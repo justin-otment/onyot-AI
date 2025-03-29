@@ -1,0 +1,255 @@
+import asyncio
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from fuzzywuzzy import fuzz as string_similarity
+from utilities import get_random_timeout, human_like_mouse_movement, safe_find_element, random_delay
+import re
+from selenium.common.exceptions import NoSuchElementException
+from errorHandler import error_handler
+
+
+# Utility function to remove HTML tags from a string
+def remove_html_tags(text):
+    clean = re.compile('<.*?>')
+    return re.sub(clean, '', text)
+
+# Async function to extract the Current Mailing Address
+async def extract_address_query(driver, timeout=10):
+    """
+    Extracts the Current Mailing Address from the web page and formats it as a one-liner.
+
+    :param driver: Selenium WebDriver instance.
+    :param timeout: Maximum time to wait for the element (in seconds).
+    :return: Extracted and formatted address query as a string.
+    """
+    address_query = ""
+
+    try:
+        # Locate the address query element
+        address_query_element = await safe_find_element(driver, By.XPATH, '//*[@id="current_address_section"]/div[1]/h3/a', timeout)
+        
+        # Simulate human-like mouse movement if the element is found
+        if address_query_element:
+            await human_like_mouse_movement(driver, address_query_element)
+            raw_address = address_query_element.text.strip()
+            
+            # Format the address into a single line
+            address_query = " ".join(raw_address.splitlines())
+        else:
+            print("Address query element not found.")
+    except Exception as error:
+        print(f"Error extracting address query: {str(error)}")
+    
+    return address_query
+
+
+# Async function to extract and format phone data
+async def extractPhoneData(driver):
+    """
+    Extracts phone numbers and their corresponding types from the phone section of the web page.
+    Formats the data into a readable string.
+
+    :param driver: Selenium WebDriver instance.
+    :param target_name: The target name to be used in the relative_link function if no phone data is found.
+    :return: A dictionary with phone numbers, phone types, and a formatted phone data string.
+    """
+    try:
+        # Generate a random timeout
+        timeout = await get_random_timeout(15000, 30000, 1000, 5000)
+
+        # Locate the phone number section on the page
+        phone_section = driver.find_element(By.ID, 'phone_number_section')
+
+        # Extract phone types and phone numbers as separate lists
+        phone_type_elements = phone_section.find_elements(By.CSS_SELECTOR, 'dt+dd')
+        phone_number_elements = phone_section.find_elements(By.CSS_SELECTOR, 'a')
+
+        # Initialize separate lists for phone types and numbers
+        phone_types = [element.text.strip() or '' for element in phone_type_elements]
+        phone_numbers = [element.text.strip() or '' for element in phone_number_elements]
+
+        # Ensure both lists are the same length by padding with empty strings
+        max_length = max(len(phone_types), len(phone_numbers))
+        phone_types += [''] * (max_length - len(phone_types))
+        phone_numbers += [''] * (max_length - len(phone_numbers))
+
+        # Format the phone data into a readable string
+        phone_data = ", ".join(
+            [f"{num} ({ptype})" for num, ptype in zip(phone_numbers, phone_types) if num]
+        )
+
+        # Check if no phone data was extracted
+        if not phone_numbers:
+            await relativeLink(driver)
+            if not relativeLink:
+               await error_handler(driver)
+
+        return {
+            'phone_numbers': phone_numbers,
+            'phone_types': phone_types,
+            'formatted_phone_data': phone_data
+        }
+
+    except Exception as error:
+        print(f"Error extracting phone data: {error}")
+        return {
+            'phone_numbers': [],
+            'phone_types': [],
+            'formatted_phone_data': ''
+        }
+
+
+# Async function to extract full name data
+async def extractFullName(driver):
+    firstName = ''
+    lastName = ''
+    
+    try:
+        fullNameElement = driver.find_elements(By.CSS_SELECTOR, 'div#full_name_section span.fullname')
+        
+        if not fullNameElement:
+            await error_handler(driver)  # Await the error_handler coroutine if no elements are found
+            random_delay(3000, 10000, 500)
+            return None, 0
+            
+        else:
+            fullName = fullNameElement[0].text.strip()
+            nameParts = fullName.split(' ')
+            firstName = nameParts[0] if nameParts else ''
+            lastName = ' '.join(nameParts[1:]) if len(nameParts) > 1 else ''
+    except Exception as error:
+        print(f"Error extracting full name: {str(error)}")
+
+    return {'firstName': firstName, 'lastName': lastName}
+
+# Async function to extract email data
+async def extractEmailData(driver):
+    
+    try:
+        emailSection = driver.find_element(By.ID, 'email_section')
+        emailElements = emailSection.find_elements(By.CSS_SELECTOR, 'h3')
+        emailData = [emailElement.text for emailElement in emailElements]
+    except NoSuchElementException:
+        emailData = []
+    
+    return emailData
+
+async def extract_full_data(driver, target_name, retries=1):
+    """Extract comprehensive data from the current page."""
+    try:
+        timeout = await get_random_timeout(15000, 30000, 1000, 5000)
+
+        # Extract phone data
+        phone_data = await extractPhoneData(driver)
+        print(f"Phone data extracted: {phone_data}")
+
+        if not phone_data and retries > 0:
+            print("No phone data found on the initial page. Attempting relative link fallback...")
+            
+            relative_link_success = await relativeLink(driver, target_name)
+
+            if relative_link_success:
+                WebDriverWait(driver, timeout).until(
+                    EC.presence_of_element_located((By.ID, "phone_number_section"))
+                )
+                relative_data = await extract_full_data(driver, target_name, retries - 1)
+                relative_data["relativeName"] = target_name
+                return relative_data
+            else:
+                print("No matching link found for fallback, skipping extraction for this entry.")
+                return {
+                    "currentMailingAddress": "",
+                    "address": "",
+                    "city": "",
+                    "state": "",
+                    "zipcode": "",
+                    "firstName": "",
+                    "lastName": "",
+                    "phoneNumbers": [],
+                    "phoneTypes": [],
+                    "emailData": [],
+                    "relativeName": ""
+                }
+
+        # Extract Current Mailing Address
+        address_query = await extract_address_query(driver)
+
+        # Extract full name
+        full_name = await extractFullName(driver)
+        first_name = full_name.get("firstName", "")
+        last_name = full_name.get("lastName", "")
+
+        # Extract email data and sanitize it
+        email_data = await extractEmailData(driver)
+        sanitized_email_data = [remove_html_tags(email) for email in email_data]
+
+        return {
+            "currentMailingAddress": address_query,
+            "address": "",
+            "city": "",
+            "state": "",
+            "zipcode": "",
+            "firstName": first_name,
+            "lastName": last_name,
+            "phoneNumbers": phone_data.get("phone_numbers", []),
+            "phoneTypes": phone_data.get("phone_types", []),
+            "emailData": sanitized_email_data,
+            "relativeName": ""
+        }
+
+    except Exception as error:
+        print(f"Error extracting full data: {str(error)}")
+        return {
+            "currentMailingAddress": "",
+            "address": "",
+            "city": "",
+            "state": "",
+            "zipcode": "",
+            "firstName": "",
+            "lastName": "",
+            "phoneNumbers": [],
+            "phoneTypes": [],
+            "emailData": [],
+            "relativeName": ""
+        }
+
+
+
+# Function to search for relative links based on the target name
+async def relativeLink(driver, targetName):
+    try:
+        timeout = await get_random_timeout(15000, 30000, 1000, 5000)
+        linkElements = driver.find_elements(By.CSS_SELECTOR, '#relative-links a')
+
+        bestMatch = None
+        highestSimilarity = 0
+
+        targetLastName = targetName.split(' ')[-1]
+
+        for element in linkElements:
+            text = element.text
+            if not isinstance(text, str) or not isinstance(targetName, str):
+                print('Invalid text or targetName, skipping similarity check.')
+                continue
+
+            elementLastName = text.split(' ')[-1]
+            similarityRate = string_similarity.ratio(elementLastName, targetLastName)
+
+            print(f"Comparing '{elementLastName}' with '{targetLastName}': Similarity = {similarityRate}")
+            if similarityRate > highestSimilarity:
+                highestSimilarity = similarityRate
+                bestMatch = element
+
+        print(f"Best match: {bestMatch.text if bestMatch else 'None'} with similarity: {highestSimilarity}")
+        if bestMatch and highestSimilarity >= 0.03:
+            print(f"Clicking on best match: {bestMatch.text} with similarity rate: {highestSimilarity}")
+            await human_like_mouse_movement(driver, bestMatch)
+            bestMatch.click()
+            return True
+        else:
+            print(f"No matching link found for '{targetName}' with sufficient similarity.")
+            return False
+    except Exception as error:
+        print(f"Error in relativeLink: {str(error)}")
+        return False

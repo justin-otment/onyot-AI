@@ -1,0 +1,256 @@
+import csv
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
+from utilities import human_like_mouse_movement
+import asyncio
+import ssl
+import os
+import time
+import urllib3
+from urllib3.exceptions import ProtocolError
+from selenium import webdriver
+from undetected_chromedriver import Chrome, ChromeOptions
+
+def make_request_with_retries(url, retries=3, backoff_factor=1):
+    http = urllib3.PoolManager()
+    attempt = 0
+    while attempt < retries:
+        try:
+            response = http.request('GET', url)
+            return response
+        except ProtocolError as e:
+            print(f"Attempt {attempt + 1} failed: {e}")
+            attempt += 1
+            sleep_time = backoff_factor * (2 ** attempt)  # Exponential backoff
+            print(f"Retrying in {sleep_time} seconds...")
+            time.sleep(sleep_time)
+    raise Exception(f"Failed to fetch {url} after {retries} attempts.")
+
+# Example usage:
+url = 'https://app.reireply.com/v2/location/1cVYKO461ACcl3mI3FdG/dashboard'
+response = make_request_with_retries(url)
+print(response.data)
+
+
+os.environ['NO_PROXY'] = 'localhost,127.0.0.1'
+
+# Disable SSL verification temporarily (use only for testing)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+context = ssl.create_default_context()
+context.check_hostname = False
+context.verify_mode = ssl.CERT_NONE
+
+# Constants
+
+def undetected_chrome_driver():
+    # Setup Chrome options
+    options = ChromeOptions()
+    options.add_argument(f"--user-data-dir=C:\\Users\\DELL\\AppData\\Local\\Google\\Chrome\\User Data")
+    options.add_argument("--remote-debugging-port=0")
+    options.add_argument(f"--profile-directory=Profile 1")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-gpu")
+    return Chrome(options=options)
+
+# Function to read CSV file and extract rows
+def read_csv(file_path):
+    try:
+        with open(file_path, mode='r') as file:
+            reader = csv.DictReader(file)
+            rows = [row for row in reader]
+            print("CSV file read successfully")
+            print("Column names:", rows[0].keys())  # Log column names for debugging
+            return rows
+    except Exception as error:
+        print(f"Error reading CSV file: {error}")
+        raise
+
+
+# Function to extract phone numbers based on "Wireless" type
+def extract_phone_numbers(rows):
+    phone_numbers = []
+    for row in rows:
+        for key, value in row.items():
+            if value == "Wireless":
+                phone_number = row[list(row.keys())[list(row.keys()).index(key) - 1]]
+                phone_numbers.append({"phoneNumber": phone_number, "row": row})
+    print("Phone numbers extracted:", phone_numbers)
+    return phone_numbers
+
+
+# Function to press the 'Enter' key
+def press_enter_key(driver):
+    webdriver.ActionChains(driver).send_keys(Keys.RETURN).perform()
+    print("Pressed Enter key")
+    time.sleep(7)  # Adding delay
+
+
+# Function to scroll to and click an element
+def scroll_and_click_element(driver, element):
+    driver.execute_script("arguments[0].scrollIntoView(true);", element)
+    element.click()
+    print("Scrolled to and clicked the element")
+
+
+# Function to check and handle elements
+async def check_and_handle_elements(driver, row):
+    try:
+        if not row or not row.get("First Name") or not row.get("Last Name") or not row.get("Address"):
+            print("Row or required properties are undefined:", row)
+            return
+
+        element1_selector = "div.v-vl-items"
+        element2_selector = "div.flex.mt-3.cursor-pointer"
+
+        # Check for Element 1
+        try:
+            element1 = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CSS_SELECTOR, element1_selector)))
+            if element1:
+                print("Element 1 found. Pressing ENTER key.")
+                press_enter_key(driver)
+                return
+        except TimeoutException:
+            pass
+
+        # Check for Element 2
+        try:
+            element2 = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CSS_SELECTOR, element2_selector)))
+            if element2:
+                print("Element 2 found. Handling form.")
+                scroll_and_click_element(driver, element2)
+                driver.find_element(By.CSS_SELECTOR, "#conversations-new-message-modal-form-input-firstName > div.n-input-wrapper > div > input").send_keys(row["First Name"])
+                driver.find_element(By.CSS_SELECTOR, "#conversations-new-message-modal-form-input-lastName > div.n-input-wrapper > div > input").send_keys(row["Address"])
+                return
+        except TimeoutException:
+            pass
+
+        print("Neither Element 1 nor Element 2 were found. Pressing ENTER key as a last resort.")
+        press_enter_key(driver)
+
+    except Exception as error:
+        print(f"Error handling elements: {error}")
+
+
+# Function to compose and send a message
+async def compose_and_send_message(driver, row):
+    try:
+        first_name = row.get("First Name", "there")
+        last_name = row.get("Last Name", "")
+        address = row.get("Address", "")
+
+        if address:
+            message = (
+                f"Hi, I hope I have reached the number for {first_name} {last_name}. "
+                f"My name is Justin and I work for OTM Enterprises LLC. "
+                f"I was trying to contact you regarding real estate property situated on {address}. "
+                f"If this isn't the number for {first_name}, please kindly disregard this message. "
+                f"Otherwise, please let us know a good time to reach out. Thanks!"
+            )
+        else:
+            message = (
+                f"Hi, I hope I have reached the number for {first_name} {last_name}. "
+                f"My name is Justin and I work for OTM Enterprises LLC. "
+                f"I was trying to contact you regarding the Vacant Land you own in Lee County Florida. "
+                f"If this isn't the number for {first_name}, please kindly disregard this message. "
+                f"Otherwise, please let us know a good time to reach out. Thanks!"
+            )
+
+        message_box = WebDriverWait(driver, 60).until(EC.visibility_of_element_located((By.CSS_SELECTOR, "#text-message")))
+        message_box.send_keys(message)
+        print("Composed message:", message)
+
+        send_button = WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#send-sms > span > span")))
+        send_button.click()
+        print("Clicked send button")
+        await asyncio.sleep(7)
+
+    except Exception as error:
+        print(f"Error composing and sending message: {error}")
+
+
+# Function to perform actions
+async def perform_actions(driver, phone_numbers):
+    
+    url = 'https://app.reireply.com/v2/location/1cVYKO461ACcl3mI3FdG/dashboard'
+    
+    try:
+        driver.get(url)
+        print("Navigated to URL")
+        await asyncio.sleep(10)
+
+        conversations_element = WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#sb_conversations")))
+        await human_like_mouse_movement(driver, conversations_element)
+        conversations_element.click()
+        print("Clicked on conversations")
+        await asyncio.sleep(7)
+
+        for item in phone_numbers:
+            phone_number = item.get("phoneNumber", "")
+            row = item.get("row", {})
+
+            try:
+                compose_button_selector = (
+                    "#conversations > div > div.hl_conversations--messages-list-v2.relative.border-r.border-gray-200 > "
+                    "div > div:nth-child(2) > div:nth-child(1) > div:nth-child(2) > div > div.cursor-pointer > svg"
+                )
+                WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.CSS_SELECTOR, compose_button_selector)))
+                await asyncio.sleep(5)
+
+                compose_element = driver.find_element(By.CSS_SELECTOR, compose_button_selector)
+                await human_like_mouse_movement(driver, compose_element)
+                compose_element.click()
+                print("Clicked on compose new message")
+                await asyncio.sleep(10)
+
+                popup_selector = "#conversations-new-message-modal-start-new-chat > div > img"
+                WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.CSS_SELECTOR, popup_selector)))
+                popup_element = driver.find_element(By.CSS_SELECTOR, popup_selector)
+                await human_like_mouse_movement(driver, popup_element)
+                popup_element.click()
+                print("Clicked on popup child element")
+                await asyncio.sleep(5)
+
+                input_selector = "#conversations-new-message-modal-form-select-contact > div > div.n-base-selection-label > input"
+                input_element = driver.find_element(By.CSS_SELECTOR, input_selector)
+                input_element.send_keys(phone_number)
+                print(f"Entered phone number: {phone_number}")
+                await asyncio.sleep(7)
+
+                await check_and_handle_elements(driver, row)
+
+                continue_button_selector = "#conversations-new-message-modal-footer-btn-positive-action > span"
+                WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.CSS_SELECTOR, continue_button_selector)))
+                continue_element = driver.find_element(By.CSS_SELECTOR, continue_button_selector)
+                await human_like_mouse_movement(driver, continue_element)
+                continue_element.click()
+                print("Clicked continue")
+                await asyncio.sleep(7)
+
+                await compose_and_send_message(driver, row)
+
+                driver.refresh()
+                print("Page refreshed")
+                await asyncio.sleep(10)
+
+            except Exception as error:
+                print(f"Error processing phone number {phone_number}: {error}")
+                continue
+
+    except Exception as error:
+        print(f"Error performing actions: {error}")
+        raise
+
+
+# Main script execution
+if __name__ == "__main__":
+    driver = undetected_chrome_driver()
+    try:
+        rows = read_csv("C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/palm_bay.csv")
+        phone_numbers = extract_phone_numbers(rows)
+        asyncio.run(perform_actions(driver, phone_numbers))
+    finally:
+        driver.quit()

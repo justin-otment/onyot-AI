@@ -1,0 +1,10 @@
+{
+  "asi": true,
+  "globalstrict": true,
+  "browser": true,
+  "node": true,
+  "eqnull": true,
+  "globals": {
+    "define": false
+  }
+}

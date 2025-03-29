@@ -1,0 +1,34 @@
+{
+    "name": "selenium-script",
+    "version": "1.0.0",
+    "main": "floridaParcels.mjs",
+    "scripts": {
+      "start": "node floridaParcels.mjs"
+    },
+    "dependencies": {
+        "@puppeteer/replay": "^1.0.0",
+        "apache": "^0.1.0",
+        "axios": "^1.7.7",
+        "commons": "^0.0.1-pre",
+        "csv-parser": "^3.0.0",
+        "dotenv": "^16.4.5",
+        "gaxios": "^6.7.1",
+        "google-auth-library": "^9.14.2",
+        "googleapis": "^144.0.0",
+        "har-validator": "^5.1.5",
+        "jsdom": "^25.0.1",
+        "json2csv": "^6.0.0-alpha.2",
+        "lodash": "^4.17.21",
+        "path": "^0.12.7",
+        "pkg": "^5.8.1",
+        "punycode": "^2.3.1",
+        "puppeteer": "^23.6.0",
+        "regex": "^4.3.3",
+        "selenium-webdriver": "^4.25.0",
+        "string-similarity": "^4.0.4",
+        "sydney": "^1.0.0",
+        "xlsx": "^0.18.5"
+    }
+  }
+  
+  

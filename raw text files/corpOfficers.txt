@@ -1,0 +1,91 @@
+import gspread
+from google.oauth2.service_account import Credentials
+from google.auth.transport.requests import Request
+import re
+import asyncio
+
+# Google Sheets authentication using google-auth
+def authenticate_gsheet():
+    # Define the scope for Google Sheets access
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    
+    # Load the credentials from the JSON key file
+    credentials = Credentials.from_service_account_file(
+        'credentials.json', scopes=scope)  # Replace with your credentials file path
+
+    # If the credentials are expired, refresh them
+    if credentials.expired and credentials.refresh_token:
+        credentials.refresh(Request())
+
+    # Authorize gspread client with the credentials
+    client = gspread.authorize(credentials)
+    return client
+
+# Function to fetch the column data from the sheet
+def get_sheet_column_data(sheet_id, column_name):
+    client = authenticate_gsheet()
+    sheet = client.open_by_key(sheet_id).sheet1  # Open the sheet by ID
+    header_row = sheet.row_values(1)  # Get the first row (headers)
+    
+    # Find the column index based on the header name
+    try:
+        column_index = header_row.index(column_name) + 1  # Get the 1-based index of the column
+    except ValueError:
+        print(f"Column '{column_name}' not found.")
+        return []
+
+    # Fetch the data from the column (excluding the header)
+    column_data = sheet.col_values(column_index)[1:]
+    return column_data
+
+# Function to extract names, street addresses, and ZIP codes from a cell
+async def extract_data_from_cell(driver, cell_text):
+    print("\n--- Debug: Input Cell Text ---")
+    print(cell_text)
+
+    def extract_street_addresses(text):
+        street_pattern = r"\d+\s[\w\s.,#-]+(?:Avenue|Ave|Street|St|Boulevard|Blvd|Road|Rd|Drive|Dr|Court|Ct|Lane|Ln|Way|Parkway|Pkwy|Place|Pl|Trail|Trl|Terrace|Ter|Circle|Cir|Loop|Sq|Square|Highway|Hwy|Alley|Aly|Broadway|Crescent|Cres|Pass|Path)\b"
+        matches = [match.strip() for match in re.findall(street_pattern, text)]
+        print("\n--- Debug: Extracted Street Addresses ---")
+        print(matches)
+        return matches
+
+    zip_code_pattern = r'\b\d{5}\b'
+    zip_codes = list(set(re.findall(zip_code_pattern, cell_text)))
+    print("\n--- Debug: Extracted ZIP Codes ---")
+    print(zip_codes)
+
+    lines = cell_text.split("\n")
+    names = [line.strip() for line in lines if "," in line]
+    print("\n--- Debug: Extracted Names ---")
+    print(names)
+
+    street_addresses = extract_street_addresses(cell_text)
+
+    result = {
+        "names": names,
+        "street_addresses": street_addresses,
+        "zip_codes": zip_codes
+    }
+    print("\n--- Debug: Final Extracted Data ---")
+    print(result)
+
+    return result
+
+# Main function to extract and process all data from the "Officer Details" column
+def process_officer_details(sheet_id):
+    # Fetch data from the "Officer Details" column
+    officer_details = get_sheet_column_data(sheet_id, "Officer Details")
+    
+    for index, cell_text in enumerate(officer_details):
+        print(f"\nProcessing row {index + 2}:")
+        extracted_data = extract_data_from_cell(cell_text)
+        
+        # Here, you can use extracted data for further processing as needed
+        # For example, you might print the extracted data or store it in a database
+        print(f"Extracted data for row {index + 2}: {extracted_data}")
+
+if __name__ == "__main__":
+    # Your Google Sheets ID
+    sheet_id = "13Cd10LkXGcEeDNlSB4vCzAqlTq4LE1I8yfmwwzO5HUY"
+    process_officer_details(sheet_id)

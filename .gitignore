@@ -1,0 +1,9 @@
+# Example .gitignore file for Python projects
+AppData/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+venv/
+.venv/

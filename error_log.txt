@@ -1,0 +1,6 @@
+ERROR:root:Error processing URL ['https://www.truepeoplesearch.com/resultaddress?streetaddress=&citystatezip=']
+Traceback (most recent call last):
+  File "C:\Users\DELL\Documents\Onyot.ai\Lead_List-Generator\python tests\Skip Tracing\truppl_parser.py", line 236, in main
+    target_name_block = target_names[i][0]  # Full multi-line name block from column C
+                        ~~~~~~~~~~~~~~~^^^
+IndexError: list index out of range

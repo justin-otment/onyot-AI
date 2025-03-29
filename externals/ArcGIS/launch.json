@@ -1,0 +1,15 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "type": "node",
+        "request": "launch",
+        "name": "Run Script: floridaParcels",
+        "program": "${workspaceFolder}/floridaParcels.mjs", // Ensure the path is correct
+        "skipFiles": ["<node_internals>/**"],
+        "console": "integratedTerminal",
+        "runtimeArgs": ["--experimental-modules"]
+      }
+    ]
+  }
+  
