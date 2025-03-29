@@ -11,3 +11,4 @@ venv/
 *.csv
 externals/ArcGIS/cape_coral_cadastral_data.csv
 jdk-17.0.14_windows-x64_bin.exe
+sydney_env/
