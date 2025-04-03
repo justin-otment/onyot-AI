@@ -13,47 +13,29 @@
       strategy:
         matrix:
           script:
-            - "Property Appraiser Scripts/leePA_01.py"
-            - "Property Appraiser Scripts/palmBayPA1.py"
-        max-parallel: 2 # Optional: restrict execution to 2 scripts concurrently
-  
+            - Property Appraiser Scripts/leePA_01.py
+            - Property Appraiser Scripts/leePA_02.py
+            - Property Appraiser Scripts/leePA_03.py
+            - Property Appraiser Scripts/leePA_04.py
+            - Property Appraiser Scripts/leePA_05.py
+            - Property Appraiser Scripts/palmBayPA1.py
+            - Property Appraiser Scripts/palmBayPA2.py
+            - Property Appraiser Scripts/palmBayPA3.py
+            - Property Appraiser Scripts/palmBayPA4.py
+            - Property Appraiser Scripts/palmBayPA5.py
       steps:
         - name: Checkout repository
           uses: actions/checkout@v2
-  
-        - name: Cache pip dependencies
-          uses: actions/cache@v3
-          with:
-            path: ~/.cache/pip
-            key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt', '**/dev-requirements.txt') }}
-            restore-keys: |
-              ${{ runner.os }}-pip-
   
         - name: Set up Python
           uses: actions/setup-python@v2
           with:
             python-version: '3.x'
   
-        # Install production dependencies
-        - name: Install production dependencies
-          if: github.event_name != 'pull_request'
+        - name: Install dependencies
           run: |
             python -m pip install --upgrade pip
-            pip install -r requirements.txt
-  
-        # Install development dependencies for pull requests or development runs
-        - name: Install development dependencies
-          if: github.event_name == 'pull_request'
-          run: |
-            python -m pip install --upgrade pip
-            pip install -r dev-requirements.txt
+            if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
   
         - name: Run Python script
-          run: python ${{ matrix.script }} > logs/${{ matrix.script }}.log 2>&1
-          continue-on-error: true
-  
-        - name: Upload logs
-          uses: actions/upload-artifact@v3
-          with:
-            name: logs
-            path: logs/
+          run: python ${{ matrix.script }}
