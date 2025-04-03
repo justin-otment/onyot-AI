@@ -13,7 +13,7 @@
       strategy:
         matrix:
           script:
-            - "./Property Appraiser Scripts/leePA_01.py"
+            - Property Appraiser Scripts/leePA_01.py
       steps:
         - name: Checkout repository
           uses: actions/checkout@v2
