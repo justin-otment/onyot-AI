@@ -47,7 +47,7 @@ def fetch_sheet_data():
     try:
         sheets_service = authenticate_google_sheets()
         sheet = sheets_service.spreadsheets()
-        range_ = f"{SHEET_NAME}!A2501:A5000"
+        range_ = f"{SHEET_NAME}!A2:A3000"
         result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
         return result.get("values", [])
     except Exception as e:
