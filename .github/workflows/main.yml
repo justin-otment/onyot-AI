@@ -24,11 +24,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: Install Firefox and GeckoDriver
-        run: |
-          sudo apt update
-          sudo apt install -y firefox-geckodriver
-
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
@@ -39,10 +34,15 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Set up Google Sheets credentials
-        run: echo "$GOOGLE_SHEETS_CREDENTIALS" > service_account.json
-        env:
-          GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
+      - name: Install Firefox and GeckoDriver manually
+        run: |
+          sudo apt update
+          sudo apt install -y firefox jq wget
+          GECKO_VERSION=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | jq -r '.tag_name' | sed 's/^v//')
+          wget "https://github.com/mozilla/geckodriver/releases/download/v$GECKO_VERSION/geckodriver-v$GECKO_VERSION-linux64.tar.gz"
+          tar -xzf "geckodriver-v$GECKO_VERSION-linux64.tar.gz"
+          sudo mv geckodriver /usr/local/bin/
+          geckodriver --version  # Verify installation
 
       - name: Run Python script
         run: python "${{ matrix.script }}"
