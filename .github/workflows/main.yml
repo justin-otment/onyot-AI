@@ -29,6 +29,9 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Set Python UTF-8 Encoding
+        run: echo "PYTHONIOENCODING=UTF-8" >> $GITHUB_ENV
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
