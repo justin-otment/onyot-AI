@@ -3,6 +3,7 @@ import time
 import json
 import ssl
 import urllib3
+import random
 from urllib3.exceptions import ProtocolError
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -25,7 +26,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
 TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
 
-# Disable SSL verification temporarily (use only for testing)
+# Disable SSL verification temporarily (for testing only)
 os.environ['NO_PROXY'] = 'localhost,127.0.0.1'
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -47,7 +48,7 @@ def authenticate_google_sheets():
 
     return build("sheets", "v4", credentials=creds)
 
-# Get Google Sheets data
+# Fetch Google Sheets data
 def fetch_google_sheets_data():
     try:
         sheets_service = authenticate_google_sheets()
@@ -93,43 +94,41 @@ def extract_property_details(driver, owner):
         # Extract ownership details
         WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.ID, "ownershipDiv")))
         driver.find_element(By.XPATH, '//*[@id="divDisplayParcelOwner"]/div[1]/div/div[1]/a[2]/img').click()
-        ownership_text = driver.find_element(By.XPATH, '//*[@id="ownershipDiv"]/div/ul').text
-        additional_text = driver.find_element(By.XPATH, '//*[@id="divDisplayParcelOwner"]/div[1]/div/div[2]/div').text
+        ownership_text = driver.find_element(By.XPATH, '//*[@id="ownershipDiv"]/div/ul').text or ""
+        additional_text = driver.find_element(By.XPATH, '//*[@id="divDisplayParcelOwner"]/div[1]/div/div[2]/div').text or ""
 
         # Extract property value
         driver.find_element(By.ID, "ValuesHyperLink").click()
         property_value = WebDriverWait(driver, 30).until(
             EC.presence_of_element_located((By.XPATH, '//*[@id="valueGrid"]/tbody/tr[2]/td[4]'))
-        ).text
+        ).text or ""
 
         # Extract building and full site info
-        building_info = driver.find_element(By.XPATH, '//*[@id="divDisplayParcelOwner"]/div[3]/table[1]/tbody/tr[3]/td').text
-        full_site = driver.find_element(By.XPATH, '//*[@id="divDisplayParcelOwner"]/div[2]/div[3]').text
+        building_info = driver.find_element(By.XPATH, '//*[@id="divDisplayParcelOwner"]/div[3]/table[1]/tbody/tr[3]/td').text or ""
+        full_site = driver.find_element(By.XPATH, '//*[@id="divDisplayParcelOwner"]/div[2]/div[3]').text or ""
 
         return ownership_text, additional_text, property_value, building_info, full_site
 
     except Exception as e:
         print(f"Error extracting data for {owner}: {e}")
-        return None, None, None, None, None
+        return "", "", "", "", ""
 
-# Update Google Sheets
-def update_google_sheets(sheets_service, row, ownership_text, additional_text, property_value, building_info, full_site):
-    updates = [
-        (f"{SHEET_NAME}!C{row}", [[ownership_text]]),
-        (f"{SHEET_NAME}!D{row}", [[additional_text]]),
-        (f"{SHEET_NAME}!E{row}", [[property_value]]),
-        (f"{SHEET_NAME}!F{row}", [[building_info]]),
-        (f"{SHEET_NAME}!S{row}", [[full_site]])
-    ]
+# Batch update Google Sheets
+def update_google_sheets(sheets_service, updates):
+    body = {
+        "valueInputOption": "RAW",
+        "data": updates
+    }
 
-    for cell_range, value in updates:
-        if value[0][0]:
-            sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=cell_range,
-                valueInputOption="RAW",
-                body={"values": value}
+    for attempt in range(3):  # Retry up to 3 times
+        try:
+            sheets_service.spreadsheets().values().batchUpdate(
+                spreadsheetId=SHEET_ID, body=body
             ).execute()
+            return
+        except Exception as e:
+            print(f"Error updating Google Sheets, attempt {attempt+1}: {e}")
+            time.sleep(2 + random.uniform(0, 2))  # Add slight randomness to avoid throttling
 
 # Main function
 def fetch_data_and_update_sheet():
@@ -140,6 +139,7 @@ def fetch_data_and_update_sheet():
 
     driver = setup_driver()
     sheets_service = authenticate_google_sheets()
+    updates = []
 
     for i, row in enumerate(data, start=2):
         owner = row[0].strip() if row else None
@@ -151,11 +151,17 @@ def fetch_data_and_update_sheet():
 
         ownership_text, additional_text, property_value, building_info, full_site = extract_property_details(driver, owner)
 
-        if ownership_text or additional_text or property_value or building_info or full_site:
-            update_google_sheets(sheets_service, i, ownership_text, additional_text, property_value, building_info, full_site)
-            print(f"Updated row {i} successfully.")
-        else:
-            print(f"No valid data found for row {i}")
+        if any([ownership_text, additional_text, property_value, building_info, full_site]):
+            updates.append({
+                "range": f"{SHEET_NAME}!C{i}:G{i}",  # Adjust based on required columns
+                "majorDimension": "ROWS",
+                "values": [[ownership_text, additional_text, property_value, building_info, full_site]]
+            })
+            print(f"Queued update for row {i}")
+
+    if updates:
+        update_google_sheets(sheets_service, updates)
+        print("Google Sheets updated successfully.")
 
     driver.quit()
 
