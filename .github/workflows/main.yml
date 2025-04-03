@@ -32,17 +32,14 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if (Test-Path requirements.txt) { pip install -r requirements.txt }
+        shell: powershell
 
-      - name: Install Firefox and GeckoDriver manually
+      - name: Install Firefox and GeckoDriver (Windows)
         run: |
-          sudo apt update
-          sudo apt install -y firefox jq wget
-          GECKO_VERSION=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | jq -r '.tag_name' | sed 's/^v//')
-          wget "https://github.com/mozilla/geckodriver/releases/download/v$GECKO_VERSION/geckodriver-v$GECKO_VERSION-linux64.tar.gz"
-          tar -xzf "geckodriver-v$GECKO_VERSION-linux64.tar.gz"
-          sudo mv geckodriver /usr/local/bin/
-          geckodriver --version  # Verify installation
+          choco install firefox
+          choco install geckodriver
+        shell: powershell
 
       - name: Run Python script
         run: python "${{ matrix.script }}"
