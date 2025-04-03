@@ -162,7 +162,7 @@ def fetch_data_and_update_sheet():
     sheet = sheets_service.spreadsheets()
 
     # Fetch data from Google Sheet
-    range_ = f"{SHEET_NAME}!A2:A2738"
+    range_ = f"{SHEET_NAME}!B2:B"
     result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
     sheet_data = result.get("values", [])
 
