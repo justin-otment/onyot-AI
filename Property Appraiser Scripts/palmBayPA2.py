@@ -144,16 +144,16 @@ def process_row(site, i, sheet):
                 body={"values": [[building_info]]}
             ).execute()
 
-        print(f"✅ Row {i} completed.")
+        print(f" Row {i} completed.")
 
     except Exception as e:
-        print(f"❌ Error processing row {i}: {e}")
+        print(f"Error processing row {i}: {e}")
 
     finally:
         # Close the browser if it was initialized
         if driver:
             driver.quit()
-        print(f"🚪 Closed browser instance for Row {i}\n")
+        print(f"Closed browser instance for Row {i}\n")
 
 
 # Main data fetching and updating
@@ -161,12 +161,12 @@ def fetch_data_and_update_sheet():
     sheets_service = authenticate_google_sheets()
     sheet = sheets_service.spreadsheets()
 
-    # ✅ Fetch data from Google Sheet
+    # Fetch data from Google Sheet
     range_ = f"{SHEET_NAME}!A2739:A5474"
     result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
     sheet_data = result.get("values", [])
 
-    # ✅ Process each row with a new browser instance
+    # Process each row with a new browser instance
     for i, row in enumerate(sheet_data, start=2739):
         site = row[0].strip() if row else None
         print(f"Processing Name: {site}")
@@ -175,10 +175,10 @@ def fetch_data_and_update_sheet():
             print(f"Skipping empty row {i}")
             continue
 
-        # ✅ Process the row with a new browser instance
+        #  Process the row with a new browser instance
         process_row(site, i, sheet)
 
-    print("🚀 All rows have been processed.")
+    print(" All rows have been processed.")
 
 if __name__ == '__main__':
     fetch_data_and_update_sheet()
