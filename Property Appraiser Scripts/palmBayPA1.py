@@ -50,17 +50,8 @@ def extract_text(driver, xpath, default_value="Not Found"):
     except (NoSuchElementException, TimeoutException):
         return default_value
 
-# Correcting the function
-def fetch_data_and_update_sheet():
-    try:
-        # Authenticate with Google Sheets API
-        sheets_service = authenticate_google_sheets()  # Changed 'service' to 'sheets_service'
-        sheet = sheets_service.spreadsheets()  # This is the correct object to interact with Sheets API
-    except Exception as e:
-        print(f"Error fetching data from Google Sheets: {e}")
-        return  # Exit if there's an issue fetching the sheet data
-
-def process_row(site, i, sheet):
+# Function to process each row
+def process_row(site, i, sheet, sheets_service):
     driver = None  # Initialize the driver variable to None
     try:
         # Create a new WebDriver instance
@@ -83,60 +74,44 @@ def process_row(site, i, sheet):
         )
         print("result loaded")
     except Exception as e:
-        print(f"Error fetching data from Google Sheets: {e}")
-    
-        
-
-    try:
-        # Authenticate with Google Sheets API
-        sheets_service = authenticate_google_sheets()  # Changed 'service' to 'sheets_service'
-        sheet = sheets_service.spreadsheets()  # This is the correct object to interact with Sheets API
-
-        # Define the range for the data
-        range_ = f"{SHEET_NAME}!A2739:A5474"
-        result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
-        sheet_data = result.get("values", [])
-        print(f"Fetched data: {sheet_data}")  # Debug print to check the data
-    except Exception as e:
-        print(f"Error fetching data from Google Sheets: {e}")
-        return  # Exit if there's an issue fetching the sheet data
+        print(f"Error fetching data: {e}")
 
     try:
         # Extract Data
         ownership_text = driver.find_element(By.XPATH, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[1]/div[2]/div[1]').text
         sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!C{i}",
-                valueInputOption="RAW",
-                body={"values": [[ownership_text]]}
-            ).execute()
+            spreadsheetId=SHEET_ID,
+            range=f"{SHEET_NAME}!C{i}",
+            valueInputOption="RAW",
+            body={"values": [[ownership_text]]}
+        ).execute()
 
         additional_text = driver.find_element(By.XPATH, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[2]/div[2]/div').text
         sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!D{i}",
-                valueInputOption="RAW",
-                body={"values": [[additional_text]]}
-            ).execute()
+            spreadsheetId=SHEET_ID,
+            range=f"{SHEET_NAME}!D{i}",
+            valueInputOption="RAW",
+            body={"values": [[additional_text]]}
+        ).execute()
 
-            # Click Value tab and extract property value
+        # Click Value tab and extract property value
         property_value = WebDriverWait(driver, 60).until(
-                EC.presence_of_element_located((By.XPATH, '//*[@id="tSalesTransfers"]/tbody/tr[1]/td[2]'))
-            ).text
+            EC.presence_of_element_located((By.XPATH, '//*[@id="tSalesTransfers"]/tbody/tr[1]/td[2]'))
+        ).text
         sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!E{i}",
-                valueInputOption="RAW",
-                body={"values": [[property_value]]}
-            ).execute()
+            spreadsheetId=SHEET_ID,
+            range=f"{SHEET_NAME}!E{i}",
+            valueInputOption="RAW",
+            body={"values": [[property_value]]}
+        ).execute()
 
         building_info = driver.find_element(By.XPATH, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[7]/div[2]').text
         sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!F{i}",
-                valueInputOption="RAW",
-                body={"values": [[building_info]]}
-            ).execute()
+            spreadsheetId=SHEET_ID,
+            range=f"{SHEET_NAME}!F{i}",
+            valueInputOption="RAW",
+            body={"values": [[building_info]]}
+        ).execute()
 
         print(f"Row {i} completed.")
 
@@ -149,30 +124,38 @@ def process_row(site, i, sheet):
             driver.quit()
         print(f"Closed browser instance for Row {i}\n")
 
-
-# Main data fetching and updating
+# Main data fetching and updating function
 def fetch_data_and_update_sheet():
     sheets_service = authenticate_google_sheets()
     sheet = sheets_service.spreadsheets()
 
-    # Fetch data from Google Sheet
-    range_ = f"{SHEET_NAME}!B2:B"
+    # Fetch data from Google Sheet, starting from row 2 and ensuring we don't exceed the max rows
+    START_ROW = 2
+    MAX_ROWS = 1365
+    END_ROW = 5474  # Original end row
+
+    # Adjust range to stay within the max number of rows
+    if END_ROW > MAX_ROWS:
+        END_ROW = MAX_ROWS
+
+    # Define the range
+    range_ = f"{SHEET_NAME}!A{START_ROW}:A{END_ROW}"
     result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
     sheet_data = result.get("values", [])
 
-    # Process each row with a new browser instance
-    for i, row in enumerate(sheet_data, start=2):
+    # Process each row
+    for i, row in enumerate(sheet_data, start=START_ROW):
         site = row[0].strip() if row else None
-        print(f"Processing Name: {site}")
+        print(f"Processing Site: {site}")
 
         if not site:
             print(f"Skipping empty row {i}")
             continue
 
         # Process the row with a new browser instance
-        process_row(site, i, sheet)
+        process_row(site, i, sheet, sheets_service)
 
-    print(" All rows have been processed.")
+    print("All rows have been processed.")
 
 if __name__ == '__main__':
     fetch_data_and_update_sheet()
