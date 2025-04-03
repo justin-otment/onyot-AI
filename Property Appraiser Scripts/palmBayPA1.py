@@ -56,12 +56,6 @@ def fetch_data_and_update_sheet():
         # Authenticate with Google Sheets API
         sheets_service = authenticate_google_sheets()  # Changed 'service' to 'sheets_service'
         sheet = sheets_service.spreadsheets()  # This is the correct object to interact with Sheets API
-
-        # Define the range for the data
-        range_ = f"{SHEET_NAME}!A2739:A5474"
-        result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
-        sheet_data = result.get("values", [])
-        print(f"Fetched data: {sheet_data}")  # Debug print to check the data
     except Exception as e:
         print(f"Error fetching data from Google Sheets: {e}")
         return  # Exit if there's an issue fetching the sheet data
