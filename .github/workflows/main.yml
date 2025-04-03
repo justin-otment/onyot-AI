@@ -37,8 +37,20 @@ jobs:
 
       - name: Install Firefox and GeckoDriver (Windows)
         run: |
-          choco install firefox
-          choco install geckodriver
+          # Install Firefox
+          choco install firefox -y
+          
+          # Fetch latest GeckoDriver version
+          $GECKO_VERSION = (Invoke-WebRequest -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest" | ConvertFrom-Json).tag_name -replace "v", ""
+          $GECKO_URL = "https://github.com/mozilla/geckodriver/releases/download/v$GECKO_VERSION/geckodriver-v$GECKO_VERSION-win64.zip"
+
+          # Download and extract GeckoDriver
+          Invoke-WebRequest -Uri $GECKO_URL -OutFile geckodriver.zip
+          Expand-Archive geckodriver.zip -DestinationPath C:\GeckoDriver
+          [System.Environment]::SetEnvironmentVariable("PATH", $env:PATH + ";C:\GeckoDriver", [System.EnvironmentVariableTarget]::Machine)
+
+          # Verify installation
+          C:\GeckoDriver\geckodriver.exe --version
         shell: powershell
 
       - name: Run Python script
