@@ -68,9 +68,6 @@ def process_row(site, i, sheet):
         )
         site_input.send_keys(site, Keys.RETURN)
 
-        ownership_text = WebDriverWait(driver, 60).until(
-            EC.element_to_be_clickable((By.XPATH, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[1]/div[2]/div[1]'))
-        )
         print("result loaded")
     except Exception as e:
         print(f"Error fetching data from Google Sheets: {e}")
