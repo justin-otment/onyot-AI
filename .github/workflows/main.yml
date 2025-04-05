@@ -38,8 +38,11 @@ jobs:
           # Install Firefox
           choco install firefox -y
           
-          # Fetch latest GeckoDriver version
-          $GECKO_VERSION = (Invoke-WebRequest -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest" | ConvertFrom-Json).tag_name -replace "v", ""
+          # Fetch latest GeckoDriver version using GitHub token
+          $headers = @{
+            Authorization = "token $env:GITHUB_TOKEN"
+          }
+          $GECKO_VERSION = (Invoke-WebRequest -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest" -Headers $headers | ConvertFrom-Json).tag_name -replace "v", ""
           $GECKO_URL = "https://github.com/mozilla/geckodriver/releases/download/v$GECKO_VERSION/geckodriver-v$GECKO_VERSION-win64.zip"
 
           # Download and extract GeckoDriver
@@ -50,6 +53,8 @@ jobs:
           # Verify installation
           C:\GeckoDriver\geckodriver.exe --version
         shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ secrets.OTM }}
 
       - name: Run Python script
         run: python "${{ matrix.script }}"
