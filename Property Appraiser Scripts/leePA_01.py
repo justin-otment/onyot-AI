@@ -45,7 +45,8 @@ context.verify_mode = ssl.CERT_NONE
 
 # Google Sheets setup
 SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
-SHEET_NAME = 'Raw Cape Coral - ArcGIS (lands)'
+SHEET_NAME = 'Cape Coral - ArcGIS_LANDonly'
+
 
 # Define file paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -82,7 +83,7 @@ def fetch_data_and_update_sheet():
         sheet = sheets_service.spreadsheets()  # This is the correct object to interact with Sheets API
 
         # Define the range for the data
-        range_ = f"{SHEET_NAME}!A2:A"
+        range_ = f"{SHEET_NAME}!A2:A2500"
         result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
         sheet_data = result.get("values", [])
         print(f"Fetched data: {sheet_data}")  # Debug print to check the data
