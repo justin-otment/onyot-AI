@@ -54,7 +54,7 @@ jobs:
           C:\GeckoDriver\geckodriver.exe --version
         shell: powershell
         env:
-          GITHUB_TOKEN: ${{ secrets.OTM }}
+          GITHUB_TOKEN: ${{ secrets.otm }}
 
       - name: Run Python script
         run: python "${{ matrix.script }}"
