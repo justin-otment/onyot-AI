@@ -45,7 +45,8 @@ context.verify_mode = ssl.CERT_NONE
 
 # Google Sheets setup
 SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
-SHEET_NAME = 'Raw Cape Coral - ArcGIS (lands)'
+SHEET_NAME = 'Cape Coral - ArcGIS_LANDonly'
+
 
 # Define file paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -82,7 +83,7 @@ def fetch_data_and_update_sheet():
         sheet = sheets_service.spreadsheets()  # This is the correct object to interact with Sheets API
 
         # Define the range for the data
-        range_ = f"{SHEET_NAME}!A5001:A8000"
+        range_ = f"{SHEET_NAME}!A5001:7500"
         result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
         sheet_data = result.get("values", [])
         print(f"Fetched data: {sheet_data}")  # Debug print to check the data
@@ -118,7 +119,7 @@ def fetch_data_and_update_sheet():
 
             try:
                 # Handle warning pop-up
-                WebDriverWait(driver, 60).until(
+                WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.ID, "ctl00_BodyContentPlaceHolder_pnlIssues"))
                 )
                 warning_button = driver.find_element(By.ID, "ctl00_BodyContentPlaceHolder_btnWarning")
@@ -126,29 +127,34 @@ def fetch_data_and_update_sheet():
             except:
                 print("No pop-up found, continuing to next step.")
 
-            time.sleep(1)
-
             # Navigate to property details
-            href = WebDriverWait(driver, 60).until(
+            href = WebDriverWait(driver, 30).until(
                 EC.presence_of_element_located((By.XPATH, '//*[@id="ctl00_BodyContentPlaceHolder_WebTab1"]/div/div[1]/div[1]/table/tbody/tr/td[4]/div/div[1]/a'))
             ).get_attribute('href')
             driver.get(href)
 
+            img_element = WebDriverWait(driver, 30).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'img.completeOwnershipButton'))
+            )
+
+            # Scroll into view (optional but nice)
+            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", img_element)
+            time.sleep(1)  # Give it a moment
+
+            # Use JS to click the element directly
+            driver.execute_script("arguments[0].click();", img_element)
+
             time.sleep(1)
 
-            # Click image to reveal ownership details
-            img_element = WebDriverWait(driver, 60).until(
-                EC.presence_of_element_located((By.XPATH, '//*[@id="divDisplayParcelOwner"]/div[1]/div/div[1]/a[2]/img'))
-            )
-            img_element.click()
-
-            ownership_text = driver.find_element(By.XPATH, '//*[@id="ownershipDiv"]/div/ul').text
+            ownership_text = driver.find_element(By.XPATH, '//*[@id="ownershipDiv"]/div/p').text
+            # ✅ Now passing a string
             sheets_service.spreadsheets().values().update(
                 spreadsheetId=SHEET_ID,
                 range=f"{SHEET_NAME}!C{i}",
                 valueInputOption="RAW",
                 body={"values": [[ownership_text]]}
             ).execute()
+
 
             additional_text = driver.find_element(By.XPATH, '//*[@id="divDisplayParcelOwner"]/div[1]/div/div[2]/div').text
             sheets_service.spreadsheets().values().update(
