@@ -144,10 +144,9 @@ def fetch_data_and_update_sheet():
             # Use JS to click the element directly
             driver.execute_script("arguments[0].click();", img_element)
 
-            time.sleep(1)
+            time.sleep(2)
 
             ownership_text = driver.find_element(By.XPATH, '//*[@id="ownershipDiv"]/div/p').text
-            # ✅ Now passing a string
             sheets_service.spreadsheets().values().update(
                 spreadsheetId=SHEET_ID,
                 range=f"{SHEET_NAME}!C{i}",
