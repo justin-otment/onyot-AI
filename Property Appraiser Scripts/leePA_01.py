@@ -144,9 +144,9 @@ def fetch_data_and_update_sheet():
             # Use JS to click the element directly
             driver.execute_script("arguments[0].click();", img_element)
 
-            time.sleep(2)
+            time.sleep(1)
 
-            ownership_text = driver.find_element(By.CSS_SELECTOR, 'ul."genericList"').text
+            ownership_text = driver.find_element(By.XPATH, '//*[@id="ownershipDiv"]/div/ul').text
             sheets_service.spreadsheets().values().update(
                 spreadsheetId=SHEET_ID,
                 range=f"{SHEET_NAME}!C{i}",
