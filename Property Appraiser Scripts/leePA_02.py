@@ -146,7 +146,7 @@ def fetch_data_and_update_sheet():
 
             time.sleep(2)
 
-            ownership_text = driver.find_element(By.CSS_SELECTOR, 'ul."genericList"').text
+            ownership_text = driver.find_element(By.XPATH, '//*[@id="ownershipDiv"]/div/ul').text
             sheets_service.spreadsheets().values().update(
                 spreadsheetId=SHEET_ID,
                 range=f"{SHEET_NAME}!C{i}",
