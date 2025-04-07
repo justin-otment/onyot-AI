@@ -1,19 +1,61 @@
-Download of Firefox Setup 137.0.exe (68.47 MB) completed.
-Hashes match.
-Installing Firefox...
-Firefox has been installed.
-WARNING: No registry key found based on  'Mozilla Firefox'
-  Firefox may be able to be automatically uninstalled.
- The install of Firefox was successful.
-  Deployed to 'C:\Program Files\Mozilla Firefox'
+name: Run Multiple Python Scripts
 
-Chocolatey installed 1/1 packages. 
- See the log for details (C:\ProgramData\chocolatey\logs\chocolatey.log).
-Invoke-WebRequest : {"message":"Bad credentials","documentation_url":"https://docs.github.com/rest","status":"401"}
-At D:\a\_temp\6fecc8f1-6a54-4a71-a940-6e5f16851a31.ps1:9 char:13
-+ $response = Invoke-WebRequest -Uri "https://api.github.com/repos/mozi ...
-+             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : InvalidOperation: (System.Net.HttpWebRequest:HttpWebRequest) [Invoke-WebRequest], WebExc 
-   eption
-    + FullyQualifiedErrorId : WebCmdletWebResponseException,Microsoft.PowerShell.Commands.InvokeWebRequestCommand
-Error: Process completed with exit code 1.
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  run-scripts:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        script:
+          - "Property Appraiser Scripts/leePA_01.py"
+          - "Property Appraiser Scripts/leePA_02.py"
+          - "Property Appraiser Scripts/leePA_03.py"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+
+      - name: Set Python UTF-8 Encoding
+        run: echo "PYTHONIOENCODING=UTF-8" >> $GITHUB_ENV
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if (Test-Path requirements.txt) { pip install -r requirements.txt }
+        shell: powershell
+
+      - name: Install Firefox and GeckoDriver (Windows)
+        run: |
+          # Install Firefox
+          choco install firefox -y
+          
+          # Fetch the latest GeckoDriver version (Authenticated Request)
+          $token = "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"
+          $headers = @{
+              Authorization = "Bearer $token"
+          }
+          $response = Invoke-WebRequest -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest" -Headers $headers | ConvertFrom-Json
+          $GECKO_VERSION = $response.tag_name -replace "v", ""
+          $GECKO_URL = "https://github.com/mozilla/geckodriver/releases/download/v$GECKO_VERSION/geckodriver-v$GECKO_VERSION-win64.zip"
+
+          # Download and extract GeckoDriver
+          Invoke-WebRequest -Uri $GECKO_URL -OutFile geckodriver.zip
+          Expand-Archive geckodriver.zip -DestinationPath C:\GeckoDriver
+          [System.Environment]::SetEnvironmentVariable("PATH", $env:PATH + ";C:\GeckoDriver", [System.EnvironmentVariableTarget]::Machine)
+
+          # Verify installation
+          C:\GeckoDriver\geckodriver.exe --version
+        shell: powershell
+
+      - name: Run Python script
+        run: python "${{ matrix.script }}"
