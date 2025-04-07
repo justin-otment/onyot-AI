@@ -38,20 +38,18 @@ jobs:
         run: |
           # Install Firefox
           choco install firefox -y
-          
-          # Fetch the latest GeckoDriver version (Authenticated Request)
-          $token = "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"
-          $headers = @{
-              Authorization = "Bearer $token"
-          }
-          $response = Invoke-WebRequest -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest" -Headers $headers | ConvertFrom-Json
+
+          # Fetch the latest GeckoDriver version (no authentication)
+          $response = Invoke-WebRequest -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest" | ConvertFrom-Json
           $GECKO_VERSION = $response.tag_name -replace "v", ""
           $GECKO_URL = "https://github.com/mozilla/geckodriver/releases/download/v$GECKO_VERSION/geckodriver-v$GECKO_VERSION-win64.zip"
 
           # Download and extract GeckoDriver
           Invoke-WebRequest -Uri $GECKO_URL -OutFile geckodriver.zip
           Expand-Archive geckodriver.zip -DestinationPath C:\GeckoDriver
-          [System.Environment]::SetEnvironmentVariable("PATH", $env:PATH + ";C:\GeckoDriver", [System.EnvironmentVariableTarget]::Machine)
+
+          # Add GeckoDriver to PATH for this session
+          $env:PATH += ";C:\GeckoDriver"
 
           # Verify installation
           C:\GeckoDriver\geckodriver.exe --version
