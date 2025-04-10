@@ -13,8 +13,6 @@ jobs:
       matrix:
         script:
           - "Property Appraiser Scripts/leePA_01.py"
-          - "Property Appraiser Scripts/leePA_02.py"
-          - "Property Appraiser Scripts/leePA_03.py"
 
     steps:
       - name: Checkout repository
