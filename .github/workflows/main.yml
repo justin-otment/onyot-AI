@@ -14,9 +14,8 @@ jobs:
         script:
           - "Property Appraiser Scripts/leePA_01.py"
           - "Property Appraiser Scripts/leePA_02.py"
-          - "Property Appraiser Scripts/leePA_03.py"
-          - "Property Appraiser Scripts/leePA_04.py"
-          - "Property Appraiser Scripts/leePA_05.py"
+          - "Property Appraiser Scripts/palmBayPA1.py"
+          - "Property Appraiser Scripts/palmBayPA2.py"
 
     steps:
       - name: Checkout repository
