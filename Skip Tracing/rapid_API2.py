@@ -7,13 +7,7 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from pyppeteer.errors import TimeoutError, NetworkError
 import sys
-
-def handle_exception(loop, context):
-    msg = context.get("exception", context["message"])
-    print(f"Caught asyncio exception: {msg}")
-    
-loop = asyncio.get_event_loop()
-loop.set_exception_handler(handle_exception)
+from utilities import human_like_mouse_movement
 
 # Google Sheets setup
 SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
@@ -101,10 +95,14 @@ def batch_update_sheet(credentials, data, row_number):
 
 # Pyppeteer setup with enhanced error handling
 async def fetch_page_html(url, retries=3, delay=5):
+    user_data_dir = os.path.join(os.getcwd(), 'pyppeteer_profile')
     browser = await launch(
-        headless=True,
-        executablePath=r'C:\Program Files\Google\Chrome\Application\chrome.exe'
-    )
+    headless=True,
+    executablePath=r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+    userDataDir=user_data_dir,
+    args=['--no-sandbox', '--disable-setuid-sandbox']
+)
+
     page = await browser.newPage()
     await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36")
 
@@ -218,7 +216,7 @@ async def main():
     credentials = authenticate_google_sheets()
     sheets = build('sheets', 'v4', credentials=credentials)
 
-    range_ = f"{SHEET_NAME}!R32:R"  # URLs from column R
+    range_ = f"{SHEET_NAME}!R50:R"  # URLs from column R
     try:
         result = sheets.spreadsheets().values().get(spreadsheetId=SHEET_ID, range=range_).execute()
         urls = [val[0] for val in result.get('values', []) if val and val[0]]
@@ -226,7 +224,7 @@ async def main():
         print(f"Error fetching URLs: {e}")
         return
 
-    for index, url in enumerate(urls, start=32):
+    for index, url in enumerate(urls, start=50):
         print(f"\nFetching data for URL: {url}")
         page, browser = await fetch_page_html(url)
 
@@ -259,4 +257,14 @@ async def main():
         else:
             print(f"Failed to fetch page for {url}")
 
-asyncio.run(main())
+def handle_exception(loop, context):
+    msg = context.get("exception", context["message"])
+    print(f"Caught asyncio exception: {msg}")
+
+async def main_entry():
+    loop = asyncio.get_running_loop()
+    loop.set_exception_handler(handle_exception)
+    await main()
+
+if __name__ == "__main__":
+    asyncio.run(main_entry())
