@@ -50,21 +50,23 @@ def extract_text(driver, xpath, default_value="Not Found"):
     except (NoSuchElementException, TimeoutException):
         return default_value
 
-# Correcting the function
-def fetch_data_and_update_sheet():
-    try:
-        # Authenticate with Google Sheets API
-        sheets_service = authenticate_google_sheets()  # Changed 'service' to 'sheets_service'
-        sheet = sheets_service.spreadsheets()  # This is the correct object to interact with Sheets API
+# Function to update Google Sheet per cell
+def update_google_sheet(sheet, i, sale_date, sale_amount):
+    # Update C Column (Ownership)
+    sheet.values().update(
+        spreadsheetId=SHEET_ID,
+        range=f"{SHEET_NAME}!G{i}",
+        valueInputOption="RAW",
+        body={"values": [[sale_date]]}
+    ).execute()
 
-        # Define the range for the data
-        range_ = f"{SHEET_NAME}!A2739:A5474"
-        result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
-        sheet_data = result.get("values", [])
-        print(f"Fetched data: {sheet_data}")  # Debug print to check the data
-    except Exception as e:
-        print(f"Error fetching data from Google Sheets: {e}")
-        return  # Exit if there's an issue fetching the sheet data
+    # Update D Column (Additional Info)
+    sheet.values().update(
+        spreadsheetId=SHEET_ID,
+        range=f"{SHEET_NAME}!H{i}",
+        valueInputOption="RAW",
+        body={"values": [[sale_amount]]}
+    ).execute()
 
 def process_row(site, i, sheet):
     driver = None  # Initialize the driver variable to None
@@ -80,7 +82,7 @@ def process_row(site, i, sheet):
 
         # Input the Site and Search
         site_input = WebDriverWait(driver, 60).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, '#txtPropertySearch_Pid'))
+            EC.element_to_be_clickable((By.ID, 'txtPropertySearch_Address'))
         )
         site_input.send_keys(site, Keys.RETURN)
 
@@ -88,63 +90,16 @@ def process_row(site, i, sheet):
             EC.element_to_be_clickable((By.XPATH, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[1]/div[2]/div[1]'))
         )
         print("result loaded")
-    except Exception as e:
-        print(f"Error fetching data from Google Sheets: {e}")
-    
+
+        # Extract Data
+        sale_date = extract_text(driver, '//*[@id="tSalesTransfers"]/tbody/tr[1]/td[1]')
+        sale_amount = extract_text(driver, '//*[@id="tSalesTransfers"]/tbody/tr[1]/td[2]')
         
 
-    try:
-        # Authenticate with Google Sheets API
-        sheets_service = authenticate_google_sheets()  # Changed 'service' to 'sheets_service'
-        sheet = sheets_service.spreadsheets()  # This is the correct object to interact with Sheets API
+        # Update the sheet immediately per row
+        update_google_sheet(sheet, i, sale_date, sale_amount)
 
-        # Define the range for the data
-        range_ = f"{SHEET_NAME}!A2739:A5474"
-        result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
-        sheet_data = result.get("values", [])
-        print(f"Fetched data: {sheet_data}")  # Debug print to check the data
-    except Exception as e:
-        print(f"Error fetching data from Google Sheets: {e}")
-        return  # Exit if there's an issue fetching the sheet data
-
-    try:
-        # Extract Data
-        ownership_text = driver.find_element(By.XPATH, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[1]/div[2]/div[1]').text
-        sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!C{i}",
-                valueInputOption="RAW",
-                body={"values": [[ownership_text]]}
-            ).execute()
-
-        additional_text = driver.find_element(By.XPATH, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[2]/div[2]/div').text
-        sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!D{i}",
-                valueInputOption="RAW",
-                body={"values": [[additional_text]]}
-            ).execute()
-
-            # Click Value tab and extract property value
-        property_value = WebDriverWait(driver, 60).until(
-                EC.presence_of_element_located((By.XPATH, '//*[@id="tSalesTransfers"]/tbody/tr[1]/td[2]'))
-            ).text
-        sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!E{i}",
-                valueInputOption="RAW",
-                body={"values": [[property_value]]}
-            ).execute()
-
-        building_info = driver.find_element(By.XPATH, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[7]/div[2]').text
-        sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!F{i}",
-                valueInputOption="RAW",
-                body={"values": [[building_info]]}
-            ).execute()
-
-        print(f" Row {i} completed.")
+        print(f"Row {i} completed.")
 
     except Exception as e:
         print(f"Error processing row {i}: {e}")
@@ -162,12 +117,12 @@ def fetch_data_and_update_sheet():
     sheet = sheets_service.spreadsheets()
 
     # Fetch data from Google Sheet
-    range_ = f"{SHEET_NAME}!A2739:A5474"
+    range_ = f"{SHEET_NAME}!B8698:B"
     result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
     sheet_data = result.get("values", [])
 
     # Process each row with a new browser instance
-    for i, row in enumerate(sheet_data, start=2739):
+    for i, row in enumerate(sheet_data, start=8698):
         site = row[0].strip() if row else None
         print(f"Processing Name: {site}")
 
@@ -175,10 +130,10 @@ def fetch_data_and_update_sheet():
             print(f"Skipping empty row {i}")
             continue
 
-        #  Process the row with a new browser instance
+        # Process the row with a new browser instance
         process_row(site, i, sheet)
 
-    print(" All rows have been processed.")
+    print("All rows have been processed.")
 
 if __name__ == '__main__':
     fetch_data_and_update_sheet()
