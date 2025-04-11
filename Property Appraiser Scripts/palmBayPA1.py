@@ -14,7 +14,7 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException
 
 # Google Sheets setup
 SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
-SHEET_NAME = 'PalmBay_ArcGIS_LandONLY'
+SHEET_NAME = 'Palm Bay - ArcGIS RAW'
 
 # Define file paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
