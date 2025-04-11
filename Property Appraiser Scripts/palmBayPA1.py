@@ -51,13 +51,13 @@ def extract_text(driver, xpath, default_value="Not Found"):
         return default_value
 
 # Function to update Google Sheet per cell
-def update_google_sheet(sheet, i, ownership_text, additional_text, property_value, bldg_info):
+def update_google_sheet(sheet, i, sale_date, sale_amount):
     # Update C Column (Ownership)
     sheet.values().update(
         spreadsheetId=SHEET_ID,
         range=f"{SHEET_NAME}!C{i}",
         valueInputOption="RAW",
-        body={"values": [[ownership_text]]}
+        body={"values": [[sale_date]]}
     ).execute()
 
     # Update D Column (Additional Info)
@@ -65,23 +65,7 @@ def update_google_sheet(sheet, i, ownership_text, additional_text, property_valu
         spreadsheetId=SHEET_ID,
         range=f"{SHEET_NAME}!D{i}",
         valueInputOption="RAW",
-        body={"values": [[additional_text]]}
-    ).execute()
-
-    # Update E Column (Property Value)
-    sheet.values().update(
-        spreadsheetId=SHEET_ID,
-        range=f"{SHEET_NAME}!E{i}",
-        valueInputOption="RAW",
-        body={"values": [[property_value]]}
-    ).execute()
-
-    # Update F Column (Building Info)
-    sheet.values().update(
-        spreadsheetId=SHEET_ID,
-        range=f"{SHEET_NAME}!F{i}",
-        valueInputOption="RAW",
-        body={"values": [[bldg_info]]}
+        body={"values": [[sale_amount]]}
     ).execute()
 
 def process_row(site, i, sheet):
@@ -108,13 +92,12 @@ def process_row(site, i, sheet):
         print("result loaded")
 
         # Extract Data
-        ownership_text = extract_text(driver, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[1]/div[2]/div[1]')
-        additional_text = extract_text(driver, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[2]/div[2]/div')
-        property_value = extract_text(driver, '//*[@id="tSalesTransfers"]/tbody/tr[1]/td[2]')
-        bldg_info = extract_text(driver, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[7]/div[2]')
+        sale_date = extract_text(driver, '//*[@id="tSalesTransfers"]/tbody/tr[1]/td[1]')
+        sale_amount = extract_text(driver, '//*[@id="tSalesTransfers"]/tbody/tr[1]/td[2]')
+        
 
         # Update the sheet immediately per row
-        update_google_sheet(sheet, i, ownership_text, additional_text, property_value, bldg_info)
+        update_google_sheet(sheet, i, sale_date, sale_amount)
 
         print(f"Row {i} completed.")
 
