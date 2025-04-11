@@ -16,6 +16,7 @@ jobs:
           - "Property Appraiser Scripts/leePA_02.py"
           - "Property Appraiser Scripts/palmBayPA1.py"
           - "Property Appraiser Scripts/palmBayPA2.py"
+          - "Skip Tracing/rapid_API2.py"
 
     steps:
       - name: Checkout repository
