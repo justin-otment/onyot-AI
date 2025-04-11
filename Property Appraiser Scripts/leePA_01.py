@@ -45,7 +45,7 @@ context.verify_mode = ssl.CERT_NONE
 
 # Google Sheets setup
 SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
-SHEET_NAME = 'Cape Coral - ArcGIS_LANDonly'
+SHEET_NAME = 'Raw Cape Coral - ArcGIS (lands)'
 
 
 # Define file paths
