@@ -45,7 +45,7 @@ context.verify_mode = ssl.CERT_NONE
 
 # Google Sheets setup
 SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
-SHEET_NAME = 'Cape Coral - ArcGIS_LANDonly'
+SHEET_NAME = 'Raw Cape Coral - ArcGIS (lands)'
 
 
 # Define file paths
@@ -83,7 +83,7 @@ def fetch_data_and_update_sheet():
         sheet = sheets_service.spreadsheets()  # This is the correct object to interact with Sheets API
 
         # Define the range for the data
-        range_ = f"{SHEET_NAME}!A5001:7500"
+        range_ = f"{SHEET_NAME}!A5001:A7500"
         result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
         sheet_data = result.get("values", [])
         print(f"Fetched data: {sheet_data}")  # Debug print to check the data
@@ -134,7 +134,7 @@ def fetch_data_and_update_sheet():
             driver.get(href)
 
             img_element = WebDriverWait(driver, 30).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, 'img.completeOwnershipButton'))
+                EC.presence_of_element_located((By.CSS_SELECTOR, '#SalesHyperLink > img'))
             )
 
             # Scroll into view (optional but nice)
@@ -146,48 +146,24 @@ def fetch_data_and_update_sheet():
 
             time.sleep(1)
 
-            ownership_text = driver.find_element(By.XPATH, '//*[@id="ownershipDiv"]/div/ul').text
-            sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!C{i}",
-                valueInputOption="RAW",
-                body={"values": [[ownership_text]]}
-            ).execute()
-
-            additional_text = driver.find_element(By.XPATH, '//*[@id="divDisplayParcelOwner"]/div[1]/div/div[2]/div').text
-            sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!D{i}",
-                valueInputOption="RAW",
-                body={"values": [[additional_text]]}
-            ).execute()
-
-            # Click Value tab and extract property value
-            value_tab = driver.find_element(By.ID, "ValuesHyperLink").click()
-            property_value = WebDriverWait(driver, 60).until(
-                EC.presence_of_element_located((By.XPATH, '//*[@id="valueGrid"]/tbody/tr[2]/td[4]'))
+            sale_date = WebDriverWait(driver, 60).until(
+                EC.presence_of_element_located((By.XPATH, '//*[@id="SalesDetails"]/div[3]/table/tbody/tr[2]/td[2]'))
             ).text
             sheets_service.spreadsheets().values().update(
                 spreadsheetId=SHEET_ID,
                 range=f"{SHEET_NAME}!E{i}",
                 valueInputOption="RAW",
-                body={"values": [[property_value]]}
+                body={"values": [[sale_date]]}
             ).execute()
 
-            building_info = driver.find_element(By.XPATH, '//*[@id="divDisplayParcelOwner"]/div[3]/table[1]/tbody/tr[3]/td').text
+            sale_amount = WebDriverWait(driver, 60).until(
+                EC.presence_of_element_located((By.XPATH, '//*[@id="SalesDetails"]/div[3]/table/tbody/tr[2]/td[1]'))
+            ).text
             sheets_service.spreadsheets().values().update(
                 spreadsheetId=SHEET_ID,
                 range=f"{SHEET_NAME}!F{i}",
                 valueInputOption="RAW",
-                body={"values": [[building_info]]}
-            ).execute()
-
-            full_site = driver.find_element(By.XPATH, '//*[@id="divDisplayParcelOwner"]/div[2]/div[3]').text
-            sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!S{i}",
-                valueInputOption="RAW",
-                body={"values": [[full_site]]}
+                body={"values": [[sale_amount]]}
             ).execute()
 
         except Exception as e:
