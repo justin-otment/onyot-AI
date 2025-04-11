@@ -14,7 +14,7 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException
 
 # Google Sheets setup
 SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
-SHEET_NAME = 'PalmBay_ArcGIS_LandONLY'
+SHEET_NAME = 'Palm Bay - ArcGIS RAW'
 
 # Define file paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -117,7 +117,7 @@ def fetch_data_and_update_sheet():
     sheet = sheets_service.spreadsheets()
 
     # Fetch data from Google Sheet
-    range_ = f"{SHEET_NAME}!B8698:B17394"
+    range_ = f"{SHEET_NAME}!B8698:B"
     result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
     sheet_data = result.get("values", [])
 
