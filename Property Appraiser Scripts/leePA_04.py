@@ -47,6 +47,7 @@ context.verify_mode = ssl.CERT_NONE
 SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
 SHEET_NAME = 'Raw Cape Coral - ArcGIS (lands)'
 
+
 # Define file paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
@@ -82,7 +83,7 @@ def fetch_data_and_update_sheet():
         sheet = sheets_service.spreadsheets()  # This is the correct object to interact with Sheets API
 
         # Define the range for the data
-        range_ = f"{SHEET_NAME}!A10001:A15000"
+        range_ = f"{SHEET_NAME}!A7501:A10000"
         result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
         sheet_data = result.get("values", [])
         print(f"Fetched data: {sheet_data}")  # Debug print to check the data
@@ -93,7 +94,7 @@ def fetch_data_and_update_sheet():
     # Web scraping and updating data in Google Sheets
     url = 'https://www.leepa.org/Search/PropertySearch.aspx'
 
-    for i, row in enumerate(sheet_data, start=10001):
+    for i, row in enumerate(sheet_data, start=7501):
         owner = row[0] if row else None
         if not owner or owner.strip() == '':
             print(f"Skipping empty or blank cell at row {i}")
@@ -118,7 +119,7 @@ def fetch_data_and_update_sheet():
 
             try:
                 # Handle warning pop-up
-                WebDriverWait(driver, 60).until(
+                WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.ID, "ctl00_BodyContentPlaceHolder_pnlIssues"))
                 )
                 warning_button = driver.find_element(By.ID, "ctl00_BodyContentPlaceHolder_btnWarning")
@@ -126,64 +127,43 @@ def fetch_data_and_update_sheet():
             except:
                 print("No pop-up found, continuing to next step.")
 
-            time.sleep(7)
-
             # Navigate to property details
-            href = WebDriverWait(driver, 60).until(
+            href = WebDriverWait(driver, 30).until(
                 EC.presence_of_element_located((By.XPATH, '//*[@id="ctl00_BodyContentPlaceHolder_WebTab1"]/div/div[1]/div[1]/table/tbody/tr/td[4]/div/div[1]/a'))
             ).get_attribute('href')
             driver.get(href)
 
-            time.sleep(5)
-
-            # Click image to reveal ownership details
-            img_element = WebDriverWait(driver, 60).until(
-                EC.presence_of_element_located((By.XPATH, '//*[@id="divDisplayParcelOwner"]/div[1]/div/div[1]/a[2]/img'))
+            img_element = WebDriverWait(driver, 30).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, '#SalesHyperLink > img'))
             )
-            img_element.click()
 
-            ownership_text = driver.find_element(By.XPATH, '//*[@id="ownershipDiv"]/div/ul').text
-            sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!C{i}",
-                valueInputOption="RAW",
-                body={"values": [[ownership_text]]}
-            ).execute()
+            # Scroll into view (optional but nice)
+            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", img_element)
+            time.sleep(1)  # Give it a moment
 
-            additional_text = driver.find_element(By.XPATH, '//*[@id="divDisplayParcelOwner"]/div[1]/div/div[2]/div').text
-            sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!D{i}",
-                valueInputOption="RAW",
-                body={"values": [[additional_text]]}
-            ).execute()
+            # Use JS to click the element directly
+            driver.execute_script("arguments[0].click();", img_element)
 
-            # Click Value tab and extract property value
-            value_tab = driver.find_element(By.ID, "ValuesHyperLink").click()
-            property_value = WebDriverWait(driver, 60).until(
-                EC.presence_of_element_located((By.XPATH, '//*[@id="valueGrid"]/tbody/tr[2]/td[4]'))
+            time.sleep(1)
+
+            sale_date = WebDriverWait(driver, 60).until(
+                EC.presence_of_element_located((By.XPATH, '//*[@id="SalesDetails"]/div[3]/table/tbody/tr[2]/td[2]'))
             ).text
             sheets_service.spreadsheets().values().update(
                 spreadsheetId=SHEET_ID,
                 range=f"{SHEET_NAME}!E{i}",
                 valueInputOption="RAW",
-                body={"values": [[property_value]]}
+                body={"values": [[sale_date]]}
             ).execute()
 
-            building_info = driver.find_element(By.XPATH, '//*[@id="divDisplayParcelOwner"]/div[3]/table[1]/tbody/tr[3]/td').text
+            sale_amount = WebDriverWait(driver, 60).until(
+                EC.presence_of_element_located((By.XPATH, '//*[@id="SalesDetails"]/div[3]/table/tbody/tr[2]/td[1]'))
+            ).text
             sheets_service.spreadsheets().values().update(
                 spreadsheetId=SHEET_ID,
                 range=f"{SHEET_NAME}!F{i}",
                 valueInputOption="RAW",
-                body={"values": [[building_info]]}
-            ).execute()
-
-            full_site = driver.find_element(By.XPATH, '//*[@id="divDisplayParcelOwner"]/div[2]/div[3]').text
-            sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!S{i}",
-                valueInputOption="RAW",
-                body={"values": [[full_site]]}
+                body={"values": [[sale_amount]]}
             ).execute()
 
         except Exception as e:
