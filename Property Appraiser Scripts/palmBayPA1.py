@@ -55,7 +55,7 @@ def update_google_sheet(sheet, i, sale_date, sale_amount):
     # Update C Column (Ownership)
     sheet.values().update(
         spreadsheetId=SHEET_ID,
-        range=f"{SHEET_NAME}!C{i}",
+        range=f"{SHEET_NAME}!G{i}",
         valueInputOption="RAW",
         body={"values": [[sale_date]]}
     ).execute()
@@ -63,7 +63,7 @@ def update_google_sheet(sheet, i, sale_date, sale_amount):
     # Update D Column (Additional Info)
     sheet.values().update(
         spreadsheetId=SHEET_ID,
-        range=f"{SHEET_NAME}!D{i}",
+        range=f"{SHEET_NAME}!H{i}",
         valueInputOption="RAW",
         body={"values": [[sale_amount]]}
     ).execute()
@@ -117,7 +117,7 @@ def fetch_data_and_update_sheet():
     sheet = sheets_service.spreadsheets()
 
     # Fetch data from Google Sheet
-    range_ = f"{SHEET_NAME}!B2:B"
+    range_ = f"{SHEET_NAME}!B2:B8697"
     result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
     sheet_data = result.get("values", [])
 
