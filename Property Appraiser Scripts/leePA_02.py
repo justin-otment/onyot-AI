@@ -83,7 +83,7 @@ def fetch_data_and_update_sheet():
         sheet = sheets_service.spreadsheets()  # This is the correct object to interact with Sheets API
 
         # Define the range for the data
-        range_ = f"{SHEET_NAME}!A12522:A"
+        range_ = f"{SHEET_NAME}!A2501:A5000"
         result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
         sheet_data = result.get("values", [])
         print(f"Fetched data: {sheet_data}")  # Debug print to check the data
@@ -94,7 +94,7 @@ def fetch_data_and_update_sheet():
     # Web scraping and updating data in Google Sheets
     url = 'https://www.leepa.org/Search/PropertySearch.aspx'
 
-    for i, row in enumerate(sheet_data, start=12522):
+    for i, row in enumerate(sheet_data, start=2501):
         owner = row[0] if row else None
         if not owner or owner.strip() == '':
             print(f"Skipping empty or blank cell at row {i}")
