@@ -1,3 +1,4 @@
+
 import os
 import time
 import json
@@ -83,7 +84,7 @@ def fetch_data_and_update_sheet():
         sheet = sheets_service.spreadsheets()  # This is the correct object to interact with Sheets API
 
         # Define the range for the data
-        range_ = f"{SHEET_NAME}!A10001:A12500"
+        range_ = f"{SHEET_NAME}!A10001:A12000"
         result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
         sheet_data = result.get("values", [])
         print(f"Fetched data: {sheet_data}")  # Debug print to check the data
