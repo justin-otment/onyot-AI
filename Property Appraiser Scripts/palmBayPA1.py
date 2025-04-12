@@ -117,12 +117,12 @@ def fetch_data_and_update_sheet():
     sheet = sheets_service.spreadsheets()
 
     # Fetch data from Google Sheet
-    range_ = f"{SHEET_NAME}!B1909:B"
+    range_ = f"{SHEET_NAME}!B2:B2500"
     result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
     sheet_data = result.get("values", [])
 
     # Process each row with a new browser instance
-    for i, row in enumerate(sheet_data, start=1909):
+    for i, row in enumerate(sheet_data, start=2):
         site = row[0].strip() if row else None
         print(f"Processing Name: {site}")
 
