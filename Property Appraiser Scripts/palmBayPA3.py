@@ -14,7 +14,7 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException
 
 # Google Sheets setup
 SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
-SHEET_NAME = 'PalmBay_ArcGIS_LandONLY'
+SHEET_NAME = 'Palm Bay - ArcGIS RAW'
 
 # Define file paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -51,37 +51,21 @@ def extract_text(driver, xpath, default_value="Not Found"):
         return default_value
 
 # Function to update Google Sheet per cell
-def update_google_sheet(sheet, i, ownership_text, additional_text, property_value, bldg_info):
+def update_google_sheet(sheet, i, sale_date, sale_amount):
     # Update C Column (Ownership)
     sheet.values().update(
         spreadsheetId=SHEET_ID,
-        range=f"{SHEET_NAME}!C{i}",
+        range=f"{SHEET_NAME}!G{i}",
         valueInputOption="RAW",
-        body={"values": [[ownership_text]]}
+        body={"values": [[sale_date]]}
     ).execute()
 
     # Update D Column (Additional Info)
     sheet.values().update(
         spreadsheetId=SHEET_ID,
-        range=f"{SHEET_NAME}!D{i}",
+        range=f"{SHEET_NAME}!H{i}",
         valueInputOption="RAW",
-        body={"values": [[additional_text]]}
-    ).execute()
-
-    # Update E Column (Property Value)
-    sheet.values().update(
-        spreadsheetId=SHEET_ID,
-        range=f"{SHEET_NAME}!E{i}",
-        valueInputOption="RAW",
-        body={"values": [[property_value]]}
-    ).execute()
-
-    # Update F Column (Building Info)
-    sheet.values().update(
-        spreadsheetId=SHEET_ID,
-        range=f"{SHEET_NAME}!F{i}",
-        valueInputOption="RAW",
-        body={"values": [[bldg_info]]}
+        body={"values": [[sale_amount]]}
     ).execute()
 
 def process_row(site, i, sheet):
@@ -98,7 +82,7 @@ def process_row(site, i, sheet):
 
         # Input the Site and Search
         site_input = WebDriverWait(driver, 60).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, '#txtPropertySearch_Pid'))
+            EC.element_to_be_clickable((By.ID, 'txtPropertySearch_Address'))
         )
         site_input.send_keys(site, Keys.RETURN)
 
@@ -108,24 +92,23 @@ def process_row(site, i, sheet):
         print("result loaded")
 
         # Extract Data
-        ownership_text = extract_text(driver, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[1]/div[2]/div[1]')
-        additional_text = extract_text(driver, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[2]/div[2]/div')
-        property_value = extract_text(driver, '//*[@id="tSalesTransfers"]/tbody/tr[1]/td[2]')
-        bldg_info = extract_text(driver, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[7]/div[2]')
+        sale_date = extract_text(driver, '//*[@id="tSalesTransfers"]/tbody/tr[1]/td[1]')
+        sale_amount = extract_text(driver, '//*[@id="tSalesTransfers"]/tbody/tr[1]/td[2]')
+        
 
         # Update the sheet immediately per row
-        update_google_sheet(sheet, i, ownership_text, additional_text, property_value, bldg_info)
+        update_google_sheet(sheet, i, sale_date, sale_amount)
 
-        print(f"✅ Row {i} completed.")
+        print(f"Row {i} completed.")
 
     except Exception as e:
-        print(f"❌ Error processing row {i}: {e}")
+        print(f"Error processing row {i}: {e}")
 
     finally:
         # Close the browser if it was initialized
         if driver:
             driver.quit()
-        print(f"🚪 Closed browser instance for Row {i}\n")
+        print(f"Closed browser instance for Row {i}\n")
 
 
 # Main data fetching and updating
@@ -133,13 +116,13 @@ def fetch_data_and_update_sheet():
     sheets_service = authenticate_google_sheets()
     sheet = sheets_service.spreadsheets()
 
-    # ✅ Fetch data from Google Sheet
-    range_ = f"{SHEET_NAME}!A5474:A8208"
+    # Fetch data from Google Sheet
+    range_ = f"{SHEET_NAME}!B5001:B7500"
     result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
     sheet_data = result.get("values", [])
 
-    # ✅ Process each row with a new browser instance
-    for i, row in enumerate(sheet_data, start=5474):
+    # Process each row with a new browser instance
+    for i, row in enumerate(sheet_data, start=5001):
         site = row[0].strip() if row else None
         print(f"Processing Name: {site}")
 
@@ -147,10 +130,10 @@ def fetch_data_and_update_sheet():
             print(f"Skipping empty row {i}")
             continue
 
-        # ✅ Process the row with a new browser instance
+        # Process the row with a new browser instance
         process_row(site, i, sheet)
 
-    print("🚀 All rows have been processed.")
+    print("All rows have been processed.")
 
 if __name__ == '__main__':
     fetch_data_and_update_sheet()
