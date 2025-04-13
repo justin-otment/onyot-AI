@@ -1,5 +1,4 @@
 import os
-import json
 from selenium import webdriver
 from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.common.by import By
@@ -27,113 +26,105 @@ def authenticate_google_sheets():
     creds = None
     if os.path.exists(TOKEN_PATH):
         creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
             creds = flow.run_local_server(port=0)
-
-    with open(TOKEN_PATH, "w") as token:
-        token.write(creds.to_json())
-
+        with open(TOKEN_PATH, "w") as token:
+            token.write(creds.to_json())
     return build("sheets", "v4", credentials=creds)
 
-# Function to safely extract text
-def extract_text(driver, xpath, default_value="Not Found"):
+# Function to process a single row
+def process_row(driver, sheet_service, site, i):
     try:
-        element = WebDriverWait(driver, 60).until(
-            EC.presence_of_element_located((By.XPATH, xpath))
-        )
-        return element.text.strip()
-    except (NoSuchElementException, TimeoutException):
-        return default_value
-
-# Function to update Google Sheet per cell
-def update_google_sheet(sheet, i, sale_date, sale_amount):
-    # Update C Column (Ownership)
-    sheet.values().update(
-        spreadsheetId=SHEET_ID,
-        range=f"{SHEET_NAME}!G{i}",
-        valueInputOption="RAW",
-        body={"values": [[sale_date]]}
-    ).execute()
-
-    # Update D Column (Additional Info)
-    sheet.values().update(
-        spreadsheetId=SHEET_ID,
-        range=f"{SHEET_NAME}!H{i}",
-        valueInputOption="RAW",
-        body={"values": [[sale_amount]]}
-    ).execute()
-
-def process_row(site, i, sheet):
-    driver = None  # Initialize the driver variable to None
-    try:
-        # Create a new WebDriver instance
-        options = webdriver.FirefoxOptions()
-        options.add_argument("--headless")
-        service = Service()
-        driver = webdriver.Firefox(service=service, options=options)
-
         # Navigate to the site
         driver.get('https://www.bcpao.us/propertysearch/#/nav/Search')
 
-        # Input the Site and Search
+        # Input the Site ID and search
         site_input = WebDriverWait(driver, 60).until(
-            EC.element_to_be_clickable((By.ID, 'txtPropertySearch_Address'))
+            EC.element_to_be_clickable((By.CSS_SELECTOR, '#txtPropertySearch_Pid'))
         )
         site_input.send_keys(site, Keys.RETURN)
 
-        ownership_text = WebDriverWait(driver, 60).until(
-            EC.element_to_be_clickable((By.XPATH, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[1]/div[2]/div[1]'))
+        WebDriverWait(driver, 60).until(
+            EC.presence_of_element_located((By.XPATH, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[1]/div[2]/div[1]'))
         )
-        print("result loaded")
+        print("✅ Result loaded")
 
         # Extract Data
-        sale_date = extract_text(driver, '//*[@id="tSalesTransfers"]/tbody/tr[1]/td[1]')
-        sale_amount = extract_text(driver, '//*[@id="tSalesTransfers"]/tbody/tr[1]/td[2]')
-        
+        ownership_text = driver.find_element(By.XPATH, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[1]/div[2]/div[1]').text
+        additional_text = driver.find_element(By.XPATH, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[2]/div[2]/div').text
+        property_value = WebDriverWait(driver, 60).until(
+            EC.presence_of_element_located((By.XPATH, '//*[@id="tSalesTransfers"]/tbody/tr[1]/td[2]'))
+        ).text
+        building_info = driver.find_element(By.XPATH, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[7]/div[2]').text
 
-        # Update the sheet immediately per row
-        update_google_sheet(sheet, i, sale_date, sale_amount)
+        # Update Google Sheet
+        updates = [
+            (f"{SHEET_NAME}!C{i}", [[ownership_text]]),
+            (f"{SHEET_NAME}!D{i}", [[additional_text]]),
+            (f"{SHEET_NAME}!E{i}", [[property_value]]),
+            (f"{SHEET_NAME}!F{i}", [[building_info]])
+        ]
 
-        print(f"Row {i} completed.")
+        for rng, val in updates:
+            sheet_service.values().update(
+                spreadsheetId=SHEET_ID,
+                range=rng,
+                valueInputOption="RAW",
+                body={"values": val}
+            ).execute()
+
+        print(f"✅ Row {i} processed.")
 
     except Exception as e:
-        print(f"Error processing row {i}: {e}")
+        print(f"❌ Error processing row {i}: {e}")
 
-    finally:
-        # Close the browser if it was initialized
-        if driver:
-            driver.quit()
-        print(f"Closed browser instance for Row {i}\n")
-
-
-# Main data fetching and updating
+# Main function
 def fetch_data_and_update_sheet():
+    # Authenticate once
     sheets_service = authenticate_google_sheets()
     sheet = sheets_service.spreadsheets()
 
-    # Fetch data from Google Sheet
-    range_ = f"{SHEET_NAME}!B2:B2500"
-    result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
-    sheet_data = result.get("values", [])
+    # Fetch site data and check column G (skip rows where G is filled)
+    range_sites = f"{SHEET_NAME}!A2:A1696"
+    range_checks = f"{SHEET_NAME}!G2:G1696"
+    site_data = sheet.values().get(spreadsheetId=SHEET_ID, range=range_sites).execute().get("values", [])
+    check_data = sheet.values().get(spreadsheetId=SHEET_ID, range=range_checks).execute().get("values", [])
 
-    # Process each row with a new browser instance
-    for i, row in enumerate(sheet_data, start=2):
-        site = row[0].strip() if row else None
-        print(f"Processing Name: {site}")
+    # Pad check_data to match site_data
+    while len(check_data) < len(site_data):
+        check_data.append([])
 
-        if not site:
-            print(f"Skipping empty row {i}")
-            continue
+    # Start the browser only once
+    options = webdriver.FirefoxOptions()
+    options.add_argument("--headless")
+    driver = webdriver.Firefox(service=Service(), options=options)
 
-        # Process the row with a new browser instance
-        process_row(site, i, sheet)
+    try:
+        for i, (site_row, check_row) in enumerate(zip(site_data, check_data), start=2):
+            site = site_row[0].strip() if site_row else None
+            check_value = check_row[0].strip() if check_row else ""
 
-    print("All rows have been processed.")
+            print(f"🔎 Row {i}: Site = {site}, G = '{check_value}'")
+
+            if not site:
+                print(f"⚠️ Skipping row {i} (empty site).")
+                continue
+
+            if check_value:
+                print(f"⏭️ Skipping row {i} (G not empty).")
+                continue
+
+            process_row(driver, sheets_service, site, i)
+
+    finally:
+        driver.quit()
+        print("🚪 Browser closed.")
+
+    print("🚀 All applicable rows have been processed.")
 
 if __name__ == '__main__':
     fetch_data_and_update_sheet()
