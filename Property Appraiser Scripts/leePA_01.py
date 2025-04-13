@@ -81,8 +81,8 @@ def fetch_data_and_update_sheet():
         sheet = sheets_service.spreadsheets()
 
         # Fetch column A (names) and column E (sale_date)
-        names_range = f"{SHEET_NAME}!A2:A2500"
-        dates_range = f"{SHEET_NAME}!E2:E2500"
+        names_range = f"{SHEET_NAME}!A2:A3950"
+        dates_range = f"{SHEET_NAME}!E2:E3950"
 
         names_result = sheet.values().get(spreadsheetId=SHEET_ID, range=names_range).execute()
         dates_result = sheet.values().get(spreadsheetId=SHEET_ID, range=dates_range).execute()
