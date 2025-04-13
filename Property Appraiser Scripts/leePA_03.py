@@ -45,7 +45,7 @@ context.verify_mode = ssl.CERT_NONE
 
 # Google Sheets setup
 SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
-SHEET_NAME = 'Raw Cape Coral - ArcGIS (lands)'
+SHEET_NAME = 'Cape Coral - ArcGIS_LANDonly'
 
 
 # Define file paths
@@ -75,59 +75,66 @@ def authenticate_google_sheets():
 
     return build("sheets", "v4", credentials=creds)
 
-# Correcting the function
 def fetch_data_and_update_sheet():
     try:
-        # Authenticate with Google Sheets API
-        sheets_service = authenticate_google_sheets()  # Changed 'service' to 'sheets_service'
-        sheet = sheets_service.spreadsheets()  # This is the correct object to interact with Sheets API
+        sheets_service = authenticate_google_sheets()
+        sheet = sheets_service.spreadsheets()
 
-        # Define the range for the data
-        range_ = f"{SHEET_NAME}!A5001:A7500"
-        result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
-        sheet_data = result.get("values", [])
-        print(f"Fetched data: {sheet_data}")  # Debug print to check the data
+        # Fetch column A (names) and column E (sale_date)
+        names_range = f"{SHEET_NAME}!A7901:A11850"
+        dates_range = f"{SHEET_NAME}!E7901:E11850"
+
+        names_result = sheet.values().get(spreadsheetId=SHEET_ID, range=names_range).execute()
+        dates_result = sheet.values().get(spreadsheetId=SHEET_ID, range=dates_range).execute()
+
+        names_data = names_result.get("values", [])
+        dates_data = dates_result.get("values", [])
+
+        print(f"Fetched {len(names_data)} names and {len(dates_data)} date cells.")
+
     except Exception as e:
         print(f"Error fetching data from Google Sheets: {e}")
-        return  # Exit if there's an issue fetching the sheet data
+        return
 
-    # Web scraping and updating data in Google Sheets
     url = 'https://www.leepa.org/Search/PropertySearch.aspx'
 
-    for i, row in enumerate(sheet_data, start=5001):
-        owner = row[0] if row else None
-        if not owner or owner.strip() == '':
-            print(f"Skipping empty or blank cell at row {i}")
+    for i, (name_row, date_row) in enumerate(zip(names_data, dates_data), start=7901):
+        owner = name_row[0].strip() if name_row else ""
+        sale_date = date_row[0].strip() if date_row else ""
+
+        # Skip if column E is non-empty
+        if sale_date:
+            print(f"Skipping row {i} because column E is already filled.")
             continue
 
-        print(f"Processing Name: {owner}")
+        if not owner:
+            print(f"Skipping row {i} because owner name is blank.")
+            continue
 
-        # Setup Firefox driver with headless option
+        print(f"Processing row {i}: Owner = {owner}")
+
         options = webdriver.FirefoxOptions()
         options.add_argument("--headless")
-        service = Service()  # Selenium WebDriver service (for Firefox)
+        service = Service()
         driver = webdriver.Firefox(service=service, options=options)
 
         try:
             driver.get(url)
 
-            # Enter owner name and submit
             strap_input = WebDriverWait(driver, 60).until(
                 EC.presence_of_element_located((By.ID, "ctl00_BodyContentPlaceHolder_WebTab1_tmpl0_STRAPTextBox"))
             )
             strap_input.send_keys(owner, Keys.RETURN)
 
             try:
-                # Handle warning pop-up
                 WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.ID, "ctl00_BodyContentPlaceHolder_pnlIssues"))
                 )
                 warning_button = driver.find_element(By.ID, "ctl00_BodyContentPlaceHolder_btnWarning")
                 warning_button.click()
             except:
-                print("No pop-up found, continuing to next step.")
+                print("No warning popup.")
 
-            # Navigate to property details
             href = WebDriverWait(driver, 30).until(
                 EC.presence_of_element_located((By.XPATH, '//*[@id="ctl00_BodyContentPlaceHolder_WebTab1"]/div/div[1]/div[1]/table/tbody/tr/td[4]/div/div[1]/a'))
             ).get_attribute('href')
@@ -136,30 +143,28 @@ def fetch_data_and_update_sheet():
             img_element = WebDriverWait(driver, 30).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, '#SalesHyperLink > img'))
             )
-
-            # Scroll into view (optional but nice)
             driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", img_element)
-            time.sleep(1)  # Give it a moment
-
-            # Use JS to click the element directly
+            time.sleep(1)
             driver.execute_script("arguments[0].click();", img_element)
-
             time.sleep(1)
 
             sale_date = WebDriverWait(driver, 60).until(
                 EC.presence_of_element_located((By.XPATH, '//*[@id="SalesDetails"]/div[3]/table/tbody/tr[2]/td[2]'))
             ).text
-            sheets_service.spreadsheets().values().update(
+            sale_amount = WebDriverWait(driver, 60).until(
+                EC.presence_of_element_located((By.XPATH, '//*[@id="SalesDetails"]/div[3]/table/tbody/tr[2]/td[1]'))
+            ).text
+
+            # Write sale_date to column E
+            sheet.values().update(
                 spreadsheetId=SHEET_ID,
                 range=f"{SHEET_NAME}!E{i}",
                 valueInputOption="RAW",
                 body={"values": [[sale_date]]}
             ).execute()
 
-            sale_amount = WebDriverWait(driver, 60).until(
-                EC.presence_of_element_located((By.XPATH, '//*[@id="SalesDetails"]/div[3]/table/tbody/tr[2]/td[1]'))
-            ).text
-            sheets_service.spreadsheets().values().update(
+            # Write sale_amount to column F
+            sheet.values().update(
                 spreadsheetId=SHEET_ID,
                 range=f"{SHEET_NAME}!F{i}",
                 valueInputOption="RAW",
