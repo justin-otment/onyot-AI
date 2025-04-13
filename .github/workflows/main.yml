@@ -20,7 +20,6 @@ jobs:
           - "Property Appraiser Scripts/palmBayPA1.py"
           - "Property Appraiser Scripts/palmBayPA2.py"
           - "Property Appraiser Scripts/palmBayPA3.py"
-          - "Property Appraiser Scripts/palmBayPA4.py"
           
     steps:
       - name: Checkout repository
