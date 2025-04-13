@@ -51,7 +51,7 @@ def process_row(driver, sheet_service, site, i):
         WebDriverWait(driver, 60).until(
             EC.presence_of_element_located((By.XPATH, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[1]/div[2]/div[1]'))
         )
-        print("✅ Result loaded")
+        print(" Result loaded")
 
         # Extract Data
         ownership_text = driver.find_element(By.XPATH, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[1]/div[2]/div[1]').text
@@ -77,10 +77,10 @@ def process_row(driver, sheet_service, site, i):
                 body={"values": val}
             ).execute()
 
-        print(f"✅ Row {i} processed.")
+        print(f"Row {i} processed.")
 
     except Exception as e:
-        print(f"❌ Error processing row {i}: {e}")
+        print(f"Error processing row {i}: {e}")
 
 # Main function
 def fetch_data_and_update_sheet():
@@ -108,21 +108,21 @@ def fetch_data_and_update_sheet():
             site = site_row[0].strip() if site_row else None
             check_value = check_row[0].strip() if check_row else ""
 
-            print(f"🔎 Row {i}: Site = {site}, G = '{check_value}'")
+            print(f" Row {i}: Site = {site}, G = '{check_value}'")
 
             if not site:
-                print(f"⚠️ Skipping row {i} (empty site).")
+                print(f" Skipping row {i} (empty site).")
                 continue
 
             if check_value:
-                print(f"⏭️ Skipping row {i} (G not empty).")
+                print(f" Skipping row {i} (G not empty).")
                 continue
 
             process_row(driver, sheets_service, site, i)
 
     finally:
         driver.quit()
-        print("🚪 Browser closed.")
+        print(" Browser closed.")
 
     print("🚀 All applicable rows have been processed.")
 
