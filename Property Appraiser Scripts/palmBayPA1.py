@@ -89,8 +89,8 @@ def fetch_data_and_update_sheet():
     sheet = sheets_service.spreadsheets()
 
     # Fetch site data and check column G (skip rows where G is filled)
-    range_sites = f"{SHEET_NAME}!A2:A1696"
-    range_checks = f"{SHEET_NAME}!G2:G1696"
+    range_sites = f"{SHEET_NAME}!A2:A"
+    range_checks = f"{SHEET_NAME}!G2:G"
     site_data = sheet.values().get(spreadsheetId=SHEET_ID, range=range_sites).execute().get("values", [])
     check_data = sheet.values().get(spreadsheetId=SHEET_ID, range=range_checks).execute().get("values", [])
 
