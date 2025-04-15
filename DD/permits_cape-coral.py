@@ -28,15 +28,25 @@ def authenticate_google_sheets():
     client = gspread.authorize(creds)
     return client
 
-def get_sheet_data(sheet_id, range_name):
+def get_sheet_data(sheet_id, range_name, check_column="R2:R"):
     try:
         service = authenticate_google_sheets()
         sheet = service.open_by_key(sheet_id)
         worksheet = sheet.worksheet(range_name.split('!')[0])
-        data = worksheet.get(range_name.split('!')[1])
-        return [cell[0] for cell in data if cell]
+
+        search_terms_col = worksheet.get(range_name.split('!')[1])
+        check_column_values = worksheet.get(check_column)
+
+        max_len = max(len(search_terms_col), len(check_column_values))
+        search_terms_col += [[]] * (max_len - len(search_terms_col))
+        check_column_values += [[]] * (max_len - len(check_column_values))
+
+        filtered_terms = [term[0] for term, check in zip(search_terms_col, check_column_values) if term and not check]
+        return filtered_terms
+
     except Exception as e:
         print(f"Error fetching data from Google Sheets: {e}")
+        traceback.print_exc()
         return []
 
 def write_detection_remark(sheet_id, worksheet_name, row_index, remark="dwelling detected"):
@@ -48,45 +58,60 @@ def write_detection_remark(sheet_id, worksheet_name, row_index, remark="dwelling
         print(f"Error writing remark to sheet: {e}")
         traceback.print_exc()
 
-
 async def search_property(driver, term):
-    for attempt in range(3):  # Retry max 3 times if stale element occurs
+    for attempt in range(3):
         try:
             driver.get("https://energovweb.capecoral.gov/EnerGovProd/selfservice#/search")
 
-            search_box = WebDriverWait(driver, 60).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "#SearchKeyword"))
-            )
+            try:
+                search_box = WebDriverWait(driver, 30).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "#SearchKeyword"))
+                )
+            except:
+                print(f"[Timeout] Search box not found for term '{term}'")
+                raise
+
             search_box.clear()
             search_box.send_keys(term)
 
-            WebDriverWait(driver, 60).until(
-                EC.invisibility_of_element((By.CSS_SELECTOR, "#overlay"))
-            )
+            try:
+                WebDriverWait(driver, 30).until(
+                    EC.invisibility_of_element_located((By.CSS_SELECTOR, "#overlay"))
+                )
+            except:
+                print(f"[Timeout] Overlay still visible after search for '{term}'")
 
             search_button = driver.find_element(By.CSS_SELECTOR, "#button-Search")
             search_button.click()
 
-            hidden_element_selector = "#energovSearchForm > div:nth-child(5) > div.col-md-10 > div:nth-child(1)"
-            driver.execute_script(
-                "document.querySelector(arguments[0]).classList.remove('hidden-print', 'hidden-xs', 'hidden-sm');",
-                hidden_element_selector
-            )
+            try:
+                WebDriverWait(driver, 30).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "div.row"))
+                )
+            except:
+                print(f"[No Results Timeout] Waiting for results div for '{term}'")
+                return []
 
-            WebDriverWait(driver, 60).until(
-                EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.row:nth-of-type(n+10)'))
-            )
+            no_results = driver.find_elements(By.XPATH, "//*[contains(text(), 'No results found')]")
+            if no_results:
+                print(f"[No Match] No results found for '{term}'")
+                return []
 
             spans = driver.find_elements(By.CSS_SELECTOR, 'span.margin-md-left')
             print(f"Found {len(spans)} spans for '{term}'")
 
             texts = []
             for span in spans:
-                driver.execute_script("arguments[0].scrollIntoView(true);", span)
-                time.sleep(0.5)
-                if span.is_displayed():
-                    text = span.text.strip().lower()
-                    texts.append(text)
+                try:
+                    driver.execute_script("arguments[0].scrollIntoView(true);", span)
+                    time.sleep(0.3)
+                    if span.is_displayed():
+                        text = span.text.strip().lower()
+                        if text:
+                            texts.append(text)
+                except:
+                    continue
+
             return texts
 
         except Exception as e:
@@ -97,14 +122,20 @@ async def search_property(driver, term):
                 continue
             else:
                 print(f"Error during search for '{term}':")
+                html_path = os.path.join(BASE_DIR, f"error_page_{term.replace(' ', '_')}.html")
+                with open(html_path, "w", encoding="utf-8") as f:
+                    f.write(driver.page_source)
+                print(f"Saved error snapshot to {html_path}")
                 traceback.print_exc()
                 return []
+
+    return []
 
 async def find_best_match(driver, search_terms, sheet_id, range_name):
     worksheet_name = range_name.split('!')[0]
 
-    for index, term in enumerate(search_terms, start=2):  # Google Sheets is 1-indexed, starts at row 2
-        print(f"Searching for '{term}'...")
+    for index, term in enumerate(search_terms, start=2):
+        print(f"\nSearching for '{term}'...")
         texts = await search_property(driver, term)
         if not texts:
             continue
@@ -114,9 +145,9 @@ async def find_best_match(driver, search_terms, sheet_id, range_name):
             if any(keyword in text for keyword in keywords):
                 print(f"Detected dwelling for '{term}' in row {index}")
                 write_detection_remark(sheet_id, worksheet_name, index)
-                break  # Stop processing further texts once a match is found
+                break
 
-        driver.get("https://energovweb.capecoral.gov/EnerGovProd/selfservice#/search")  # Navigate back
+        driver.get("https://energovweb.capecoral.gov/EnerGovProd/selfservice#/search")
 
 async def main():
     options = webdriver.ChromeOptions()
@@ -129,7 +160,7 @@ async def main():
 
     sheet_id = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
     range_name = "Raw Cape Coral - ArcGIS (lands)!B2:B"
-    search_terms = get_sheet_data(sheet_id, range_name)
+    search_terms = get_sheet_data(sheet_id, range_name, check_column="R2:R")
 
     if search_terms:
         await find_best_match(driver, search_terms, sheet_id, range_name)
@@ -137,8 +168,8 @@ async def main():
         print("No search terms found in the specified range.")
 
     driver.quit()
-
     await asyncio.sleep(0)
     await asyncio.get_event_loop().shutdown_asyncgens()
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
