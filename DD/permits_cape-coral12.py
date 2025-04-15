@@ -28,7 +28,7 @@ def authenticate_google_sheets():
     client = gspread.authorize(creds)
     return client
 
-def get_sheet_data(sheet_id, range_name, check_column="R22001:R24000"):
+def get_sheet_data(sheet_id, range_name, check_column="R22001:R24356"):
     try:
         service = authenticate_google_sheets()
         sheet = service.open_by_key(sheet_id)
@@ -159,8 +159,8 @@ async def main():
     driver = webdriver.Chrome(options=options)
 
     sheet_id = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
-    range_name = "Raw Cape Coral - ArcGIS (lands)!B22001:B24000"
-    search_terms = get_sheet_data(sheet_id, range_name, check_column="R22001:R24000")
+    range_name = "Raw Cape Coral - ArcGIS (lands)!B22001:B24356"
+    search_terms = get_sheet_data(sheet_id, range_name, check_column="R22001:R24356")
 
     if search_terms:
         await find_best_match(driver, search_terms, sheet_id, range_name)
