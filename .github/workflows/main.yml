@@ -12,8 +12,8 @@ jobs:
     strategy:
       matrix:
         script:
-          - "Property Appraiser Scripts/leePA_01.py"
-          - "Property Appraiser Scripts/palmBayPA1.py"
+          - "DD/permits_cape-coral.py"
+          - "DD/permits_palm-bay.py"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
