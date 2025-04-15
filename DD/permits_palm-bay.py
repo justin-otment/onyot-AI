@@ -30,7 +30,7 @@ def authenticate_google_sheets():
     return gspread.authorize(creds)
 
 # Get data only if the corresponding R cell is blank
-def get_sheet_data(sheet_id, range_name, check_column="R2:R"):
+def get_sheet_data(sheet_id, range_name, check_column="R2:R2000"):
     try:
         service = authenticate_google_sheets()
         sheet = service.open_by_key(sheet_id)
@@ -146,8 +146,8 @@ def main():
 
     try:
         sheet_id = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
-        range_name = "Palm Bay - ArcGIS RAW!B2:B"
-        check_column = "R2:R"
+        range_name = "Palm Bay - ArcGIS RAW!B2:B2000"
+        check_column = "R2:R2000"
 
         search_terms = get_sheet_data(sheet_id, range_name, check_column)
 
