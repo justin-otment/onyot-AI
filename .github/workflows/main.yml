@@ -12,8 +12,26 @@ jobs:
     strategy:
       matrix:
         script:
-          - "DD/permits_cape-coral.py"
-          - "DD/permits_palm-bay.py"
+          - "DD/permits_cape-coral1.py"
+          - "DD/permits_cape-coral2.py"
+          - "DD/permits_cape-coral3.py"
+          - "DD/permits_cape-coral4.py"
+          - "DD/permits_cape-coral5.py"
+          - "DD/permits_cape-coral6.py"
+          - "DD/permits_cape-coral7.py"
+          - "DD/permits_cape-coral8.py"
+          - "DD/permits_cape-coral9.py"
+          - "DD/permits_cape-coral10.py"
+          - "DD/permits_cape-coral11.py"
+          - "DD/permits_cape-coral12.py"
+          - "DD/permits_palm-bay1.py"
+          - "DD/permits_palm-bay2.py"
+          - "DD/permits_palm-bay3.py"
+          - "DD/permits_palm-bay4.py"
+          - "DD/permits_palm-bay5.py"
+          - "DD/permits_palm-bay6.py"
+          - "DD/permits_palm-bay7.py"
+          - "DD/permits_palm-bay8.py"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
