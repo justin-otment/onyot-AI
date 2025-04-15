@@ -1,15 +1,14 @@
 import os
 import time
-import random
 import gspread
 import asyncio
+import traceback
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from gspread_formatting import *
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
@@ -40,25 +39,21 @@ def get_sheet_data(sheet_id, range_name):
         print(f"Error fetching data from Google Sheets: {e}")
         return []
 
-def is_row_colored_yellow(sheet_id, range_name, row):
+def write_detection_remark(sheet_id, worksheet_name, row_index, remark="dwelling detected"):
     try:
         service = authenticate_google_sheets()
-        sheet = service.open_by_key(sheet_id)
-        worksheet = sheet.worksheet(range_name.split('!')[0])
-        format = get_effective_format(worksheet, f"A{row}")
-        color = format.backgroundColor
-        # Yellow approx RGB = (1.0, 1.0, 0.0)
-        if color.red == 1.0 and color.green == 1.0 and color.blue == 0.0:
-            return True
+        worksheet = service.open_by_key(sheet_id).worksheet(worksheet_name)
+        worksheet.update(values=[[remark]], range_name=f"Z{row_index}")
     except Exception as e:
-        print(f"Error checking yellow color in row {row}: {e}")
-    return False
+        print(f"Error writing remark to sheet: {e}")
+        traceback.print_exc()
+
 
 async def search_property(driver, term):
     for attempt in range(3):  # Retry max 3 times if stale element occurs
         try:
             driver.get("https://energovweb.capecoral.gov/EnerGovProd/selfservice#/search")
-            
+
             search_box = WebDriverWait(driver, 60).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "#SearchKeyword"))
             )
@@ -72,7 +67,6 @@ async def search_property(driver, term):
             search_button = driver.find_element(By.CSS_SELECTOR, "#button-Search")
             search_button.click()
 
-            # Ensure the hidden element is visible
             hidden_element_selector = "#energovSearchForm > div:nth-child(5) > div.col-md-10 > div:nth-child(1)"
             driver.execute_script(
                 "document.querySelector(arguments[0]).classList.remove('hidden-print', 'hidden-xs', 'hidden-sm');",
@@ -86,52 +80,44 @@ async def search_property(driver, term):
             spans = driver.find_elements(By.CSS_SELECTOR, 'span.margin-md-left')
             print(f"Found {len(spans)} spans for '{term}'")
 
+            texts = []
             for span in spans:
-                # Ensure the element is interactable
                 driver.execute_script("arguments[0].scrollIntoView(true);", span)
                 time.sleep(0.5)
                 if span.is_displayed():
                     text = span.text.strip().lower()
-                    print(f"Visible span text: {text}")
-                else:
-                    # Debugging: Print span attributes if not displayed
-                    print(f"Hidden span attributes: {span.get_attribute('outerHTML')}")
-
-            texts = [span.text.strip().lower() for span in spans if span.text.strip()]
+                    texts.append(text)
             return texts
 
         except Exception as e:
             if "stale element reference" in str(e).lower():
                 print(f"Stale element encountered for '{term}'. Retrying ({attempt + 1}/3)...")
                 time.sleep(3)
-                driver.refresh()  # Refresh the page before retrying
+                driver.refresh()
                 continue
             else:
-                print(f"Error during search for '{term}': {e}")
+                print(f"Error during search for '{term}':")
+                traceback.print_exc()
                 return []
 
 async def find_best_match(driver, search_terms, sheet_id, range_name):
-    for index, term in enumerate(search_terms, start=2):
-        if is_row_colored_yellow(sheet_id, range_name, index):
-            print(f"Skipping row {index} (already yellow)")
-            continue
+    worksheet_name = range_name.split('!')[0]
 
+    for index, term in enumerate(search_terms, start=2):  # Google Sheets is 1-indexed, starts at row 2
         print(f"Searching for '{term}'...")
         texts = await search_property(driver, term)
         if not texts:
             continue
 
         keywords = ["bld", "blc", "new construction", "new single family residence", "new", "rnt"]
-        matched_keywords = [text for text in texts if any(keyword in text for keyword in keywords)]
+        for text in texts:
+            if any(keyword in text for keyword in keywords):
+                print(f"Detected dwelling for '{term}' in row {index}")
+                write_detection_remark(sheet_id, worksheet_name, index)
+                break  # Stop processing further texts once a match is found
 
-        if matched_keywords:
-            print(f"Matched keywords in row {index}: {matched_keywords}")
-            update_sheet_color(sheet_id, range_name, index)
-        else:
-            print(f"No matched keywords found for '{term}'")
+        driver.get("https://energovweb.capecoral.gov/EnerGovProd/selfservice#/search")  # Navigate back
 
-        driver.get("https://energovweb.capecoral.gov/EnerGovProd/selfservice#/search")
-            
 async def main():
     options = webdriver.ChromeOptions()
     options.add_argument('--headless')
@@ -152,7 +138,6 @@ async def main():
 
     driver.quit()
 
-    # Ensure proper cleanup of asynchronous generators
     await asyncio.sleep(0)
     await asyncio.get_event_loop().shutdown_asyncgens()
 
