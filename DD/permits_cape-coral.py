@@ -40,17 +40,19 @@ def get_sheet_data(sheet_id, range_name):
         print(f"Error fetching data from Google Sheets: {e}")
         return []
 
-def update_sheet_color(sheet_id, range_name, row):
+def is_row_colored_yellow(sheet_id, range_name, row):
     try:
         service = authenticate_google_sheets()
         sheet = service.open_by_key(sheet_id)
         worksheet = sheet.worksheet(range_name.split('!')[0])
-        cell_format = CellFormat(
-            backgroundColor=Color(1, 0, 0)
-        )
-        format_cell_range(worksheet, f"{row}:{row}", cell_format)
+        format = get_effective_format(worksheet, f"A{row}")
+        color = format.backgroundColor
+        # Yellow approx RGB = (1.0, 1.0, 0.0)
+        if color.red == 1.0 and color.green == 1.0 and color.blue == 0.0:
+            return True
     except Exception as e:
-        print(f"Error updating sheet color: {e}")
+        print(f"Error checking yellow color in row {row}: {e}")
+    return False
 
 async def search_property(driver, term):
     for attempt in range(3):  # Retry max 3 times if stale element occurs
@@ -110,6 +112,10 @@ async def search_property(driver, term):
 
 async def find_best_match(driver, search_terms, sheet_id, range_name):
     for index, term in enumerate(search_terms, start=2):
+        if is_row_colored_yellow(sheet_id, range_name, index):
+            print(f"Skipping row {index} (already yellow)")
+            continue
+
         print(f"Searching for '{term}'...")
         texts = await search_property(driver, term)
         if not texts:
@@ -123,7 +129,8 @@ async def find_best_match(driver, search_terms, sheet_id, range_name):
             update_sheet_color(sheet_id, range_name, index)
         else:
             print(f"No matched keywords found for '{term}'")
-        driver.get("https://energovweb.capecoral.gov/EnerGovProd/selfservice#/search")  # Navigate back
+
+        driver.get("https://energovweb.capecoral.gov/EnerGovProd/selfservice#/search")
             
 async def main():
     options = webdriver.ChromeOptions()
