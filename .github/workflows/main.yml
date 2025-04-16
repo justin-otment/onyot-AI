@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         script:
-          - "Skip Tracing/rapid_draft.py"
+          - "Skip Tracing/main_beta.py"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
