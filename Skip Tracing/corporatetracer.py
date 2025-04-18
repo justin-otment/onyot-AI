@@ -73,7 +73,7 @@ def authenticate_google_sheets():
 def update_sheet(credentials, data, row_index):
     # No need to use .authorize(), build automatically handles the credentials
     sheets = build('sheets', 'v4', credentials=credentials)
-    range_ = f"{SHEET_NAME}!N{row_index}:R{row_index}"
+    range_ = f"{SHEET_NAME}!K{row_index}:O{row_index}"
     body = {'values': [data]}
     try:
         sheets.spreadsheets().values().update(
