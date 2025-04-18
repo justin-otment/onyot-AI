@@ -47,14 +47,10 @@ context.verify_mode = ssl.CERT_NONE
 
 # Google Sheets setup
 SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
-SHEET_NAME = 'Cape Coral - ArcGIS'
+SHEET_NAME = 'CAPE CORAL FINAL'
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 CREDENTIALS_PATH = os.path.join(os.getcwd(), 'credentials.json')
 TOKEN_PATH = os.path.join(os.getcwd(), 'token.json')
-
-from googleapiclient.discovery import build
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
 
 def authenticate_google_sheets():
     """Authenticate with Google Sheets API."""
