@@ -347,11 +347,9 @@ async def main():
         return
 
     async with async_playwright() as p:
+        browser = none
         try:
-            browser = await p.chromium.launch(
-            executablePath="/usr/bin/google-chrome-stable",
-            headless=False
-        )
+            browser = await p.chromium.launch(headless=True)
             context = await browser.new_context(user_agent=random.choice(user_agents))
             await context.add_init_script(stealth_js)
             page = await context.new_page()
