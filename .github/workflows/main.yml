@@ -38,7 +38,15 @@ jobs:
           pip install playwright
           playwright install --with-deps
 
+      # Step to restore base64-encoded credentials and token files
+      - name: Restore credentials and token files
+        run: |
+          echo "${{ secrets.GOOGLE_CREDENTIALS_B64 }}" | base64 -d > credentials.json
+          echo "${{ secrets.GOOGLE_TOKEN_B64 }}" | base64 -d > token.json
+
+      # Run the Python script
       - name: Run Python script
         env:
           CI: "true"
+          API_KEY: ${{ secrets.TWOCAPTCHA_API_KEY }}  # API Key for CAPTCHA solving (2Captcha API)
         run: python "${{ matrix.script }}"
