@@ -24,9 +24,6 @@ sheets_service = build('sheets', 'v4', credentials=creds)
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-# Force headless in CI
-CI = os.getenv("CI", "false").lower() == "true"
-
 # === Config ===
 # Define file paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -348,12 +345,10 @@ async def main():
     if not url_entries:
         print("[!] No URLs fetched from Google Sheets. Exiting...")
         return
-
-    browser = None  # <--- PREVENTS UnboundLocalError
-
+        
     async with async_playwright() as p:
         try:
-            browser = await p.chromium.launch(headless=CI)
+            browser = await p.chromium.launch(headless=CI, executable_path="/usr/bin/google-chrome")
             context = await browser.new_context(user_agent=random.choice(user_agents))
             await context.add_init_script(stealth_js)
             page = await context.new_page()
