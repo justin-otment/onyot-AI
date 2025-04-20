@@ -177,7 +177,7 @@ def log_matches_to_sheet(sheet_id, row_index, matched_results):
         update_sheet_data(sheet_id, row_index, values)
 
 # Load API Key for 2Captcha
-captcha_api_key = os.getenv('TWOCAPTCHA_API_KEY')
+api_key = os.getenv('TWOCAPTCHA_API_KEY')
 
 async def get_site_key(page):
     """Extract sitekey by finding iframe URL and extracting the `k=` param."""
@@ -206,8 +206,10 @@ def solve_turnstile_captcha(sitekey, url):
         captcha_id = request_data["request"]
         print(f"[✓] CAPTCHA solving request sent. ID: {captcha_id}. Waiting for solution...")
 
+        RETRY_DELAY = 8  # Configurable retry delay
         for _ in range(15):  # Poll for 75s max
-            time.sleep(5)
+            time.sleep(RETRY_DELAY)
+
             solved_response = requests.get(f"http://2captcha.com/res.php?key={api_key}&action=get&id={captcha_id}&json=1")
             solved_data = solved_response.json()
 
@@ -231,7 +233,7 @@ async def fetch_truepeoplesearch_data(url, browser, context, page):
 
             # Perform human-like interactions
             await page.wait_for_timeout(random.randint(3000, 5000))
-            await page.mouse.move(random.randint(100, 400), random.randint(100, 400), steps=20)
+            await page.mouse.move(random.randint(100, 400), random.randint(100, 400), steps=random.randint(10, 30))
             await page.mouse.wheel(0, random.randint(400, 800))
             await page.wait_for_timeout(random.randint(3000, 5000))
 
