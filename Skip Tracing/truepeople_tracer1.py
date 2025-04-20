@@ -347,7 +347,7 @@ async def main():
         return
 
     async with async_playwright() as p:
-        browser = none
+        browser = None
         try:
             browser = await p.chromium.launch(headless=True)
             context = await browser.new_context(user_agent=random.choice(user_agents))
