@@ -30,7 +30,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y \
-            libwoff1 libvpx7 libevent-2.1-7 libopus0 \
+            libwoff1 libvpx-dev libevent-2.1-7 libopus0 \
             libharfbuzz-icu0 libsecret-1-0 \
             libgles2 libx11-dev
 
