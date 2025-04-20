@@ -8,7 +8,7 @@ on:
 
 jobs:
   run-scripts:
-    runs-on: ubuntu-22.04  # Stable Ubuntu version to prevent package issues
+    runs-on: ubuntu-22.04
 
     strategy:
       matrix:
@@ -27,36 +27,18 @@ jobs:
       - name: Set UTF-8 Encoding
         run: echo "PYTHONIOENCODING=UTF-8" >> $GITHUB_ENV
 
-      - name: Install Google Chrome
+      - name: Install Python dependencies
         run: |
-          sudo apt update
-          sudo apt install -y google-chrome-stable
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install setuptools
 
-      - name: Install Playwright and Browsers
+      - name: Install Playwright and required browsers
         run: |
           pip install playwright
           playwright install --with-deps
 
-      - name: Verify Chromium installation
-        run: ls -l /home/runner/.cache/ms-playwright/
-
-      - name: Install required system dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y libwoff1 libvpx-dev libevent-2.1-7 libopus0 \
-            libharfbuzz-icu0 libsecret-1-0 libgles2 libx11-dev \
-            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
-            gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
-            gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-x \
-            gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 \
-            gstreamer1.0-qt5 gstreamer1.0-pulseaudio libhyphen0 libflite1
-
-      - name: Install Python dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install setuptools
-
       - name: Run Python script
         env:
-          CI: "true"  # Pass CI as an environment variable
+          CI: "true"
         run: python "${{ matrix.script }}"
