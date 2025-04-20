@@ -17,6 +17,9 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 import requests
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 creds = Credentials.from_authorized_user_file('token.json', SCOPES)
@@ -174,15 +177,19 @@ def log_matches_to_sheet(sheet_id, row_index, matched_results):
         update_sheet_data(sheet_id, row_index, values)
 
 # Load API Key for 2Captcha
-api_key = os.getenv('APIKEY_2CAPTCHA', 'a01559936e2950720a2c0126309a824e')
+captcha_api_key = os.getenv('TWOCAPTCHA_API_KEY')
 
 async def get_site_key(page):
-    """Extracts the CAPTCHA site key dynamically from the page."""
-    site_key = await page.evaluate("""() => {
-        let element = document.querySelector('[data-sitekey]') || document.querySelector('input[name="sitekey"]');
-        return element ? element.getAttribute('data-sitekey') || element.value : null;
-    }""")
-    return site_key
+    """Extract sitekey by finding iframe URL and extracting the `k=` param."""
+    try:
+        iframe = await page.query_selector('iframe[src*="challenges.cloudflare.com"]')
+        if iframe:
+            iframe_src = await iframe.get_attribute('src')
+            if iframe_src and "k=" in iframe_src:
+                return iframe_src.split("k=")[1].split("&")[0]
+    except Exception as e:
+        print(f"[!] Error extracting sitekey: {e}")
+    return None
 
 def solve_turnstile_captcha(sitekey, url):
     """Sends CAPTCHA solving request to 2Captcha API."""
