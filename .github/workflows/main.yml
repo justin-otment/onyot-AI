@@ -8,7 +8,7 @@ on:
 
 jobs:
   run-scripts:
-    runs-on: ubuntu-22.04  # Using a stable Ubuntu version
+    runs-on: ubuntu-22.04  # Stable Ubuntu version to prevent package issues
 
     strategy:
       matrix:
@@ -17,7 +17,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -32,6 +32,12 @@ jobs:
           sudo apt update
           sudo apt install -y google-chrome-stable
 
+      - name: Install Playwright dependencies
+        run: |
+          npm install -g playwright
+          npx playwright install-deps
+          npx playwright install chromium
+
       - name: Install required system dependencies
         run: |
           sudo apt update
@@ -43,11 +49,6 @@ jobs:
             gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 \
             gstreamer1.0-qt5 gstreamer1.0-pulseaudio libhyphen0 libflite1
 
-      - name: Install Playwright dependencies
-        run: |
-          npx playwright install-deps
-          playwright install chromium
-
       - name: Install Python dependencies
         run: |
           pip install -r requirements.txt
@@ -55,5 +56,5 @@ jobs:
 
       - name: Run Python script
         env:
-          CI: true  # Ensures headless execution for Playwright in CI/CD
+          CI: true  # Ensures headless execution in CI/CD
         run: python "${{ matrix.script }}"
