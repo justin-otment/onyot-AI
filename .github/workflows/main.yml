@@ -8,7 +8,7 @@ on:
 
 jobs:
   run-scripts:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         script:
