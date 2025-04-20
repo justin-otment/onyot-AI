@@ -32,11 +32,13 @@ jobs:
           sudo apt update
           sudo apt install -y google-chrome-stable
 
-      - name: Install Playwright dependencies
+      - name: Install Playwright and Browsers
         run: |
-          npm install -g playwright
-          npx playwright install-deps
-          npx playwright install chromium
+          pip install playwright
+          playwright install --with-deps
+
+      - name: Verify Chromium installation
+        run: ls -l /home/runner/.cache/ms-playwright/
 
       - name: Install required system dependencies
         run: |
