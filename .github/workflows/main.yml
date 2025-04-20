@@ -13,7 +13,6 @@ jobs:
       matrix:
         script:
           - "Skip Tracing/truepeople_tracer1.py"
-          - "Skip Tracing/main.py"
 
     steps:
       - name: Checkout repository
