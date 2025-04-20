@@ -33,7 +33,9 @@ jobs:
           pip install -r requirements.txt
           playwright install  # <--- This is critical
 
-
+      - name: Install browsers
+        run: playwright install
+        
       - name: Install Firefox and GeckoDriver (Ubuntu)
         run: |
           sudo apt update
