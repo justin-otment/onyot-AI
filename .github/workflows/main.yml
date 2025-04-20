@@ -8,7 +8,7 @@ on:
 
 jobs:
   run-scripts:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         script:
@@ -29,13 +29,10 @@ jobs:
       - name: Install system dependencies for Chrome & Playwright
         run: |
           sudo apt update
-          sudo add-apt-repository universe
-          sudo add-apt-repository multiverse
-          sudo apt update
           sudo apt install -y \
-            libwoff1 libvpx6 libevent-2.1-7 libopus0 \
-            libharfbuzz-icu0 libgst-dev libgstreamer-plugins-base1.0-dev \
-            libflite1 libflite-dev libx264-dev
+            libwoff1 libvpx7 libevent-2.1-7 libopus0 \
+            libharfbuzz-icu0 libsecret-1-0 \
+            libgles2 libx11-dev
 
       - name: Install Firefox and GeckoDriver (Ubuntu)
         run: |
