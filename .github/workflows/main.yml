@@ -8,7 +8,7 @@ on:
 
 jobs:
   run-scripts:
-    runs-on: ubuntu-22.04 # Use Ubuntu 22.04 instead of latest
+    runs-on: ubuntu-22.04  # Using a stable Ubuntu version
 
     strategy:
       matrix:
@@ -27,42 +27,33 @@ jobs:
       - name: Set UTF-8 Encoding
         run: echo "PYTHONIOENCODING=UTF-8" >> $GITHUB_ENV
 
+      - name: Install Google Chrome
+        run: |
+          sudo apt update
+          sudo apt install -y google-chrome-stable
+
+      - name: Install required system dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y libwoff1 libvpx-dev libevent-2.1-7 libopus0 \
+            libharfbuzz-icu0 libsecret-1-0 libgles2 libx11-dev \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+            gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-x \
+            gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 \
+            gstreamer1.0-qt5 gstreamer1.0-pulseaudio libhyphen0 libflite1
+
       - name: Install Playwright dependencies
         run: |
           npx playwright install-deps
-
-      - name: Install system dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y \
-            libwoff1 libvpx-dev libevent-2.1-7 libopus0 \
-            libharfbuzz-icu0 libsecret-1-0 libgles2 libx11-dev \
-            libgstreamer1.0-allocators libgstreamer1.0-app libgstreamer1.0-pbutils \
-            libgstreamer1.0-audio libgstreamer1.0-tag libgstreamer1.0-video \
-            libgstreamer1.0-gl libgstreamer1.0-codecparsers libgstreamer1.0-fft \
-            libhyphen0 libflite1
-
-      - name: Install Firefox and GeckoDriver
-        run: |
-          sudo apt install -y firefox jq wget
-          GECKO_VERSION=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | jq -r .tag_name | sed 's/v//')
-          GECKO_URL="https://github.com/mozilla/geckodriver/releases/download/v$GECKO_VERSION/geckodriver-v$GECKO_VERSION-linux64.tar.gz"
-          wget $GECKO_URL -O geckodriver.tar.gz
-          tar -xvzf geckodriver.tar.gz
-          sudo mv geckodriver /usr/local/bin/
-          geckodriver --version
+          playwright install chromium
 
       - name: Install Python dependencies
         run: |
           pip install -r requirements.txt
           pip install setuptools
 
-      - name: Install Playwright browsers
-        run: playwright install
-
       - name: Run Python script
+        env:
+          CI: true  # Ensures headless execution for Playwright in CI/CD
         run: python "${{ matrix.script }}"
-
-# If Ubuntu dependencies continue to fail, switch to Playwright's prebuilt Docker image:
-# container:
-#   image: mcr.microsoft.com/playwright:v1.36.0-jammy
