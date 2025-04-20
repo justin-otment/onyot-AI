@@ -8,7 +8,8 @@ on:
 
 jobs:
   run-scripts:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04 # Use Ubuntu 22.04 instead of latest
+
     strategy:
       matrix:
         script:
@@ -26,31 +27,23 @@ jobs:
       - name: Set UTF-8 Encoding
         run: echo "PYTHONIOENCODING=UTF-8" >> $GITHUB_ENV
 
-      - name: Install system dependencies for Chrome & Playwright
+      - name: Install Playwright dependencies
+        run: |
+          npx playwright install-deps
+
+      - name: Install system dependencies
         run: |
           sudo apt update
           sudo apt install -y \
             libwoff1 libvpx-dev libevent-2.1-7 libopus0 \
-            libharfbuzz-icu0 libsecret-1-0 \
-            libgles2 libx11-dev \
-            libgstallocators-1.0-0 \
-            libgstapp-1.0-0 \
-            libgstpbutils-1.0-0 \
-            libgstaudio-1.0-0 \
-            libgsttag-1.0-0 \
-            libgstvideo-1.0-0 \
-            libgstgl-1.0-0 \
-            libgstcodecparsers-1.0-0 \
-            libgstfft-1.0-0 \
-            libhyphen0 \
-            libmanette0.2 \
-            libflite1 \
-            libflite-usenglish1 \
-            libx264
+            libharfbuzz-icu0 libsecret-1-0 libgles2 libx11-dev \
+            libgstreamer1.0-allocators libgstreamer1.0-app libgstreamer1.0-pbutils \
+            libgstreamer1.0-audio libgstreamer1.0-tag libgstreamer1.0-video \
+            libgstreamer1.0-gl libgstreamer1.0-codecparsers libgstreamer1.0-fft \
+            libhyphen0 libflite1
 
-      - name: Install Firefox and GeckoDriver (Ubuntu)
+      - name: Install Firefox and GeckoDriver
         run: |
-          sudo apt update
           sudo apt install -y firefox jq wget
           GECKO_VERSION=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | jq -r .tag_name | sed 's/v//')
           GECKO_URL="https://github.com/mozilla/geckodriver/releases/download/v$GECKO_VERSION/geckodriver-v$GECKO_VERSION-linux64.tar.gz"
@@ -69,3 +62,7 @@ jobs:
 
       - name: Run Python script
         run: python "${{ matrix.script }}"
+
+# If Ubuntu dependencies continue to fail, switch to Playwright's prebuilt Docker image:
+# container:
+#   image: mcr.microsoft.com/playwright:v1.36.0-jammy
