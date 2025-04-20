@@ -26,10 +26,10 @@ jobs:
         run: echo "PYTHONIOENCODING=UTF-8" >> $GITHUB_ENV
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          if (Test-Path requirements.txt) { pip install -r requirements.txt }
-        shell: powershell
+        run: pip install -r requirements.txt
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
 
       - name: Install Firefox and GeckoDriver (Windows)
         run: |
