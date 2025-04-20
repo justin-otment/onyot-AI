@@ -1,199 +1,411 @@
 import asyncio
 import os
-import random
+import re
 import string
-import time
 import json
-import requests
-from bs4 import BeautifulSoup
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
+import sys
+import random
+import time
+from datetime import datetime
 
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-SPREADSHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
+from bs4 import BeautifulSoup
+from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
+from playwright_stealth import stealth_async
+from googleapiclient.discovery import build
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import InstalledAppFlow
+import requests
+from pathlib import Path
+
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+sheets_service = build('sheets', 'v4', credentials=creds)
+
+sys.stdout.reconfigure(encoding='utf-8')
+
+# === Config ===
+# Define file paths
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
+TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
+SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "CAPE CORAL FINAL"
-RANGE_NAME = "R2:R"
+URL_RANGE = "R2:R1717"
+MAX_RETRIES = 1
+
+# === Google Sheets Auth ===
+def authenticate_google_sheets():
+    """Authenticate with Google Sheets API."""
+    creds = None
+    if os.path.exists(TOKEN_PATH):
+        creds = Credentials.from_authorized_user_file(
+            TOKEN_PATH, ["https://www.googleapis.com/auth/spreadsheets"]
+        )
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                CREDENTIALS_PATH, ["https://www.googleapis.com/auth/spreadsheets"]
+            )
+            creds = flow.run_local_server(port=53221)
+            with open(TOKEN_PATH, "w") as token:
+                token.write(creds.to_json())
+    return build('sheets', 'v4', credentials=creds)
+
+def get_sheet_data(sheet_id, range_name):
+    try:
+        service = authenticate_google_sheets()
+        result = service.spreadsheets().values().get(
+            spreadsheetId=sheet_id,
+            range=f"{SHEET_NAME}!{range_name}"
+        ).execute()
+        values = result.get("values", [])
+        base_row = int(re.search(r"(\d+):\w*", range_name).group(1))
+
+        # Keep track of actual sheet row number
+        return [
+            (i + base_row, row[0])
+            for i, row in enumerate(values)
+            if row and row[0]
+        ]
+    except Exception as e:
+        print(f"Error fetching data from Google Sheets: {e}")
+        return []
+    
+def update_sheet_data(sheet_id, row_index, values):
+    from string import ascii_uppercase
+
+    # We'll write starting from column 'T'
+    start_col_index = ascii_uppercase.index('T')  # 19th letter
+    end_col_index = start_col_index + len(values) - 1  # Adjust based on length of values
+
+    # Handle column letters for target range
+    start_col_letter = ascii_uppercase[start_col_index]
+    end_col_letter = ascii_uppercase[end_col_index] if end_col_index < len(ascii_uppercase) else get_column_letter(end_col_index)
+
+    target_range = f"CAPE CORAL FINAL!{start_col_letter}{row_index}:{end_col_letter}{row_index}"
+
+    body = {
+        "range": target_range,
+        "majorDimension": "ROWS",
+        "values": [values]
+    }
+
+    sheets_service.spreadsheets().values().update(
+        spreadsheetId=sheet_id,
+        range=target_range,
+        valueInputOption="RAW",
+        body=body
+    ).execute()
 
 user_agents = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.1 Safari/605.1.15",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    # Include at least 10 varied user agents here.
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64)...Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)...Chrome/120.0.0.0 Safari/537.36",
+    # Add more user agents
 ]
 
-def authenticate_google_sheets():
-    creds = Credentials.from_authorized_user_file("token.json", SCOPES)
-    return build("sheets", "v4", credentials=creds)
+stealth_js = """
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+Object.defineProperty(navigator, 'plugins', { get: () => [1,2,3,4,5] });
+Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
+window.chrome = { runtime: {} };
+window.navigator.chrome = { runtime: {} };
+"""
 
-def read_sheet_data(service):
-    result = service.spreadsheets().values().get(
-        spreadsheetId=SPREADSHEET_ID,
-        range=f"{SHEET_NAME}!{RANGE_NAME}"
+def name_tokens(name):
+    return [normalize_and_sort()(part) for part in name.split()]
+
+
+def normalize_text(text):
+    return re.sub(r'\s+', ' ', text.strip().upper())
+
+def normalize_and_sort(text):
+    words = re.findall(r'\w+', text.upper())
+    return ' '.join(sorted(words))
+
+def is_match(entry_text, ref_names):
+    normalized_entry = normalize_and_sort(entry_text)
+    for ref in ref_names:
+        normalized_ref = normalize_and_sort(ref)
+        if normalized_ref in normalized_entry or normalized_entry in normalized_ref:
+            return True
+    return False
+
+def extract_reference_names(sheet_id, row_index):
+    range_ = f'CAPE CORAL FINAL!D{row_index}:J{row_index}'
+    result = sheets_service.spreadsheets().values().get(
+        spreadsheetId=sheet_id,
+        range=range_
     ).execute()
-    return result.get("values", [])
+    values = result.get('values', [[]])[0]
+    return [normalize_text(val) for val in values if val.strip()]
 
-def update_sheet_data(service, row, values):
-    from openpyxl.utils import get_column_letter
+def match_entries(extracted, ref_names):
+    matched_results = []
+    for entry in extracted:
+        # Ensure 'link' and 'text' exist
+        if "link" in entry and "text" in entry:
+            normalized_text = normalize_and_sort(entry["text"])
+            for ref in ref_names:
+                normalized_ref = normalize_and_sort(ref)
+                if normalized_ref in normalized_text or normalized_text in normalized_ref:
+                    matched_results.append({
+                        "link": entry["link"],
+                        "text": entry["text"],
+                        "matched_to": ref  # Add the matched reference term
+                    })
+    return matched_results
 
-    start_col = 20  # T
-    end_col = start_col + len(values) - 1
-    start_letter = get_column_letter(start_col)
-    end_letter = get_column_letter(end_col)
+def log_matches_to_sheet(sheet_id, row_index, matched_results):
+    values = []
+    for result in matched_results:
+        if "matched_to" in result:
+            entry_text = result['text']
+            entry_link = result['link']
+            match_label = result['matched_to']
+            combined_entry = f"{entry_text} (Matched: {match_label})"
+            values.extend([combined_entry, entry_link])  # Each pair in two columns
 
-    range_name = f"{SHEET_NAME}!{start_letter}{row + 2}:{end_letter}{row + 2}"
-    body = {"values": [values]}
-    service.spreadsheets().values().update(
-        spreadsheetId=SPREADSHEET_ID,
-        range=range_name,
-        valueInputOption="RAW",
-        body=body,
-    ).execute()
+    if values:
+        update_sheet_data(sheet_id, row_index, values)
 
-def extract_sitekey(content):
-    soup = BeautifulSoup(content, "html.parser")
-    turnstile_div = soup.find("div", {"class": "cf-turnstile"})
-    if turnstile_div:
-        return turnstile_div.get("data-sitekey")
-    return None
+# Load API Key for 2Captcha
+api_key = os.getenv('APIKEY_2CAPTCHA', 'a01559936e2950720a2c0126309a824e')
 
-async def inject_token(page, token, url):
-    try:
-        await page.evaluate(
-            f"""
-            () => {{
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'cf-turnstile-response';
-                input.value = '{token}';
-                document.querySelector('form')?.appendChild(input);
-                document.querySelector('form')?.submit();
-            }}
-            """
-        )
-        return True
-    except Exception as e:
-        print(f"[!] Failed to inject CAPTCHA token: {e}")
-        return False
+async def get_site_key(page):
+    """Extracts the CAPTCHA site key dynamically from the page."""
+    site_key = await page.evaluate("""() => {
+        let element = document.querySelector('[data-sitekey]') || document.querySelector('input[name="sitekey"]');
+        return element ? element.getAttribute('data-sitekey') || element.value : null;
+    }""")
+    return site_key
 
-async def solve_turnstile_captcha(api_key, sitekey, url):
-    print(f"[+] Submitting CAPTCHA to 2Captcha...")
-    response = requests.post(
-        "http://2captcha.com/in.php",
-        data={"key": api_key, "method": "turnstile", "sitekey": sitekey, "pageurl": url, "json": 1},
-    )
-    request_id = response.json().get("request")
-    if not request_id:
-        print(f"[!] CAPTCHA submission failed: {response.text}")
+def solve_turnstile_captcha(sitekey, url):
+    """Sends CAPTCHA solving request to 2Captcha API."""
+    response = requests.post("http://2captcha.com/in.php", data={
+        "key": api_key,
+        "method": "turnstile",
+        "sitekey": sitekey,
+        "pageurl": url,
+        "json": 1
+    })
+
+    request_data = response.json()
+    if request_data.get("status") == 1:
+        captcha_id = request_data["request"]
+        print(f"[✓] CAPTCHA solving request sent. ID: {captcha_id}. Waiting for solution...")
+
+        for _ in range(15):  # Poll for 75s max
+            time.sleep(5)
+            solved_response = requests.get(f"http://2captcha.com/res.php?key={api_key}&action=get&id={captcha_id}&json=1")
+            solved_data = solved_response.json()
+
+            if solved_data.get("status") == 1:
+                captcha_token = solved_data["request"]
+                print(f"[✓] CAPTCHA solved successfully: {captcha_token}")
+                return captcha_token
+
+        print("[!] CAPTCHA solving timed out.")
         return None
 
-    print("[+] CAPTCHA submitted. Polling for result...")
-    for _ in range(30):
-        time.sleep(5)
-        result = requests.get(
-            "http://2captcha.com/res.php",
-            params={"key": api_key, "action": "get", "id": request_id, "json": 1},
-        ).json()
-        if result.get("status") == 1:
-            print("[+] CAPTCHA solved successfully.")
-            return result.get("request")
-        elif result.get("request") != "CAPCHA_NOT_READY":
-            print(f"[!] CAPTCHA error: {result}")
-            return None
-    print("[!] CAPTCHA solving timed out.")
+    print(f"[!] CAPTCHA request failed: {request_data}")
     return None
 
-async def fetch_truepeoplesearch_data(url, api_key, browser):
-    context = await browser.new_context(user_agent=random.choice(user_agents))
-    page = await context.new_page()
-    for attempt in range(3):
+async def fetch_truepeoplesearch_data(url, browser, context, page):
+    """Fetches page content while handling CAPTCHA detection dynamically, without closing the browser."""
+    for attempt in range(1, MAX_RETRIES + 1):
         try:
-            await page.goto(url, timeout=60000)
-            await page.wait_for_timeout(3000)
+            print(f"Attempt {attempt} to fetch: {url}")
+            await page.goto(url, wait_until="networkidle", timeout=60000)
+
+            # Perform human-like interactions
+            await page.wait_for_timeout(random.randint(3000, 5000))
+            await page.mouse.move(random.randint(100, 400), random.randint(100, 400), steps=20)
+            await page.mouse.wheel(0, random.randint(400, 800))
+            await page.wait_for_timeout(random.randint(3000, 5000))
+
             content = await page.content()
 
-            if "cf-turnstile" in content:
-                sitekey = extract_sitekey(content)
+            # Check for CAPTCHA
+            if "captcha" in content.lower() or "are you a human" in content.lower():
+                print(f"[!] CAPTCHA detected on attempt {attempt}. Fetching sitekey dynamically...")
+
+                # Fetch the sitekey dynamically
+                sitekey = await get_site_key(page)
                 if not sitekey:
-                    print("[!] Sitekey not found.")
+                    print("[!] No valid sitekey found. Skipping CAPTCHA solving.")
+                    continue  # Proceed with retries
+
+                print(f"[✓] Sitekey found: {sitekey}. Solving CAPTCHA via 2Captcha API.")
+                captcha_token = solve_turnstile_captcha(sitekey, url)
+                if not captcha_token:
+                    print("[!] CAPTCHA solving failed. Skipping row.")
+                    continue  # Retry instead of terminating
+
+                print(f"[✓] CAPTCHA solved successfully. Retrying request for {url} with token.")
+
+                # Inject CAPTCHA token into the correct context
+                success = await inject_token(page, captcha_token, url)
+                if not success:
+                    print("[!] CAPTCHA injection failed. Retrying...")
+                    continue  # Retry instead of terminating
+
+                # Wait for CAPTCHA processing
+                await page.wait_for_timeout(5000)
+
+                # Force refresh to validate CAPTCHA completion
+                print("[✓] Reloading page to validate CAPTCHA token.")
+                await page.reload(wait_until="networkidle")
+
+                # Recheck page content for CAPTCHA persistence
+                content = await page.content()
+                if "captcha" not in content.lower():
+                    print("[✓] CAPTCHA solved and page loaded successfully.")
                     return content
 
-                token = await solve_turnstile_captcha(api_key, sitekey, url)
-                if not token:
-                    return content
+                print("[!] CAPTCHA challenge still present. Retrying...")
+                continue  # Retry instead of failing
 
-                success = await inject_token(page, token, url)
-                if success:
-                    await page.wait_for_timeout(5000)
-                    await page.reload(wait_until="networkidle")
-                    await page.wait_for_timeout(3000)
-                    content = await page.content()
-                    return content
-            else:
-                return content
-        except PlaywrightTimeout as e:
-            print(f"[!] Timeout on attempt {attempt} for {url}: {e}")
+            return content  # Page loaded successfully without CAPTCHA
+
         except Exception as e:
-            print(f"[!] Error on attempt {attempt}: {e}")
+            print(f"[!] Error during attempt {attempt}: {e}")
+            continue  # Retry instead of terminating
+
+    print(f"[!] CAPTCHA challenge persisted after maximum retries. Skipping {url}.")
     return None
 
-def normalize_and_sort(name):
-    return "".join(sorted(name.lower().replace(",", "").replace("jr", "").replace(".", "").strip()))
+async def inject_token(page, captcha_token, url):
+    """Injects CAPTCHA token, submits validation, and ensures return to original inquiry."""
+    try:
+        print("[✓] Attempting CAPTCHA token injection.")
 
-def match_entries(html_content, target_names):
-    soup = BeautifulSoup(html_content, "html.parser")
-    results = soup.find_all("div", class_="result-content")
-    matches = []
+        # Directly submit the CAPTCHA token via POST request
+        response = await page.evaluate("""(token) => {
+            return fetch("/internalcaptcha/captchasubmit", {
+                method: "POST",
+                body: new URLSearchParams({ 'captchaToken': token }),
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }).then(res => res.json())
+              .then(data => {
+                  if (data.RedirectUrl) {
+                      document.location.href = data.RedirectUrl;
+                      console.log("[✓] CAPTCHA successfully submitted. Redirecting...");
+                      return true;
+                  } else {
+                      console.error("[!] CAPTCHA submission failed.");
+                      return false;
+                  }
+              }).catch(error => {
+                  console.error("[!] Error in CAPTCHA submission:", error);
+                  return false;
+              });
+        }""", captcha_token)
 
-    normalized_targets = [normalize_and_sort(name) for name in target_names]
+        # If CAPTCHA submission failed, reload the page and retry
+        if not response:
+            print("[!] CAPTCHA submission failed. Trying page reload...")
+            await page.reload(wait_until="networkidle")
+            return False
 
-    for result in results:
-        name_tag = result.find("a", class_="h4")
-        if name_tag:
-            name_text = name_tag.text.strip()
-            result_name_parts = [normalize_and_sort(part) for part in name_text.split()]
-            for target in normalized_targets:
-                if any(target in part for part in result_name_parts):
-                    href = name_tag.get("href", "")
-                    matches.append(f"{name_text} - https://www.truepeoplesearch.com{href}")
-                    break
-    return matches
+        print(f"[✓] CAPTCHA solved! Navigating back to original URL: {url}")
+        await page.goto(url, wait_until="networkidle", timeout=60000)
+
+        return True  # CAPTCHA successfully cleared
+
+    except Exception as e:
+        print(f"[!] Error injecting CAPTCHA token: {e}")
+        return False
+
+def extract_links(html):
+    soup = BeautifulSoup(html, 'html.parser')
+    entries = []
+
+    # Modify this to extract link data correctly
+    for person_link in soup.find_all("a", href=re.compile(r"^/find/person/")):  # Adjust the target elements as needed
+        link = f"https://www.truepeoplesearch.com{person_link['href']}"
+        text = person_link.get_text(strip=True)
+        entries.append({"link": link, "text": text})
+    return entries
+
+# === Sheet Update Logic ===
+def get_column_letter(index):
+    letters = string.ascii_uppercase
+    return letters[index] if index < 26 else letters[(index // 26) - 1] + letters[index % 26]
 
 async def main():
-    service = authenticate_google_sheets()
-    values = read_sheet_data(service)
-    api_key = os.getenv("TWOCAPTCHA_API_KEY")
-    if not api_key:
-        print("[!] Missing 2Captcha API key.")
+    url_entries = get_sheet_data(SHEET_ID, URL_RANGE)
+    if not url_entries:
+        print("[!] No URLs fetched from Google Sheets. Exiting...")
         return
 
     async with async_playwright() as p:
-        browser = await p.firefox.launch(headless=True)
-        for row, row_data in enumerate(values):
-            if not row_data:
-                continue
-            url = row_data[0]
-            print(f"[>] Processing row {row + 2}: {url}")
+        try:
+            headless = os.getenv("CI", "false").lower() == "true"
+            browser = await p.chromium.launch(headless=headless)
+            context = await browser.new_context(user_agent=random.choice(user_agents))
+            await context.add_init_script(stealth_js)
+            page = await context.new_page()
+            await stealth_async(page)
 
-            html = await fetch_truepeoplesearch_data(url, api_key, browser)
-            if not html:
-                print(f"[!] Failed to fetch content for row {row + 2}")
-                continue
+            for row_index, url in url_entries:
+                if not url.strip():
+                    continue
 
-            reference_names = [service.spreadsheets().values().get(
-                spreadsheetId=SPREADSHEET_ID,
-                range=f"{SHEET_NAME}!D{row + 2}:J{row + 2}"
-            ).execute().get("values", [[]])[0]]
+                print(f"\n[→] Processing Row {row_index}: {url}")
 
-            flat_names = [name for sublist in reference_names for name in sublist]
-            matches = match_entries(html, flat_names)
+                try:
+                    # Fetch the raw HTML from TruePeopleSearch
+                    html_content = await fetch_truepeoplesearch_data(url, browser, context, page)
+                    
+                    if not html_content:
+                        print(f"[!] No valid page content extracted for row {row_index}.")
+                        continue
 
-            if matches:
-                update_sheet_data(service, row, matches)
-                print(f"[✓] Row {row + 2} updated with {len(matches)} match(es).")
-            else:
-                print(f"[x] No matches found for row {row + 2}.")
+                    # Extract links from the fetched HTML
+                    extracted_links = extract_links(html_content)
+                    if not extracted_links:
+                        print(f"[!] No valid person links extracted for row {row_index}.")
+                        continue
 
-        await browser.close()
+                    # Retrieve reference names from Google Sheets
+                    ref_names = extract_reference_names(SHEET_ID, row_index)
+                    if not ref_names:
+                        print(f"[!] No reference names found in row {row_index} (cols D–J).")
+                        continue
+
+                    # Match extracted links against reference names
+                    matched_results = match_entries(extracted_links, ref_names)
+
+                    if matched_results:
+                        print(f"[✓] Match found. Logging to row {row_index}.")
+                        try:
+                            log_matches_to_sheet(SHEET_ID, row_index, matched_results)
+                            print(f"[✓] Successfully logged data for row {row_index}.")
+                        except Exception as e:
+                            print(f"[!] Error logging to Google Sheets for row {row_index}: {e}")
+
+                    else:
+                        print(f"[!] No match found in row {row_index}.")
+
+                except Exception as e:
+                    print(f"[!] Error processing row {row_index}: {e}")
+                    continue  # Ensures execution continues even if a row fails
+
+                # Add randomized delay before proceeding to next sequence
+                delay_time = random.choice([x * 1.5 for x in range(1, 21)])  # Generates random delay from 1.5s to 30s
+                print(f"[⏳] Waiting for {delay_time:.1f} seconds before next request...")
+                await asyncio.sleep(delay_time)
+
+        finally:
+            await browser.close()  # Ensures browser closure even if an error occurs
 
 if __name__ == "__main__":
     asyncio.run(main())
