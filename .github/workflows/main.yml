@@ -13,6 +13,8 @@ jobs:
       matrix:
         script:
           - "Skip Tracing/truepeople_tracer1.py"
+          - "Skip Tracing/main.py"
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -22,38 +24,27 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Set Python UTF-8 Encoding
+      - name: Set UTF-8 Encoding
         run: echo "PYTHONIOENCODING=UTF-8" >> $GITHUB_ENV
 
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
-
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install setuptools  # <-- this line ensures pkg_resources is available
-          
-      - name: Install required packages
-        run: |
-          pip install setuptools playwright playwright-stealth gspread oauth2client
-
-      - name: Install browsers
-        run: playwright install
-        
       - name: Install Firefox and GeckoDriver (Ubuntu)
         run: |
           sudo apt update
           sudo apt install -y firefox jq wget
-          
           GECKO_VERSION=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | jq -r .tag_name | sed 's/v//')
           GECKO_URL="https://github.com/mozilla/geckodriver/releases/download/v$GECKO_VERSION/geckodriver-v$GECKO_VERSION-linux64.tar.gz"
-          
           wget $GECKO_URL -O geckodriver.tar.gz
           tar -xvzf geckodriver.tar.gz
           sudo mv geckodriver /usr/local/bin/
-          
           geckodriver --version
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install setuptools
+
+      - name: Install Playwright browsers
+        run: playwright install
 
       - name: Run Python script
         run: python "${{ matrix.script }}"
