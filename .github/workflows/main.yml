@@ -56,5 +56,5 @@ jobs:
 
       - name: Run Python script
         env:
-          CI: true  # Ensures headless execution in CI/CD
+          CI: "true"  # Pass CI as an environment variable
         run: python "${{ matrix.script }}"
