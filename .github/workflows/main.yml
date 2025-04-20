@@ -29,14 +29,13 @@ jobs:
       - name: Install system dependencies for Chrome & Playwright
         run: |
           sudo apt update
+          sudo add-apt-repository universe
+          sudo add-apt-repository multiverse
+          sudo apt update
           sudo apt install -y \
-            libwoff1 libvpx7 libevent-2.1-7 libopus0 \
-            libharfbuzz-icu0 libgstallocators-1.0-0 libgstapp-1.0-0 \
-            libgstpbutils-1.0-0 libgstaudio-1.0-0 libgsttag-1.0-0 \
-            libgstvideo-1.0-0 libgstgl-1.0-0 libgstcodecparsers-1.0-0 \
-            libgstfft-1.0-0 libsecret-1-0 libhyphen0 libmanette-0.2-0 \
-            libflite1 libflite-dev libflite-usenglish1 \
-            libgles2 libx264
+            libwoff1 libvpx6 libevent-2.1-7 libopus0 \
+            libharfbuzz-icu0 libgst-dev libgstreamer-plugins-base1.0-dev \
+            libflite1 libflite-dev libx264-dev
 
       - name: Install Firefox and GeckoDriver (Ubuntu)
         run: |
