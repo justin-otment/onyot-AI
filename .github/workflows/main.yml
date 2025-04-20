@@ -13,6 +13,7 @@ jobs:
       matrix:
         script:
           - "Skip Tracing/corporatetracer.py"
+          - "Skip Tracing/truepeople_tracer1.py"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
