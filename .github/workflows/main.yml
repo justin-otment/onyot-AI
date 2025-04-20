@@ -30,8 +30,13 @@ jobs:
 
       - name: Install dependencies
         run: |
+          pip install --upgrade pip
           pip install -r requirements.txt
-          playwright install  # <--- This is critical
+          pip install setuptools  # <-- this line ensures pkg_resources is available
+          
+      - name: Install required packages
+        run: |
+          pip install setuptools playwright playwright-stealth gspread oauth2client
 
       - name: Install browsers
         run: playwright install
