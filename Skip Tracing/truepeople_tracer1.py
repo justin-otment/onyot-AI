@@ -24,6 +24,9 @@ sheets_service = build('sheets', 'v4', credentials=creds)
 
 sys.stdout.reconfigure(encoding='utf-8')
 
+# Force headless in CI
+CI = os.getenv("CI", "false").lower() == "true"
+
 # === Config ===
 # Define file paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -350,7 +353,7 @@ async def main():
 
     async with async_playwright() as p:
         try:
-            browser = await p.chromium.launch(headless=True)
+            browser = await p.chromium.launch(headless=CI)
             context = await browser.new_context(user_agent=random.choice(user_agents))
             await context.add_init_script(stealth_js)
             page = await context.new_page()
