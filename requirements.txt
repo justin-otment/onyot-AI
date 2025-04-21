@@ -1,8 +1,14 @@
 playwright
 playwright-stealth
-google-api-python-client
-google-auth
-google-auth-oauthlib
+chromedriver-autoinstaller  # Optional for Selenium-like setups
+
+google-api-python-client>=2.105.0
+google-auth>=2.23.0
+google-auth-oauthlib>=1.0.0
+
 beautifulsoup4
+lxml  # Improves parsing efficiency
 requests
+
 python-dotenv
+certifi  # Improves SSL reliability
