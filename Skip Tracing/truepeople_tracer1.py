@@ -435,10 +435,14 @@ async def main():
             
             print(f"[+] Launching browser in {'headless' if headless else 'headed'} mode")
 
-            # Initialize Playwright Chromium
-            print("[🔄] Initializing Playwright Chromium...")
-            browser = await p.chromium.launch(headless=headless, args=["--disable-gpu"])
-            print("[✅] Playwright Chromium launched successfully!")
+            # Initialize Playwright Chromium with error handling
+            try:
+                print("[🔄] Initializing Playwright Chromium...")
+                browser = await p.chromium.launch(headless=headless, args=["--disable-gpu"])
+                print("[✅] Playwright Chromium launched successfully!")
+            except Exception as e:
+                print(f"[!] Playwright failed to launch: {e}")
+                return  # Abort execution if browser launch fails
 
             context = await browser.new_context(
                 user_agent=random.choice(user_agents),
