@@ -38,8 +38,6 @@ URL_RANGE = "R2:R1717"
 MAX_RETRIES = 1
 
 # === Google Sheets Auth ===
-C:\Users\DELL\Documents\Onyot.ai\Lead_List-Generator\python tests\Skip Tracing\truppl_parser.py
-
 def get_sheet_data(sheet_id, range_name):
     try:
         service = authenticate_google_sheets()
