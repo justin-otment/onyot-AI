@@ -362,6 +362,7 @@ def get_column_letter(index):
     return letters[index] if index < 26 else letters[(index // 26) - 1] + letters[index % 26]
 
 async def main():
+    browser = None  # define early
     url_entries = get_sheet_data(SHEET_ID, URL_RANGE)
     if not url_entries:
         print("[!] No URLs fetched from Google Sheets. Exiting...")
