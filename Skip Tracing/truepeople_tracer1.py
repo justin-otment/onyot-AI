@@ -368,11 +368,10 @@ async def main():
         return
 
     async with async_playwright() as p:
-        browser = None  # Ensure it's defined for safe cleanup
         try:
             headless = os.getenv("CI", "false").lower() == "true"
             if os.getenv("DEBUG") == "1":
-                headless = False
+                headless = True
 
             print(f"[+] Launching browser in {'headless' if headless else 'headed'} mode")
             browser = await p.chromium.launch(headless=headless)
@@ -435,3 +434,6 @@ async def main():
         finally:
             if browser:
                 await browser.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())
