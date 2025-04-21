@@ -75,11 +75,11 @@ jobs:
       - name: Capture System Logs (Alternative)
         run: journalctl -xe | tail -n 50 || echo "[!] No system logs available."
 
+      # Capture Playwright execution logs (if failure occurs)
+      - name: Capture Python Execution Logs
+        if: failure()
+        run: cat /home/runner/work/_temp/*.log | tail -n 50 || echo "[!] No Python execution logs found."
+
       # Run Playwright with XVFB in Non-Headless Mode
       - name: Run Playwright with Xvfb
         run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python "${{ matrix.script }}" --disable-gpu --verbose
-
-      # Capture Debug Logs (if execution fails)
-      - name: Capture Debug Logs
-        if: failure()
-        run: cat /var/log/syslog | tail -n 50 || echo "[!] Unable to retrieve syslog data."
