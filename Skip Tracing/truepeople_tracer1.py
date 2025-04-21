@@ -19,56 +19,78 @@ import requests
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
-
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-sheets_service = build('sheets', 'v4', credentials=creds)
-
-sys.stdout.reconfigure(encoding='utf-8')
-
-# === Config ===
-# Define file paths
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
-TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "CAPE CORAL FINAL"
 URL_RANGE = "R2:R1717"
 MAX_RETRIES = 1
 
-# === Google Sheets Auth ===
+# Load environment variables from .env file
+load_dotenv()
+
+# Define Google Sheets API scopes
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+
+# === Config ===
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Decode and save Google Credentials from environment variable
+CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
+TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
+
+if os.getenv("GOOGLE_CREDENTIALS_B64"):
+    try:
+        with open(CREDENTIALS_PATH, "wb") as f:
+            f.write(base64.b64decode(os.getenv("GOOGLE_CREDENTIALS_B64")))
+        print("[✓] Credentials.json successfully decoded.")
+    except Exception as e:
+        print(f"[!] Error decoding GOOGLE_CREDENTIALS_B64: {e}")
+
+if os.getenv("GOOGLE_TOKEN_B64"):
+    try:
+        with open(TOKEN_PATH, "wb") as f:
+            f.write(base64.b64decode(os.getenv("GOOGLE_TOKEN_B64")))
+        print("[✓] Token.json successfully decoded.")
+    except Exception as e:
+        print(f"[!] Error decoding GOOGLE_TOKEN_B64: {e}")
+
+# TwoCaptcha API Key from environment variables
+TWOCAPTCHA_API_KEY = os.getenv("TWOCAPTCHA_API_KEY")
+if not TWOCAPTCHA_API_KEY:
+    print("[!] Missing TwoCaptcha API Key! Set TWOCAPTCHA_API_KEY in environment variables.")
+
+# === Google Sheets Authentication ===
 def authenticate_google_sheets():
     """Authenticate with Google Sheets API."""
     creds = None
-    
-    # Check if we have a token file
+
     if os.path.exists(TOKEN_PATH):
         creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
 
-    # If there's no valid credentials, refresh or prompt for login
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             try:
-                creds.refresh(Request())  # Attempt to refresh the expired token
-                print("Token refreshed successfully.")
-                # Save the refreshed token back to the token file
+                creds.refresh(Request())
+                print("[✓] Token refreshed successfully.")
                 with open(TOKEN_PATH, 'w') as token:
                     token.write(creds.to_json())
             except Exception as e:
-                print(f"Error refreshing token: {e}")
-                creds = None  # Reset creds if refresh fails
+                print(f"[!] Error refreshing token: {e}")
+                creds = None
+
         if not creds:
-            # If no valid credentials are available or refresh fails, initiate re-authentication
             flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
             creds = flow.run_local_server(port=0)
-            # Save the new credentials for future use
             with open(TOKEN_PATH, 'w') as token:
                 token.write(creds.to_json())
-            print("New credentials obtained and saved.")
-    
-    # Build the Sheets API client with valid credentials
+            print("[✓] New credentials obtained and saved.")
+
     return build('sheets', 'v4', credentials=creds)
+
+# Initialize Sheets API
+sheets_service = authenticate_google_sheets()
+
+# Ensure correct stdout encoding
+sys.stdout.reconfigure(encoding='utf-8')
 
 def get_sheet_data(sheet_id, range_name):
     try:
