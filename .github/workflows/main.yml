@@ -55,8 +55,10 @@ jobs:
           "
 
       - name: Run Script
+        env:
+          LOG_LEVEL: DEBUG  # Options: DEBUG, INFO, WARNING, ERROR
         run: |
-          xvfb-run --auto-servernum python "${{ matrix.script }}"
+          xvfb-run --auto-servernum python "Skip Tracing/truepeople_tracer1.py"
 
       - name: Capture Python Execution Logs
         if: failure()
