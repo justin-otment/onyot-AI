@@ -9,7 +9,6 @@ on:
 jobs:
   run-scripts:
     runs-on: ubuntu-latest
-    environment: production
 
     strategy:
       matrix:
