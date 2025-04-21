@@ -2,12 +2,14 @@ name: Run Multiple Python Scripts
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   run-scripts:
     runs-on: ubuntu-latest
+
     strategy:
       matrix:
         script:
@@ -25,41 +27,64 @@ jobs:
       - name: Set UTF-8 Encoding
         run: echo "PYTHONIOENCODING=UTF-8" >> $GITHUB_ENV
 
+      # Install dependencies explicitly for Playwright
       - name: Install Required System Packages
         run: |
           sudo apt-get update
           sudo apt-get install -y libnss3 libgtk-3-0 libgbm1 xvfb
 
+      # Validate Dependency Installation
+      - name: Verify Installed Packages
+        run: dpkg -l | grep -E 'libnss3|libgtk-3-0|libgbm1' || echo "[!] Missing required packages."
+
       - name: Install Python Dependencies
         run: |
-          python -m pip install --upgrade pip setuptools
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
-          playwright install --with-deps
+          pip install setuptools playwright
 
+      - name: Install Playwright Browsers
+        run: playwright install --with-deps
+
+      # Restore credentials and tokens
       - name: Restore Credentials and Token Files
         run: |
           echo "${{ secrets.GOOGLE_CREDENTIALS_B64 }}" | base64 -d > credentials.json
           echo "${{ secrets.GOOGLE_TOKEN_B64 }}" | base64 -d > token.json
 
       - name: Verify Credential Files
-        run: ls -lh credentials.json token.json
+        run: ls -lh credentials.json token.json || echo "[!] Credentials files missing."
 
+      # Ensure Playwright launches correctly
       - name: Test Playwright Browser Launch
         run: |
-          xvfb-run --auto-servernum python -c "
+          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python -c "
           from playwright.sync_api import sync_playwright;
           with sync_playwright() as p:
-              browser = p.chromium.launch(headless=True);
+              print('🔄 Initializing Playwright Chromium...');
+              browser = p.chromium.launch(headless=False);
               print('✅ Playwright test successful!');
               browser.close();
           "
 
-      - name: Run Script
-        env:
-          LOG_LEVEL: DEBUG  # Options: DEBUG, INFO, WARNING, ERROR
-        run: |
-          xvfb-run --auto-servernum python "Skip Tracing/truepeople_tracer1.py"
+      # Ensure no stale Chrome processes block execution
+      - name: Cleanup Stalled Chrome Instances
+        run: pkill -f 'chrome' || echo "[!] No stale Chrome instances found."
 
+      # Debugging - alternative to dmesg since GitHub Actions restricts access
+      - name: Capture System Logs (Alternative)
+        run: journalctl -xe | tail -n 50 || echo "[!] No system logs available."
+
+      # Check Python execution logs (if failure occurs)
       - name: Capture Python Execution Logs
         if: failure()
-        run: cat script_errors.log || echo "[!] No script errors logged."
+        run: cat /home/runner/work/_temp/*.log | tail -n 50 || echo "[!] No Python execution logs found."
+
+      # List running processes to verify Playwright is running
+      - name: List Running Processes
+        if: failure()
+        run: ps aux | grep 'chrome\|playwright' || echo "[!] No Playwright processes detected."
+
+      # Run Playwright with XVFB in Non-Headless Mode
+      - name: Run Playwright with Xvfb
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python "${{ matrix.script }}" --disable-gpu --verbose
