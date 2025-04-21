@@ -1,22 +1,28 @@
+# 📌 Standard Library Imports (built-in modules)
 import asyncio
 import os
-import re
-import string
-import json
 import sys
+import json
 import random
 import time
+import re
+import string
 from datetime import datetime
+from pathlib import Path
 
+# 📌 Third-Party Libraries
+import requests
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
 from playwright_stealth import stealth_async
+
+# 📌 Google Sheets API Handling
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
-import requests
-from pathlib import Path
+
+# 📌 Environment Variables Management
 from dotenv import load_dotenv
 
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
@@ -54,7 +60,7 @@ if os.getenv("GOOGLE_TOKEN_B64"):
         print(f"[!] Error decoding GOOGLE_TOKEN_B64: {e}")
 
 # TwoCaptcha API Key from environment variables
-TWOCAPTCHA_API_KEY = os.getenv("TWOCAPTCHA_API_KEY")
+api_key = os.getenv("TWOCAPTCHA_API_KEY")
 if not TWOCAPTCHA_API_KEY:
     print("[!] Missing TwoCaptcha API Key! Set TWOCAPTCHA_API_KEY in environment variables.")
 
@@ -211,9 +217,6 @@ def log_matches_to_sheet(sheet_id, row_index, matched_results):
     if values:
         update_sheet_data(sheet_id, row_index, values)
 
-# Load API Key for 2Captcha
-api_key = os.getenv('TWOCAPTCHA_API_KEY')
-
 async def get_site_key(page):
     """Extract sitekey by finding iframe URL or by scanning script contents."""
     try:
@@ -275,10 +278,10 @@ async def fetch_truepeoplesearch_data(url, browser, context, page):
     """Fetches page content while handling CAPTCHA detection dynamically, without closing the browser."""
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            print(f"Attempt {attempt} to fetch: {url}")
+            print(f"[🔄] Attempt {attempt} to fetch: {url}")
             await page.goto(url, wait_until="networkidle", timeout=60000)
 
-            # Perform human-like interactions
+            # Perform human-like interactions to mimic real user behavior
             await page.wait_for_timeout(random.randint(3000, 5000))
             await page.mouse.move(random.randint(100, 400), random.randint(100, 400), steps=random.randint(10, 30))
             await page.mouse.wheel(0, random.randint(400, 800))
@@ -290,27 +293,28 @@ async def fetch_truepeoplesearch_data(url, browser, context, page):
             if "captcha" in content.lower() or "are you a human" in content.lower():
                 print(f"[!] CAPTCHA detected on attempt {attempt}. Fetching sitekey dynamically...")
 
-                # Fetch the sitekey dynamically
+                # Fetch the CAPTCHA sitekey dynamically
                 sitekey = await get_site_key(page)
                 if not sitekey:
                     print("[!] No valid sitekey found. Skipping CAPTCHA solving.")
-                    continue  # Proceed with retries
+                    return None  # Abort early instead of retrying needlessly
 
                 print(f"[✓] Sitekey found: {sitekey}. Solving CAPTCHA via 2Captcha API.")
                 captcha_token = solve_turnstile_captcha(sitekey, url)
-                if not captcha_token:
-                    print("[!] CAPTCHA solving failed. Skipping row.")
-                    continue  # Retry instead of terminating
 
-                print(f"[✓] CAPTCHA solved successfully. Retrying request for {url} with token.")
+                if not captcha_token:
+                    print("[!] CAPTCHA solving failed. Aborting retries for this URL.")
+                    return None  # Return early instead of wasting retries
+
+                print(f"[✓] CAPTCHA solved successfully. Injecting token for {url}.")
 
                 # Inject CAPTCHA token into the correct context
                 success = await inject_token(page, captcha_token, url)
                 if not success:
-                    print("[!] CAPTCHA injection failed. Retrying...")
-                    continue  # Retry instead of terminating
+                    print("[!] CAPTCHA injection failed. Aborting.")
+                    return None  # Early return instead of repeating failed attempts
 
-                # Wait for CAPTCHA processing
+                # Wait briefly for CAPTCHA processing
                 await page.wait_for_timeout(5000)
 
                 # Force refresh to validate CAPTCHA completion
@@ -323,14 +327,18 @@ async def fetch_truepeoplesearch_data(url, browser, context, page):
                     print("[✓] CAPTCHA solved and page loaded successfully.")
                     return content
 
-                print("[!] CAPTCHA challenge still present. Retrying...")
-                continue  # Retry instead of failing
+                print("[!] CAPTCHA challenge still present after solving attempt. Aborting retries.")
+                return None  # Return early instead of looping unnecessarily
 
             return content  # Page loaded successfully without CAPTCHA
 
+        except PlaywrightTimeout:
+            print(f"[⚠] Timeout error on attempt {attempt}. Retrying...")
+            continue  # Allow retries on timeout errors
+
         except Exception as e:
-            print(f"[!] Error during attempt {attempt}: {e}")
-            continue  # Retry instead of terminating
+            print(f"[❌] Unexpected error during attempt {attempt}: {e}")
+            return None  # Abort early if an unknown issue occurs
 
     print(f"[!] CAPTCHA challenge persisted after maximum retries. Skipping {url}.")
     return None
