@@ -396,6 +396,7 @@ def get_column_letter(index):
     letters = string.ascii_uppercase
     return letters[index] if index < 26 else letters[(index // 26) - 1] + letters[index % 26]
 
+# === Main Playwright Execution ===
 async def main():
     url_entries = get_sheet_data(SHEET_ID, URL_RANGE)
     if not url_entries:
@@ -412,7 +413,11 @@ async def main():
                 headless = False  # Ensure debug mode forces headed execution
             
             print(f"[+] Launching browser in {'headless' if headless else 'headed'} mode")
+
+            # Debug: Check if Playwright is stuck
+            print("[🔄] Initializing Playwright Chromium...")
             browser = await p.chromium.launch(headless=headless, args=["--disable-gpu"])
+            print("[✅] Playwright Chromium launched successfully!")
 
             context = await browser.new_context(
                 user_agent=random.choice(user_agents),
@@ -434,6 +439,7 @@ async def main():
 
                 try:
                     # Fetch page content
+                    print("[🔍] Fetching page content...")
                     html_content = await fetch_truepeoplesearch_data(url, browser, context, page)
                     
                     if not html_content:
@@ -479,7 +485,9 @@ async def main():
 
         finally:
             if browser:
+                print("[♻] Closing Playwright browser...")
                 await browser.close()
+                print("[✅] Browser closed successfully.")
 
 if __name__ == "__main__":
     asyncio.run(main())
