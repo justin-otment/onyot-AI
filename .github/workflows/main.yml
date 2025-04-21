@@ -41,7 +41,7 @@ jobs:
       - name: Install Playwright Browsers
         run: playwright install --with-deps
 
-      # Step to restore base64-encoded credentials and token files
+      # Restore base64-encoded credentials and token files
       - name: Restore Credentials and Token Files
         run: |
           echo "${{ secrets.GOOGLE_CREDENTIALS_B64 }}" | base64 -d > credentials.json
@@ -49,6 +49,21 @@ jobs:
 
       - name: Verify Credential Files
         run: ls -lh credentials.json token.json
+
+      # Run a standalone Playwright test before the main script to ensure browser launches
+      - name: Test Playwright Browser Launch
+        run: |
+          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python -c "
+          from playwright.sync_api import sync_playwright;
+          with sync_playwright() as p:
+              browser = p.chromium.launch(headless=False);
+              print('✅ Playwright test successful!');
+              browser.close();
+          "
+
+      # Ensure no stale Chrome processes block execution
+      - name: Cleanup Any Stalled Chrome Instances
+        run: pkill -f 'chrome' || true
 
       # Run Playwright with XVFB in Non-Headless Mode
       - name: Run Playwright with Xvfb
