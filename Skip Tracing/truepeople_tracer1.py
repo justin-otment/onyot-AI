@@ -418,6 +418,7 @@ def get_column_letter(index):
 
 # === Main Playwright Execution ===
 async def main():
+    """Main execution function for Playwright automation."""
     url_entries = get_sheet_data(SHEET_ID, URL_RANGE)
     if not url_entries:
         print("[!] No URLs fetched from Google Sheets. Exiting...")
@@ -434,7 +435,7 @@ async def main():
             
             print(f"[+] Launching browser in {'headless' if headless else 'headed'} mode")
 
-            # Debug: Check if Playwright is stuck
+            # Initialize Playwright Chromium
             print("[🔄] Initializing Playwright Chromium...")
             browser = await p.chromium.launch(headless=headless, args=["--disable-gpu"])
             print("[✅] Playwright Chromium launched successfully!")
@@ -458,7 +459,7 @@ async def main():
                 print(f"\n[→] Processing Row {row_index}: {url}")
 
                 try:
-                    # Fetch page content
+                    # Fetch page content with CAPTCHA handling
                     print("[🔍] Fetching page content...")
                     html_content = await fetch_truepeoplesearch_data(url, browser, context, page)
                     
