@@ -47,7 +47,7 @@ jobs:
       # Run the Python script
       - name: Run Python script
         env:
-          CI: "false"
+          CI: "True"
           DEBUG: "1"  # optional, only if you want to force non-headless during GH runs
           API_KEY: ${{ secrets.TWOCAPTCHA_API_KEY }}  # API Key for CAPTCHA solving (2Captcha API)
         run: python "${{ matrix.script }}"
