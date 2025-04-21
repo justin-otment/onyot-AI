@@ -428,10 +428,10 @@ async def main():
         browser = None  # Ensure browser variable is initialized
 
         try:
-            # Determine headless mode based on environment variables
+            # Ensure environment variables are properly loaded
             headless = os.getenv("CI", "false").lower() == "true"
             if os.getenv("DEBUG") == "1":
-                headless = False  # Ensure debug mode forces headed execution
+                headless = False  # Debug mode forces non-headless execution
             
             print(f"[+] Launching browser in {'headless' if headless else 'headed'} mode")
 
@@ -441,7 +441,7 @@ async def main():
                 browser = await p.chromium.launch(headless=headless, args=["--disable-gpu"])
                 print("[✅] Playwright Chromium launched successfully!")
             except Exception as e:
-                print(f"[!] Playwright failed to launch: {e}")
+                print(f"[❌] Playwright failed to launch: {e}")
                 return  # Abort execution if browser launch fails
 
             context = await browser.new_context(
@@ -466,39 +466,38 @@ async def main():
                     # Fetch page content with CAPTCHA handling
                     print("[🔍] Fetching page content...")
                     html_content = await fetch_truepeoplesearch_data(url, browser, context, page)
-                    
+
                     if not html_content:
-                        print(f"[!] No valid page content extracted for row {row_index}.")
+                        print(f"[❌] No valid page content extracted for row {row_index}.")
                         continue
 
                     # Extract person links
                     extracted_links = extract_links(html_content)
                     if not extracted_links:
-                        print(f"[!] No valid person links extracted for row {row_index}.")
+                        print(f"[❌] No valid person links extracted for row {row_index}.")
                         continue
 
                     # Extract reference names
                     ref_names = extract_reference_names(SHEET_ID, row_index)
                     if not ref_names:
-                        print(f"[!] No reference names found in row {row_index} (cols D–J).")
+                        print(f"[❌] No reference names found in row {row_index} (cols D–J).")
                         continue
 
                     # Match extracted links with reference names
                     matched_results = match_entries(extracted_links, ref_names)
 
                     if matched_results:
-                        print(f"[✓] Match found. Logging to row {row_index}.")
+                        print(f"[✅] Match found. Logging to row {row_index}.")
                         try:
                             log_matches_to_sheet(SHEET_ID, row_index, matched_results)
-                            print(f"[✓] Successfully logged data for row {row_index}.")
+                            print(f"[✅] Successfully logged data for row {row_index}.")
                         except Exception as e:
-                            print(f"[!] Error logging to Google Sheets for row {row_index}: {e}")
+                            print(f"[❌] Error logging to Google Sheets for row {row_index}: {e}")
                     else:
-                        print(f"[!] No match found in row {row_index}.")
+                        print(f"[⚠] No match found in row {row_index}.")
 
                 except Exception as e:
-                    print(f"[!] Error processing row {row_index}: {e}")
-                    continue
+                    print(f"[❌] Error processing row {row_index}: {e}")
 
                 # Introduce randomized delay
                 delay_time = random.uniform(1.5, 30)  # Randomized delay between requests
@@ -506,7 +505,7 @@ async def main():
                 await asyncio.sleep(delay_time)
 
         except Exception as e:
-            print(f"[!] Critical error encountered: {e}")
+            print(f"[❌] Critical error encountered: {e}")
 
         finally:
             if browser:
