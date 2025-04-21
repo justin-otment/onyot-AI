@@ -38,6 +38,38 @@ URL_RANGE = "R2:R1717"
 MAX_RETRIES = 1
 
 # === Google Sheets Auth ===
+def authenticate_google_sheets():
+    """Authenticate with Google Sheets API."""
+    creds = None
+    
+    # Check if we have a token file
+    if os.path.exists(TOKEN_PATH):
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+
+    # If there's no valid credentials, refresh or prompt for login
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            try:
+                creds.refresh(Request())  # Attempt to refresh the expired token
+                print("Token refreshed successfully.")
+                # Save the refreshed token back to the token file
+                with open(TOKEN_PATH, 'w') as token:
+                    token.write(creds.to_json())
+            except Exception as e:
+                print(f"Error refreshing token: {e}")
+                creds = None  # Reset creds if refresh fails
+        if not creds:
+            # If no valid credentials are available or refresh fails, initiate re-authentication
+            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
+            creds = flow.run_local_server(port=0)
+            # Save the new credentials for future use
+            with open(TOKEN_PATH, 'w') as token:
+                token.write(creds.to_json())
+            print("New credentials obtained and saved.")
+    
+    # Build the Sheets API client with valid credentials
+    return build('sheets', 'v4', credentials=creds)
+
 def get_sheet_data(sheet_id, range_name):
     try:
         service = authenticate_google_sheets()
