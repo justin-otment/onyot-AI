@@ -27,10 +27,15 @@ jobs:
       - name: Set UTF-8 Encoding
         run: echo "PYTHONIOENCODING=UTF-8" >> $GITHUB_ENV
 
-      - name: Install System Dependencies for Playwright
+      # Install dependencies explicitly for Playwright
+      - name: Install Required System Packages
         run: |
           sudo apt-get update
           sudo apt-get install -y libnss3 libgtk-3-0 libgbm1 xvfb
+
+      # Validate Dependency Installation
+      - name: Verify Installed Packages
+        run: dpkg -l | grep -E 'libnss3|libgtk-3-0|libgbm1'
 
       - name: Install Python Dependencies
         run: |
@@ -41,7 +46,7 @@ jobs:
       - name: Install Playwright Browsers
         run: playwright install --with-deps
 
-      # Restore base64-encoded credentials and token files
+      # Restore credentials and tokens
       - name: Restore Credentials and Token Files
         run: |
           echo "${{ secrets.GOOGLE_CREDENTIALS_B64 }}" | base64 -d > credentials.json
@@ -50,24 +55,29 @@ jobs:
       - name: Verify Credential Files
         run: ls -lh credentials.json token.json
 
-      # Run a standalone Playwright test before the main script to ensure browser launches
+      # Run a standalone Playwright test before the main script to ensure the browser launches correctly
       - name: Test Playwright Browser Launch
         run: |
           xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python -c "
           from playwright.sync_api import sync_playwright;
           with sync_playwright() as p:
+              print('🔄 Initializing Playwright Chromium...');
               browser = p.chromium.launch(headless=False);
               print('✅ Playwright test successful!');
               browser.close();
           "
 
       # Ensure no stale Chrome processes block execution
-      - name: Cleanup Any Stalled Chrome Instances
+      - name: Cleanup Stalled Chrome Instances
         run: pkill -f 'chrome' || true
+
+      # Debugging step - check system logs before launching Playwright
+      - name: Capture Pre-Execution System Logs
+        run: dmesg | tail -n 50
 
       # Run Playwright with XVFB in Non-Headless Mode
       - name: Run Playwright with Xvfb
-        run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python "${{ matrix.script }}" --disable-gpu
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python "${{ matrix.script }}" --disable-gpu --verbose
 
       # Capture Debug Logs (if execution fails)
       - name: Capture Debug Logs
