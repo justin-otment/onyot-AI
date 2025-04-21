@@ -40,19 +40,13 @@ jobs:
 
       - name: Install Xvfb
         run: sudo apt-get install -y xvfb
-      
-      - name: Run Playwright with Xvfb
-        run: xvfb-run --auto-servernum --server-args='-screen 0 1280x720x24' python "Skip Tracing/truepeople_tracer1.py"
-      
+
       # Step to restore base64-encoded credentials and token files
       - name: Restore credentials and token files
         run: |
           echo "${{ secrets.GOOGLE_CREDENTIALS_B64 }}" | base64 -d > credentials.json
           echo "${{ secrets.GOOGLE_TOKEN_B64 }}" | base64 -d > token.json
 
-      # Run the Python script
-      - name: Run Python script
-        env:
-          CI: "True"
-          API_KEY: ${{ secrets.TWOCAPTCHA_API_KEY }}  # API Key for CAPTCHA solving (2Captcha API)
-        run: python "${{ matrix.script }}"
+      # Run Playwright with Xvfb
+      - name: Run Playwright with Xvfb
+        run: xvfb-run --auto-servernum --server-args='-screen 0 1280x720x24' python "${{ matrix.script }}"
