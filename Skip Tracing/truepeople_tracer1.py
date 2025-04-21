@@ -362,20 +362,21 @@ def get_column_letter(index):
     return letters[index] if index < 26 else letters[(index // 26) - 1] + letters[index % 26]
 
 async def main():
-    browser = None  # define early
     url_entries = get_sheet_data(SHEET_ID, URL_RANGE)
     if not url_entries:
         print("[!] No URLs fetched from Google Sheets. Exiting...")
         return
 
     async with async_playwright() as p:
+        browser = None  # Ensure it's defined for safe cleanup
         try:
-            # inside main()
             headless = os.getenv("CI", "false").lower() == "true"
-            # Optional dev override:
             if os.getenv("DEBUG") == "1":
                 headless = False
+
+            print(f"[+] Launching browser in {'headless' if headless else 'headed'} mode")
             browser = await p.chromium.launch(headless=headless)
+
             context = await browser.new_context(
                 user_agent=random.choice(user_agents),
                 locale='en-US',
@@ -395,26 +396,22 @@ async def main():
                 print(f"\n[→] Processing Row {row_index}: {url}")
 
                 try:
-                    # Fetch the raw HTML from TruePeopleSearch
                     html_content = await fetch_truepeoplesearch_data(url, browser, context, page)
                     
                     if not html_content:
                         print(f"[!] No valid page content extracted for row {row_index}.")
                         continue
 
-                    # Extract links from the fetched HTML
                     extracted_links = extract_links(html_content)
                     if not extracted_links:
                         print(f"[!] No valid person links extracted for row {row_index}.")
                         continue
 
-                    # Retrieve reference names from Google Sheets
                     ref_names = extract_reference_names(SHEET_ID, row_index)
                     if not ref_names:
                         print(f"[!] No reference names found in row {row_index} (cols D–J).")
                         continue
 
-                    # Match extracted links against reference names
                     matched_results = match_entries(extracted_links, ref_names)
 
                     if matched_results:
@@ -424,21 +421,17 @@ async def main():
                             print(f"[✓] Successfully logged data for row {row_index}.")
                         except Exception as e:
                             print(f"[!] Error logging to Google Sheets for row {row_index}: {e}")
-
                     else:
                         print(f"[!] No match found in row {row_index}.")
 
                 except Exception as e:
                     print(f"[!] Error processing row {row_index}: {e}")
-                    continue  # Ensures execution continues even if a row fails
+                    continue
 
-                # Add randomized delay before proceeding to next sequence
-                delay_time = random.choice([x * 1.5 for x in range(1, 21)])  # Generates random delay from 1.5s to 30s
+                delay_time = random.choice([x * 1.5 for x in range(1, 21)])
                 print(f"[⏳] Waiting for {delay_time:.1f} seconds before next request...")
                 await asyncio.sleep(delay_time)
 
         finally:
-            await browser.close()  # Ensures browser closure even if an error occurs
-
-if __name__ == "__main__":
-    asyncio.run(main())
+            if browser:
+                await browser.close()
