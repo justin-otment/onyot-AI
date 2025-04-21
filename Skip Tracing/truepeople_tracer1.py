@@ -59,11 +59,6 @@ if os.getenv("GOOGLE_TOKEN_B64"):
     except Exception as e:
         print(f"[!] Error decoding GOOGLE_TOKEN_B64: {e}")
 
-# TwoCaptcha API Key from environment variables
-api_key = os.getenv("TWOCAPTCHA_API_KEY")
-if not TWOCAPTCHA_API_KEY:
-    print("[!] Missing TwoCaptcha API Key! Set TWOCAPTCHA_API_KEY in environment variables.")
-
 # === Google Sheets Authentication ===
 def authenticate_google_sheets():
     """Authenticate with Google Sheets API."""
@@ -217,42 +212,57 @@ def log_matches_to_sheet(sheet_id, row_index, matched_results):
     if values:
         update_sheet_data(sheet_id, row_index, values)
 
+# Load environment variables
+load_dotenv()
+TWOCAPTCHA_API_KEY = os.getenv("TWOCAPTCHA_API_KEY")
+
+if not TWOCAPTCHA_API_KEY:
+    print("[!] Missing TwoCaptcha API Key! Set TWOCAPTCHA_API_KEY in environment variables.")
+
 async def get_site_key(page):
     """Extract sitekey by finding iframe URL or by scanning script contents."""
     try:
-        # First attempt: look for the iframe with the sitekey in its src
+        # Attempt 1: Look for an iframe containing the sitekey in its src
         iframe = await page.query_selector('iframe[src*="challenges.cloudflare.com"]')
         if iframe:
             iframe_src = await iframe.get_attribute('src')
             if iframe_src and "k=" in iframe_src:
                 return iframe_src.split("k=")[1].split("&")[0]
-        
-        # Fallback: search all <script> tags for potential 'k=' strings
+
+        # Attempt 2: Search <script> tags for potential 'k=' strings
         scripts = await page.query_selector_all("script")
         for script in scripts:
             script_content = await script.text_content()
-            if script_content and "k=" in script_content:
+            if script_content:
                 match = re.search(r'k=([a-zA-Z0-9_-]+)', script_content)
                 if match:
                     return match.group(1)
 
     except Exception as e:
         print(f"[!] Error extracting sitekey: {e}")
-    
-    return None  # if nothing found
+
+    return None  # No sitekey found
 
 def solve_turnstile_captcha(sitekey, url):
     """Sends CAPTCHA solving request to 2Captcha API."""
-    response = requests.post("http://2captcha.com/in.php", data={
-        "key": api_key,
-        "method": "turnstile",
-        "sitekey": sitekey,
-        "pageurl": url,
-        "json": 1
-    })
+    if not TWOCAPTCHA_API_KEY:
+        print("[!] Cannot solve CAPTCHA: No API key provided.")
+        return None
 
-    request_data = response.json()
-    if request_data.get("status") == 1:
+    try:
+        response = requests.post("http://2captcha.com/in.php", data={
+            "key": TWOCAPTCHA_API_KEY,
+            "method": "turnstile",
+            "sitekey": sitekey,
+            "pageurl": url,
+            "json": 1
+        })
+
+        request_data = response.json()
+        if request_data.get("status") != 1:
+            print(f"[!] CAPTCHA request failed: {request_data}")
+            return None
+
         captcha_id = request_data["request"]
         print(f"[✓] CAPTCHA solving request sent. ID: {captcha_id}. Waiting for solution...")
 
@@ -260,7 +270,7 @@ def solve_turnstile_captcha(sitekey, url):
         for _ in range(15):  # Poll for 75s max
             time.sleep(RETRY_DELAY)
 
-            solved_response = requests.get(f"http://2captcha.com/res.php?key={api_key}&action=get&id={captcha_id}&json=1")
+            solved_response = requests.get(f"http://2captcha.com/res.php?key={TWOCAPTCHA_API_KEY}&action=get&id={captcha_id}&json=1")
             solved_data = solved_response.json()
 
             if solved_data.get("status") == 1:
@@ -271,8 +281,10 @@ def solve_turnstile_captcha(sitekey, url):
         print("[!] CAPTCHA solving timed out.")
         return None
 
-    print(f"[!] CAPTCHA request failed: {request_data}")
-    return None
+    except requests.exceptions.RequestException as e:
+        print(f"[!] Error communicating with 2Captcha API: {e}")
+        return None
+
 
 async def fetch_truepeoplesearch_data(url, browser, context, page):
     """Fetches page content while handling CAPTCHA detection dynamically, without closing the browser."""
