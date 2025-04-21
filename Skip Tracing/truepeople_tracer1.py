@@ -381,13 +381,16 @@ async def main():
         return
 
     async with async_playwright() as p:
+        browser = None  # Ensure browser variable is initialized
+
         try:
+            # Determine headless mode based on environment variables
             headless = os.getenv("CI", "false").lower() == "true"
             if os.getenv("DEBUG") == "1":
-                headless = True
-
+                headless = False  # Ensure debug mode forces headed execution
+            
             print(f"[+] Launching browser in {'headless' if headless else 'headed'} mode")
-            browser = await p.chromium.launch(headless=headless)
+            browser = await p.chromium.launch(headless=headless, args=["--disable-gpu"])
 
             context = await browser.new_context(
                 user_agent=random.choice(user_agents),
@@ -408,22 +411,26 @@ async def main():
                 print(f"\n[→] Processing Row {row_index}: {url}")
 
                 try:
+                    # Fetch page content
                     html_content = await fetch_truepeoplesearch_data(url, browser, context, page)
                     
                     if not html_content:
                         print(f"[!] No valid page content extracted for row {row_index}.")
                         continue
 
+                    # Extract person links
                     extracted_links = extract_links(html_content)
                     if not extracted_links:
                         print(f"[!] No valid person links extracted for row {row_index}.")
                         continue
 
+                    # Extract reference names
                     ref_names = extract_reference_names(SHEET_ID, row_index)
                     if not ref_names:
                         print(f"[!] No reference names found in row {row_index} (cols D–J).")
                         continue
 
+                    # Match extracted links with reference names
                     matched_results = match_entries(extracted_links, ref_names)
 
                     if matched_results:
@@ -440,9 +447,13 @@ async def main():
                     print(f"[!] Error processing row {row_index}: {e}")
                     continue
 
-                delay_time = random.choice([x * 1.5 for x in range(1, 21)])
+                # Introduce randomized delay
+                delay_time = random.uniform(1.5, 30)  # Randomized delay between requests
                 print(f"[⏳] Waiting for {delay_time:.1f} seconds before next request...")
                 await asyncio.sleep(delay_time)
+
+        except Exception as e:
+            print(f"[!] Critical error encountered: {e}")
 
         finally:
             if browser:
