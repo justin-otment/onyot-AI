@@ -43,22 +43,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
 TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
 
-if os.getenv("GOOGLE_CREDENTIALS_B64"):
-    try:
-        with open(CREDENTIALS_PATH, "wb") as f:
-            f.write(base64.b64decode(os.getenv("GOOGLE_CREDENTIALS_B64")))
-        print("[✓] Credentials.json successfully decoded.")
-    except Exception as e:
-        print(f"[!] Error decoding GOOGLE_CREDENTIALS_B64: {e}")
-
-if os.getenv("GOOGLE_TOKEN_B64"):
-    try:
-        with open(TOKEN_PATH, "wb") as f:
-            f.write(base64.b64decode(os.getenv("GOOGLE_TOKEN_B64")))
-        print("[✓] Token.json successfully decoded.")
-    except Exception as e:
-        print(f"[!] Error decoding GOOGLE_TOKEN_B64: {e}")
-
 # === Google Sheets Authentication ===
 def authenticate_google_sheets():
     """Authenticate with Google Sheets API."""
