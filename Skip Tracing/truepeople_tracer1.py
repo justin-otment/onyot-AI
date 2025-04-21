@@ -38,24 +38,7 @@ URL_RANGE = "R2:R1717"
 MAX_RETRIES = 1
 
 # === Google Sheets Auth ===
-def authenticate_google_sheets():
-    """Authenticate with Google Sheets API."""
-    creds = None
-    if os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(
-            TOKEN_PATH, ["https://www.googleapis.com/auth/spreadsheets"]
-        )
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                CREDENTIALS_PATH, ["https://www.googleapis.com/auth/spreadsheets"]
-            )
-            creds = flow.run_local_server(port=53221)
-            with open(TOKEN_PATH, "w") as token:
-                token.write(creds.to_json())
-    return build('sheets', 'v4', credentials=creds)
+C:\Users\DELL\Documents\Onyot.ai\Lead_List-Generator\python tests\Skip Tracing\truppl_parser.py
 
 def get_sheet_data(sheet_id, range_name):
     try:
