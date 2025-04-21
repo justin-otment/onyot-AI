@@ -85,6 +85,5 @@ jobs:
         if: failure()
         run: ps aux | grep 'chrome\|playwright' || echo "[!] No Playwright processes detected."
 
-      # Run Playwright with XVFB in Non-Headless Mode
-      - name: Run Playwright with Xvfb
-        run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python "${{ matrix.script }}" --disable-gpu --verbose
+      - name: Run Playwright Without XVFB (Debug Mode)
+        run: python "Skip Tracing/truepeople_tracer1.py" --disable-gpu --verbose
