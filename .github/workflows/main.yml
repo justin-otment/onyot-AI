@@ -55,7 +55,7 @@ jobs:
       - name: Verify Credential Files
         run: ls -lh credentials.json token.json || echo "[!] Credentials files missing."
 
-      # Test Playwright Browser Launch
+      # Ensure Playwright launches correctly
       - name: Test Playwright Browser Launch
         run: |
           xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python -c "
@@ -75,10 +75,15 @@ jobs:
       - name: Capture System Logs (Alternative)
         run: journalctl -xe | tail -n 50 || echo "[!] No system logs available."
 
-      # Capture Playwright execution logs (if failure occurs)
+      # Check Python execution logs (if failure occurs)
       - name: Capture Python Execution Logs
         if: failure()
         run: cat /home/runner/work/_temp/*.log | tail -n 50 || echo "[!] No Python execution logs found."
+
+      # List running processes to verify Playwright is running
+      - name: List Running Processes
+        if: failure()
+        run: ps aux | grep 'chrome\|playwright' || echo "[!] No Playwright processes detected."
 
       # Run Playwright with XVFB in Non-Headless Mode
       - name: Run Playwright with Xvfb
