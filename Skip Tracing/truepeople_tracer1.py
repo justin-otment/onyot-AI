@@ -180,16 +180,28 @@ def log_matches_to_sheet(sheet_id, row_index, matched_results):
 api_key = os.getenv('TWOCAPTCHA_API_KEY')
 
 async def get_site_key(page):
-    """Extract sitekey by finding iframe URL and extracting the `k=` param."""
+    """Extract sitekey by finding iframe URL or by scanning script contents."""
     try:
+        # First attempt: look for the iframe with the sitekey in its src
         iframe = await page.query_selector('iframe[src*="challenges.cloudflare.com"]')
         if iframe:
             iframe_src = await iframe.get_attribute('src')
             if iframe_src and "k=" in iframe_src:
                 return iframe_src.split("k=")[1].split("&")[0]
+        
+        # Fallback: search all <script> tags for potential 'k=' strings
+        scripts = await page.query_selector_all("script")
+        for script in scripts:
+            script_content = await script.text_content()
+            if script_content and "k=" in script_content:
+                match = re.search(r'k=([a-zA-Z0-9_-]+)', script_content)
+                if match:
+                    return match.group(1)
+
     except Exception as e:
         print(f"[!] Error extracting sitekey: {e}")
-    return None
+    
+    return None  # if nothing found
 
 def solve_turnstile_captcha(sitekey, url):
     """Sends CAPTCHA solving request to 2Captcha API."""
@@ -357,9 +369,20 @@ async def main():
 
     async with async_playwright() as p:
         try:
+            # inside main()
             headless = os.getenv("CI", "false").lower() == "true"
+            # Optional dev override:
+            if os.getenv("DEBUG") == "1":
+                headless = False
             browser = await p.chromium.launch(headless=headless)
-            context = await browser.new_context(user_agent=random.choice(user_agents))
+            context = await browser.new_context(
+                user_agent=random.choice(user_agents),
+                locale='en-US',
+                viewport={'width': 1280, 'height': 720},
+                java_script_enabled=True,
+                permissions=["geolocation"],
+            )
+
             await context.add_init_script(stealth_js)
             page = await context.new_page()
             await stealth_async(page)
