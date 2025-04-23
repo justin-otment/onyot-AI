@@ -25,9 +25,15 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 # 📌 Environment Variables Management
 from dotenv import load_dotenv
 
+# === Config ===
+# Define file paths
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
+TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "CAPE CORAL FINAL"
-URL_RANGE = "R2:R1717"
+SHEET_NAME_2 = "For REI Upload"
+URL_RANGE = "R45:R"
 MAX_RETRIES = 1
 
 # Load environment variables from .env file
@@ -35,13 +41,6 @@ load_dotenv()
 
 # Define Google Sheets API scopes
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-
-# === Config ===
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Decode and save Google Credentials from environment variable
-CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
-TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
 
 # === Google Sheets Authentication ===
 def authenticate_google_sheets():
@@ -97,37 +96,64 @@ def get_sheet_data(sheet_id, range_name):
         print(f"Error fetching data from Google Sheets: {e}")
         return []
     
-def update_sheet_data(sheet_id, row_index, values):
-    from string import ascii_uppercase
+def append_to_google_sheet(first_name, last_name, phones, emails):
+    """
+    Appends extracted data to the next available row in the 'For REI Upload' sheet.
+    """
+    service = authenticate_google_sheets()
 
-    # We'll write starting from column 'T'
-    start_col_index = ascii_uppercase.index('T')  # 19th letter
-    end_col_index = start_col_index + len(values) - 1  # Adjust based on length of values
+    # Fetch header row to determine column layout
+    header_row = service.spreadsheets().values().get(
+        spreadsheetId=SHEET_ID,
+        range=f"{SHEET_NAME_2}!1:1"
+    ).execute().get("values", [[]])[0]
 
-    # Handle column letters for target range
-    start_col_letter = ascii_uppercase[start_col_index]
-    end_col_letter = ascii_uppercase[end_col_index] if end_col_index < len(ascii_uppercase) else get_column_letter(end_col_index)
+    row_data = [""] * len(header_row)
 
-    target_range = f"CAPE CORAL FINAL!{start_col_letter}{row_index}:{end_col_letter}{row_index}"
+    # Insert First Name and Last Name
+    if "First Name" in header_row:
+        row_data[header_row.index("First Name")] = first_name
+    if "Last Name" in header_row:
+        row_data[header_row.index("Last Name")] = last_name
 
-    body = {
-        "range": target_range,
-        "majorDimension": "ROWS",
-        "values": [values]
-    }
+    # Insert up to 5 phone number/type pairs
+    for i, (phone, phone_type) in enumerate(phones[:5]):
+        try:
+            phone_col = header_row.index("Phone Number") + (i * 2)
+            type_col = header_row.index("Phone Type") + (i * 2)
+            row_data[phone_col] = phone
+            row_data[type_col] = phone_type
+        except ValueError:
+            print(f"[!] Phone columns missing or misaligned for pair #{i + 1}")
 
-    sheets_service.spreadsheets().values().update(
-        spreadsheetId=sheet_id,
-        range=target_range,
+    # Insert up to 3 emails
+    for i, email in enumerate(emails[:3]):
+        email_header = f"Email {i + 1}"
+        if email_header in header_row:
+            row_data[header_row.index(email_header)] = email
+
+    # Append the data to the next available row
+    service.spreadsheets().values().append(
+        spreadsheetId=SHEET_ID,
+        range=f"{SHEET_NAME_2}!A1",
         valueInputOption="RAW",
-        body=body
+        insertDataOption="INSERT_ROWS",
+        body={"values": [row_data]}
     ).execute()
 
+    print(f"[✓] Data appended to '{SHEET_NAME_2}'")
+
 user_agents = [
-    # Include at least 10 varied user agents here.
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64)...Chrome/119.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)...Chrome/120.0.0.0 Safari/537.36",
-    # Add more user agents
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.74 Mobile Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 11_2_3) AppleWebKit/537.36 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15",
+    "Mozilla/5.0 (Linux; Android 10; Mi 9T Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Mobile Safari/537.36",
+    "Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.141 Safari/537.36",
 ]
 
 stealth_js = """
@@ -204,28 +230,58 @@ if not TWOCAPTCHA_API_KEY:
     print("[!] Missing TwoCaptcha API Key! Set TWOCAPTCHA_API_KEY in environment variables.")
 
 async def get_site_key(page):
-    """Extract sitekey by finding iframe URL or by scanning script contents."""
-    try:
-        # Attempt 1: Look for an iframe containing the sitekey in its src
-        iframe = await page.query_selector('iframe[src*="challenges.cloudflare.com"]')
-        if iframe:
-            iframe_src = await iframe.get_attribute('src')
-            if iframe_src and "k=" in iframe_src:
-                return iframe_src.split("k=")[1].split("&")[0]
+    """Extracts the CAPTCHA site key dynamically from the page with enhanced robustness."""
+    MAX_RETRIES = 5  # Number of retries
+    WAIT_TIME = 7000  # Time to wait between retries (milliseconds)
 
-        # Attempt 2: Search <script> tags for potential 'k=' strings
-        scripts = await page.query_selector_all("script")
-        for script in scripts:
-            script_content = await script.text_content()
-            if script_content:
-                match = re.search(r'k=([a-zA-Z0-9_-]+)', script_content)
-                if match:
-                    return match.group(1)
+    # Log retries
+    print("[*] Attempting to locate CAPTCHA sitekey...")
 
-    except Exception as e:
-        print(f"[!] Error extracting sitekey: {e}")
+    for attempt in range(MAX_RETRIES):
+        try:
+            # Wait for the network activity to idle
+            await page.wait_for_load_state("networkidle")
+            
+            # Wait for selector to appear (handle dynamic loading)
+            await page.wait_for_selector("[data-sitekey], input[name=\"sitekey\"], .captcha-sitekey", timeout=60000)
+            
+            # Evaluate sitekey from DOM
+            site_key = await page.evaluate("""() => {
+                let selectors = [
+                    document.querySelector('[data-sitekey]'),
+                    document.querySelector('input[name="sitekey"]'),
+                    document.querySelector('.captcha-sitekey')
+                ];
+                
+                for (let selector of selectors) {
+                    if (selector) {
+                        return selector.getAttribute('data-sitekey') || selector.value;
+                    }
+                }
+                return null;
+            }""")
+            
+            # If sitekey is found, return it
+            if site_key:
+                print(f"[✓] Sitekey found: {site_key}")
+                return site_key
+            else:
+                print(f"[!] Attempt {attempt + 1}: Sitekey not found. Retrying...")
+                await page.wait_for_timeout(WAIT_TIME)  # Wait before retry
 
-    return None  # No sitekey found
+        except Exception as e:
+            # Handle timeout or selector errors
+            print(f"[!] Error during attempt {attempt + 1}: {str(e)}")
+            await page.wait_for_timeout(WAIT_TIME)
+
+    # Log failure and save DOM snapshot for debugging
+    print("[✗] Failed to locate CAPTCHA sitekey after maximum retries.")
+    dom_snapshot = await page.content()
+    with open("dom_snapshot.html", "w") as file:
+        file.write(dom_snapshot)
+    print("[*] DOM snapshot saved as 'dom_snapshot.html'. Inspect to identify missing sitekey.")
+
+    return None
 
 def solve_turnstile_captcha(sitekey, url):
     """Sends CAPTCHA solving request to 2Captcha API."""
@@ -274,12 +330,14 @@ async def fetch_truepeoplesearch_data(url, browser, context, page):
     """Fetches page content while handling CAPTCHA detection dynamically, without closing the browser."""
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            print(f"[🔄] Attempt {attempt} to fetch: {url}")
+            print(f"Attempt {attempt} to fetch: {url}")
+            # Wait for the network activity to idle
+            await page.wait_for_load_state("networkidle")
             await page.goto(url, wait_until="networkidle", timeout=60000)
 
-            # Perform human-like interactions to mimic real user behavior
+            # Perform human-like interactions
             await page.wait_for_timeout(random.randint(3000, 5000))
-            await page.mouse.move(random.randint(100, 400), random.randint(100, 400), steps=random.randint(10, 30))
+            await page.mouse.move(random.randint(100, 400), random.randint(100, 400), steps=20)
             await page.mouse.wheel(0, random.randint(400, 800))
             await page.wait_for_timeout(random.randint(3000, 5000))
 
@@ -289,28 +347,27 @@ async def fetch_truepeoplesearch_data(url, browser, context, page):
             if "captcha" in content.lower() or "are you a human" in content.lower():
                 print(f"[!] CAPTCHA detected on attempt {attempt}. Fetching sitekey dynamically...")
 
-                # Fetch the CAPTCHA sitekey dynamically
+                # Fetch the sitekey dynamically
                 sitekey = await get_site_key(page)
                 if not sitekey:
                     print("[!] No valid sitekey found. Skipping CAPTCHA solving.")
-                    return None  # Abort early instead of retrying needlessly
+                    continue  # Proceed with retries
 
                 print(f"[✓] Sitekey found: {sitekey}. Solving CAPTCHA via 2Captcha API.")
                 captcha_token = solve_turnstile_captcha(sitekey, url)
-
                 if not captcha_token:
-                    print("[!] CAPTCHA solving failed. Aborting retries for this URL.")
-                    return None  # Return early instead of wasting retries
+                    print("[!] CAPTCHA solving failed. Skipping row.")
+                    continue  # Retry instead of terminating
 
-                print(f"[✓] CAPTCHA solved successfully. Injecting token for {url}.")
+                print(f"[✓] CAPTCHA solved successfully. Retrying request for {url} with token.")
 
                 # Inject CAPTCHA token into the correct context
                 success = await inject_token(page, captcha_token, url)
                 if not success:
-                    print("[!] CAPTCHA injection failed. Aborting.")
-                    return None  # Early return instead of repeating failed attempts
+                    print("[!] CAPTCHA injection failed. Retrying...")
+                    continue  # Retry instead of terminating
 
-                # Wait briefly for CAPTCHA processing
+                # Wait for CAPTCHA processing
                 await page.wait_for_timeout(5000)
 
                 # Force refresh to validate CAPTCHA completion
@@ -323,21 +380,43 @@ async def fetch_truepeoplesearch_data(url, browser, context, page):
                     print("[✓] CAPTCHA solved and page loaded successfully.")
                     return content
 
-                print("[!] CAPTCHA challenge still present after solving attempt. Aborting retries.")
-                return None  # Return early instead of looping unnecessarily
+                print("[!] CAPTCHA challenge still present. Retrying...")
+                continue  # Retry instead of failing
 
             return content  # Page loaded successfully without CAPTCHA
 
-        except PlaywrightTimeout:
-            print(f"[⚠] Timeout error on attempt {attempt}. Retrying...")
-            continue  # Allow retries on timeout errors
-
         except Exception as e:
-            print(f"[❌] Unexpected error during attempt {attempt}: {e}")
-            return None  # Abort early if an unknown issue occurs
+            print(f"[!] Error during attempt {attempt}: {e}")
+            continue  # Retry instead of terminating
 
     print(f"[!] CAPTCHA challenge persisted after maximum retries. Skipping {url}.")
     return None
+
+def parse_contact_info(html):
+    soup = BeautifulSoup(html, 'html.parser')
+
+    phone_numbers = []
+    phone_types = []
+    emails = []
+
+    # Extract Phone Numbers
+    phone_spans = soup.select(".col-12 > div.row span[itemprop='telephone'], .collapse span[itemprop='telephone']")
+    for span in phone_spans:
+        phone_numbers.append(span.get_text(strip=True))
+
+    # Extract Phone Types
+    phone_types_spans = soup.select(".col-12 > div.row span.smaller, .collapse span.smaller")
+    for span in phone_types_spans:
+        phone_types.append(span.get_text(strip=True))
+
+    # Extract Emails
+    email_divs = soup.select("div:nth-of-type(12) .col-12 > div.pl-sm-2 .col div")
+    for email_div in email_divs:
+        email_text = email_div.get_text(strip=True)
+        if re.match(r"[^@]+@[^@]+\.[^@]+", email_text):  # Validate email format
+            emails.append(email_text)
+
+    return phone_numbers, phone_types, emails
 
 async def inject_token(page, captcha_token, url):
     """Injects CAPTCHA token, submits validation, and ensures return to original inquiry."""
@@ -400,6 +479,77 @@ def get_column_letter(index):
     letters = string.ascii_uppercase
     return letters[index] if index < 26 else letters[(index // 26) - 1] + letters[index % 26]
 
+def get_existing_headers(sheet_id, sheet_name):
+    """Fetch column headers from row 1 of the specified sheet."""
+    range_ = f"{sheet_name}!1:1"  # Specify correct sheet name
+    result = sheets_service.spreadsheets().values().get(
+        spreadsheetId=sheet_id,
+        range=range_
+    ).execute()
+    headers = result.get("values", [[]])[0]
+    return headers if headers else []
+
+async def navigate_to_profile(page, matched_url):
+    """Handles CAPTCHA while navigating to matched profiles."""
+    for attempt in range(1, 4):  # Limit retries``
+        try:
+            print(f"Attempt {attempt} to fetch: {matched_url}")
+            # Wait for the network activity to idle
+            await page.wait_for_load_state("networkidle")
+            await page.goto(matched_url, wait_until="networkidle", timeout=60000)
+
+            # Human-like interactions
+            await page.wait_for_timeout(random.randint(3000, 5000))
+            await page.mouse.move(random.randint(100, 400), random.randint(100, 400), steps=20)
+            await page.mouse.wheel(0, random.randint(400, 800))
+            await page.wait_for_timeout(random.randint(3000, 5000))
+
+            content = await page.content()
+
+            if "captcha" in content.lower() or "are you a human" in content.lower():
+                print(f"[!] CAPTCHA detected on attempt {attempt}. Fetching sitekey dynamically...")
+
+                sitekey = await get_site_key(page)
+                if not sitekey:
+                    print("[!] No valid sitekey found. Skipping CAPTCHA solving.")
+                    continue  
+
+                print(f"[✓] Sitekey found: {sitekey}. Solving CAPTCHA via 2Captcha API.")
+                captcha_token = solve_turnstile_captcha(sitekey, matched_url)
+                if not captcha_token:
+                    print("[!] CAPTCHA solving failed. Skipping row.")
+                    continue  
+
+                print(f"[✓] CAPTCHA solved successfully. Retrying request for {matched_url} with token.")
+
+                success = await inject_token(page, captcha_token, matched_url)
+                if not success:
+                    print("[!] CAPTCHA injection failed. Retrying...")
+                    continue  
+
+                await page.wait_for_timeout(5000)
+
+                print("[✓] Reloading page to validate CAPTCHA token.")
+                await page.reload(wait_until="networkidle")
+
+                content = await page.content()
+                if "captcha" not in content.lower():
+                    print("[✓] CAPTCHA solved and page loaded successfully.")
+                    return content
+
+                print("[!] CAPTCHA challenge still present. Retrying...")
+                continue  
+            
+            return content  # Page loaded successfully without CAPTCHA
+
+
+        except Exception as e:
+            print(f"[!] Error during attempt {attempt} for {matched_url}: {e}")
+            continue
+
+    print(f"[!] Skipping {matched_url} due to persistent CAPTCHA.")
+    return None
+
 # === Main Playwright Execution ===
 async def main():
     """Main execution function for Playwright automation."""
@@ -409,36 +559,14 @@ async def main():
         return
 
     async with async_playwright() as p:
-        browser = None  # Ensure browser variable is initialized
-
+        for attempt in range(1, MAX_RETRIES + 1):
+            print(f"[✓] Attempt {attempt} to launch browser.")
         try:
-            # Ensure environment variables are properly loaded
-            headless = os.getenv("CI", "false").lower() == "true"
-            if os.getenv("DEBUG") == "1":
-                headless = False  # Debug mode forces non-headless execution
-            
-            print(f"[+] Launching browser in {'headless' if headless else 'headed'} mode")
-
-            # Initialize Playwright Chromium with error handling
-            try:
-                print("[🔄] Initializing Playwright Chromium...")
-                browser = await p.chromium.launch(headless=headless, args=["--disable-gpu"])
-                print("[✅] Playwright Chromium launched successfully!")
-            except Exception as e:
-                print(f"[❌] Playwright failed to launch: {e}")
-                return  # Abort execution if browser launch fails
-
-            context = await browser.new_context(
-                user_agent=random.choice(user_agents),
-                locale='en-US',
-                viewport={'width': 1280, 'height': 720},
-                java_script_enabled=True,
-                permissions=["geolocation"],
-            )
-
-            await context.add_init_script(stealth_js)
+            browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
+            context = await browser.new_context(user_agent=random.choice(user_agents))
             page = await context.new_page()
             await stealth_async(page)
+
 
             for row_index, url in url_entries:
                 if not url.strip():
@@ -447,55 +575,72 @@ async def main():
                 print(f"\n[→] Processing Row {row_index}: {url}")
 
                 try:
-                    # Fetch page content with CAPTCHA handling
-                    print("[🔍] Fetching page content...")
                     html_content = await fetch_truepeoplesearch_data(url, browser, context, page)
-
                     if not html_content:
-                        print(f"[❌] No valid page content extracted for row {row_index}.")
                         continue
 
-                    # Extract person links
                     extracted_links = extract_links(html_content)
                     if not extracted_links:
-                        print(f"[❌] No valid person links extracted for row {row_index}.")
                         continue
 
-                    # Extract reference names
                     ref_names = extract_reference_names(SHEET_ID, row_index)
-                    if not ref_names:
-                        print(f"[❌] No reference names found in row {row_index} (cols D–J).")
-                        continue
-
-                    # Match extracted links with reference names
                     matched_results = match_entries(extracted_links, ref_names)
 
-                    if matched_results:
-                        print(f"[✅] Match found. Logging to row {row_index}.")
-                        try:
-                            log_matches_to_sheet(SHEET_ID, row_index, matched_results)
-                            print(f"[✅] Successfully logged data for row {row_index}.")
-                        except Exception as e:
-                            print(f"[❌] Error logging to Google Sheets for row {row_index}: {e}")
-                    else:
-                        print(f"[⚠] No match found in row {row_index}.")
+                    if not matched_results:
+                        print(f"[!] No match found in row {row_index}. Skipping second batch extraction.")
+                        continue
+
+                    # **Retrieve Headers for "For REI Upload"**
+                    available_headers = get_existing_headers(SHEET_ID, SHEET_NAME_2)
+                    print(f"[✓] Available headers in '{SHEET_NAME_2}': {available_headers}")
+
+                    # **Second Batch Extraction (Contact Details)**
+                    for matched_entry in matched_results:
+                        matched_url = matched_entry["link"]
+                        matched_name = matched_entry["text"]
+                        print(f"[→] Navigating to matched profile: {matched_url}")
+
+                        matched_html = await navigate_to_profile(page, matched_url)
+                        if not matched_html:
+                            continue  # Skip if CAPTCHA blocks all retries
+
+                        # Extract contact details
+                        phone_numbers, phone_types, emails = parse_contact_info(matched_html)
+
+                        # Combine phone numbers and types into pairs (zip them)
+                        phone_data = list(zip(phone_numbers, phone_types))
+                        
+                        # Skip if no phone numbers or phone types
+                        if not phone_numbers or not phone_types:
+                            print(f"[!] Skipping row {row_index}: No phone data found.")
+                            continue
+
+                        # Extract first/last name from matched text
+                        first_name, last_name = matched_name.split(" ", 1) if " " in matched_name else (matched_name, "")
+
+                        # Log to Google Sheets
+                        append_to_google_sheet(
+                            first_name=first_name,
+                            last_name=last_name,
+                            phones=phone_data,
+                            emails=emails
+                        )
+
 
                 except Exception as e:
-                    print(f"[❌] Error processing row {row_index}: {e}")
-
+                    print(f"[!] Error processing row {row_index}: {e}")
+                    continue
+                
                 # Introduce randomized delay
-                delay_time = random.uniform(1.5, 30)  # Randomized delay between requests
+                delay_time = random.uniform(2.5, 60)  # Randomized delay between requests
                 print(f"[⏳] Waiting for {delay_time:.1f} seconds before next request...")
                 await asyncio.sleep(delay_time)
-
+                
         except Exception as e:
             print(f"[❌] Critical error encountered: {e}")
 
         finally:
-            if browser:
-                print("[♻] Closing Playwright browser...")
-                await browser.close()
-                print("[✅] Browser closed successfully.")
+            await browser.close()
 
 if __name__ == "__main__":
     asyncio.run(main())
