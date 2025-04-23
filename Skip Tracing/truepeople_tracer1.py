@@ -561,9 +561,33 @@ async def main():
     async with async_playwright() as p:
         for attempt in range(1, MAX_RETRIES + 1):
             print(f"[✓] Attempt {attempt} to launch browser.")
+            browser = None  # Ensure browser variable is initialized
         try:
-            browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
-            context = await browser.new_context(user_agent=random.choice(user_agents))
+            # Ensure environment variables are properly loaded
+            headless = os.getenv("CI", "false").lower() == "true"
+            if os.getenv("DEBUG") == "1":
+                headless = False  # Debug mode forces non-headless execution
+            
+            print(f"[+] Launching browser in {'headless' if headless else 'headed'} mode")
+
+            # Initialize Playwright Chromium with error handling
+            try:
+                print("[🔄] Initializing Playwright Chromium...")
+                browser = await p.chromium.launch(headless=headless, args=["--disable-gpu"])
+                print("[✅] Playwright Chromium launched successfully!")
+            except Exception as e:
+                print(f"[❌] Playwright failed to launch: {e}")
+                return  # Abort execution if browser launch fails
+
+            context = await browser.new_context(
+                user_agent=random.choice(user_agents),
+                locale='en-US',
+                viewport={'width': 1280, 'height': 720},
+                java_script_enabled=True,
+                permissions=["geolocation"],
+            )
+
+            await context.add_init_script(stealth_js)
             page = await context.new_page()
             await stealth_async(page)
 
