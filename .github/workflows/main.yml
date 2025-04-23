@@ -1,4 +1,4 @@
-name: Run Multiple Python Scripts
+name: Playwright Automation
 
 on:
   push:
@@ -7,84 +7,44 @@ on:
   workflow_dispatch:
 
 jobs:
-  run-scripts:
+  run-playwright:
     runs-on: ubuntu-latest
-    environment: production
-
-    strategy:
-      matrix:
-        script:
-          - "Skip Tracing/truepeople_tracer1.py"
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+    # Step 1: Checkout code
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: Set Up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.12'
+    # Step 2: Set up Python
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
 
-      - name: Set UTF-8 Encoding
-        run: echo "PYTHONIOENCODING=UTF-8" >> $GITHUB_ENV
+    # Step 3: Install Playwright dependencies
+    - name: Install system dependencies for Playwright
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libnss3 libatk1.0 libatk-bridge2.0 libcups2 libdrm2 libxkbcommon0 libxshmfence1 libgbm1
+    
+    # Step 4: Install Python dependencies
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
 
-      # Install dependencies explicitly for Playwright
-      - name: Install Required System Packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libnss3 libgtk-3-0 libgbm1 xvfb
+    # Step 5: Install Playwright Browsers
+    - name: Install Playwright Browsers
+      run: npx playwright install
 
-      # Validate Dependency Installation
-      - name: Verify Installed Packages
-        run: dpkg -l | grep -E 'libnss3|libgtk-3-0|libgbm1' || echo "[!] Missing required packages."
+    # Step 6: Export environment variables (optional)
+    - name: Setup environment variables
+      env:
+        DEBUG: 0
+        CI: true
+      run: echo "Environment variables set."
 
-      - name: Install Python Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install setuptools playwright
-
-      - name: Install Playwright Browsers
-        run: playwright install --with-deps
-
-      # Restore credentials and tokens
-      - name: Restore Credentials and Token Files
-        run: |
-          echo "${{ secrets.GOOGLE_CREDENTIALS_B64 }}" | base64 -d > credentials.json
-          echo "${{ secrets.GOOGLE_TOKEN_B64 }}" | base64 -d > token.json
-
-      - name: Verify Credential Files
-        run: ls -lh credentials.json token.json || echo "[!] Credentials files missing."
-
-      # Ensure Playwright launches correctly
-      - name: Test Playwright Browser Launch
-        run: |
-          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python -c "
-          from playwright.sync_api import sync_playwright;
-          with sync_playwright() as p:
-              print('🔄 Initializing Playwright Chromium...');
-              browser = p.chromium.launch(headless=False);
-              print('✅ Playwright test successful!');
-              browser.close();
-          "
-
-      # Ensure no stale Chrome processes block execution
-      - name: Cleanup Stalled Chrome Instances
-        run: pkill -f 'chrome' || echo "[!] No stale Chrome instances found."
-
-      # Debugging - alternative to dmesg since GitHub Actions restricts access
-      - name: Capture System Logs (Alternative)
-        run: journalctl -xe | tail -n 50 || echo "[!] No system logs available."
-
-      # Check Python execution logs (if failure occurs)
-      - name: Capture Python Execution Logs
-        if: failure()
-        run: cat /home/runner/work/_temp/*.log | tail -n 50 || echo "[!] No Python execution logs found."
-
-      # List running processes to verify Playwright is running
-      - name: List Running Processes
-        if: failure()
-        run: ps aux | grep 'chrome\|playwright' || echo "[!] No Playwright processes detected."
-
-      - name: Run Playwright Without XVFB (Debug Mode)
-        run: python "Skip Tracing/truepeople_tracer1.py" --disable-gpu --verbose
+    # Step 7: Run the Playwright script
+    - name: Run script
+      run: |
+        python main.py
