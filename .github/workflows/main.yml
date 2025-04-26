@@ -2,7 +2,6 @@ name: Run Multiple Python Scripts
 
 on:
   push:
-@@ -7,84 +7,44 @@ on:
   workflow_dispatch:
 
 jobs:
