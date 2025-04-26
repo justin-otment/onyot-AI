@@ -21,30 +21,46 @@ jobs:
       with:
         python-version: '3.10'
 
-    # Step 3: Install Playwright dependencies
+    # Step 3: Install System Dependencies (for Playwright Chromium)
     - name: Install system dependencies for Playwright
       run: |
         sudo apt-get update
-        sudo apt-get install -y libnss3 libatk1.0 libatk-bridge2.0 libcups2 libdrm2 libxkbcommon0 libxshmfence1 libgbm1
-    
+        sudo apt-get install -y \
+          libnss3 \
+          libatk1.0-0 \
+          libatk-bridge2.0-0 \
+          libcups2 \
+          libdrm2 \
+          libxkbcommon0 \
+          libxshmfence1 \
+          libgbm1 \
+          libasound2 \
+          libxrandr2 \
+          libgtk-3-0 \
+          libxcomposite1 \
+          libxdamage1 \
+          libxfixes3 \
+          fonts-liberation \
+          libappindicator3-1 \
+          xdg-utils
+
     # Step 4: Install Python dependencies
-    - name: Install dependencies
+    - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    # Step 5: Install Playwright Browsers
+    # Step 5: Install Playwright Browsers (WITH dependencies)
     - name: Install Playwright Browsers
-      run: npx playwright install
+      run: |
+        python -m playwright install --with-deps
 
-    # Step 6: Export environment variables (optional)
-    - name: Setup environment variables
-      env:
-        DEBUG: 0
-        CI: true
-      run: echo "Environment variables set."
+    # Step 6: Load Environment Variables (Optional)
+    - name: Load .env Variables
+      run: |
+        echo "Loading .env variables..."  # dotenv inside script will auto-load if coded
 
     # Step 7: Run the Playwright script
-    - name: Run script
+    - name: Run Playwright Script
       run: |
-        python main.py
+        python truppl_parser.py
