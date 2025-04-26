@@ -35,7 +35,14 @@ jobs:
       - name: Install Required System Packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y libnss3 libgtk-3-0 libgbm1 xvfb
+          sudo apt-get install -y \
+            libnss3 \
+            libgtk-3-0 \
+            libgbm1 \
+            libasound2t64 \
+            libffi-dev \
+            libx264 \
+            xvfb
 
       # Step 5: Validate dependency installation
       - name: Verify Installed Packages
