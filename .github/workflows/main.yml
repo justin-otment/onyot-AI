@@ -15,7 +15,7 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v3
 
-    # Step 2: Set up Python
+    # Step 2: Set up Python environment
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
@@ -57,8 +57,8 @@ jobs:
     - name: Install OpenVPN
       run: sudo apt-get install -y openvpn
 
-    # Step 6: Setup VPNs Directory
-    - name: Setup VPNs Directory
+    # Step 6: Setup VPN Directory
+    - name: Setup VPN Directory
       run: mkdir -p VPNs
 
     # Step 7: Install Python Dependencies
@@ -72,12 +72,16 @@ jobs:
       run: |
         python -m playwright install --with-deps
 
-    # Step 9: Load Environment Variables
-    - name: Set Environment Variables
+    # Step 9: Set Environment Variables via Secrets
+    - name: Load Environment Variables
       env:
+        SHEET_ID: ${{ secrets.SHEET_ID }}
+        MAILING_STREETS_RANGE: ${{ secrets.MAILING_STREETS_RANGE }}
+        ZIPCODE_RANGE: ${{ secrets.ZIPCODE_RANGE }}
         APIKEY_2CAPTCHA: ${{ secrets.APIKEY_2CAPTCHA }}
         VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
         VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
+        CI: "true"
 
     # Step 10: Run Linting
     - name: Run Linting
@@ -90,7 +94,7 @@ jobs:
       run: |
         python -m unittest discover
 
-    # Step 12: Run the Playwright Script
+    # Step 12: Run Playwright Automation Script
     - name: Run Playwright Script
       run: |
         set -e
