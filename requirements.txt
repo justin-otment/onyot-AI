@@ -1,15 +1,18 @@
-playwright
-playwright-stealth
-chromedriver-autoinstaller  # Optional for Selenium-like setups
+# --- Core scraping ---
+playwright==1.43.0
+playwright-stealth==1.0.6
+beautifulsoup4==4.12.3
+lxml==5.2.1
 
-google-api-python-client>=2.105.0
-google-auth>=2.23.0
-google-auth-oauthlib>=1.0.0
+# --- Google Sheets API ---
+google-api-python-client==2.126.0
+google-auth==2.29.0
+# google-auth-oauthlib==1.2.0  # <-- Uncomment ONLY if using OAuth login, not service account.
 
-beautifulsoup4
-lxml  # Improves parsing efficiency
-requests
+# --- Utilities ---
+requests==2.31.0
+python-dotenv==1.0.1
+certifi==2024.2.2  # optional, harmless
 
-python-dotenv
-certifi  # Improves SSL reliability
-setuptools  # Fixes pkg_resources error
+# (chromedriver-autoinstaller removed)
+# (setuptools removed)
