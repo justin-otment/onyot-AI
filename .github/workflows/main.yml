@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         script:
-          - "Skip Tracing/truepeople_tracer1.py"
+          - "Skip Tracing/truppl_parser.py"
 
     steps:
       # Step 1: Checkout repository
