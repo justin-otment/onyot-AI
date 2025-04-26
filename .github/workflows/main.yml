@@ -1,4 +1,4 @@
-name: Playwright Automation Workflow
+name: Run Multiple Python Scripts
 
 on:
   push:
@@ -7,47 +7,51 @@ on:
   workflow_dispatch:
 
 jobs:
-  playwright-automation-run:
-    runs-on: ubuntu-latest
+  run-scripts:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        script:
+          - "Skip Tracing/truppl_parser.py"
 
     steps:
-    # Step 1: Checkout Repository
-    - name: Checkout Repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
-    # Step 2: Set Up Python Environment
-    - name: Set Up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.12'
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
 
-    # Step 3: Enable Required Repositories
-    - name: Enable Universe and Multiverse Repositories
-      run: |
-        sudo add-apt-repository universe
-        sudo add-apt-repository multiverse
-        sudo apt-get update
+      - name: Set Python UTF-8 Encoding
+        run: echo "PYTHONIOENCODING=UTF-8" >> $GITHUB_ENV
 
-    # Step 4: Install System Dependencies
-    - name: Install Required System Packages
-      run: |
-          sudo apt update
-          sudo apt install -y \
-            libwoff1 libvpx7 libevent-2.1-7 libopus0 \
-            libharfbuzz-icu0 libsecret-1-0 \
-            libgles2 libx11-dev
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if (Test-Path requirements.txt) { pip install -r requirements.txt }
+        shell: powershell
 
-    # Step 5: Install Python Dependencies
-    - name: Install Python Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install playwright
+      - name: Install Firefox and GeckoDriver (Windows)
+        run: |
+          # Install Firefox
+          choco install firefox -y
 
-    # Step 6: Install Playwright Browsers
-    - name: Install Playwright Browsers
-      run: python -m playwright install --with-deps
+          # Fetch the latest GeckoDriver version (no authentication)
+          $response = Invoke-WebRequest -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest" | ConvertFrom-Json
+          $GECKO_VERSION = $response.tag_name -replace "v", ""
+          $GECKO_URL = "https://github.com/mozilla/geckodriver/releases/download/v$GECKO_VERSION/geckodriver-v$GECKO_VERSION-win64.zip"
 
-    # Step 7: Run Playwright Script
-    - name: Run Playwright Script
-      run: python "Skip Tracing/truppl_parser.py"
+          # Download and extract GeckoDriver
+          Invoke-WebRequest -Uri $GECKO_URL -OutFile geckodriver.zip
+          Expand-Archive geckodriver.zip -DestinationPath C:\GeckoDriver
+
+          # Add GeckoDriver to PATH for this session
+          $env:PATH += ";C:\GeckoDriver"
+
+          # Verify installation
+          C:\GeckoDriver\geckodriver.exe --version
+        shell: powershell
+
+      - name: Run Python script
+        run: python "${{ matrix.script }}"
