@@ -35,13 +35,16 @@ jobs:
       - name: Install Required System Packages
         run: |
           sudo apt-get update
+          sudo add-apt-repository universe
+          sudo add-apt-repository multiverse
+          sudo apt-get update
           sudo apt-get install -y \
             libnss3 \
             libgtk-3-0 \
             libgbm1 \
             libasound2t64 \
             libffi-dev \
-            libx264 \
+            ffmpeg \
             xvfb
 
       # Step 5: Validate dependency installation
