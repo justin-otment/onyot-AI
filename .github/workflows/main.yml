@@ -72,7 +72,7 @@ jobs:
       run: |
         python -m playwright install --with-deps
 
-    # Step 9: Set Environment Variables via Secrets
+    # Step 9: Load Environment Variables via Secrets
     - name: Load Environment Variables
       env:
         SHEET_ID: ${{ secrets.SHEET_ID }}
