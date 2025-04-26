@@ -1,4 +1,4 @@
-name: Playwright Automation
+name: Playwright Automation Workflow
 
 on:
   push:
@@ -7,12 +7,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  run-playwright:
+  playwright-automation-run:
     runs-on: ubuntu-latest
 
     steps:
     # Step 1: Checkout code
-    - name: Checkout code
+    - name: Checkout Code
       uses: actions/checkout@v3
 
     # Step 2: Set up Python
@@ -21,7 +21,17 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Install system dependencies for Playwright
+    # Step 3: Cache Python Dependencies
+    - name: Cache Python Dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    # Step 4: Install System Dependencies
+    - name: Install System Dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
@@ -33,7 +43,7 @@ jobs:
           libxkbcommon0 \
           libxshmfence1 \
           libgbm1 \
-          libasound2t64 \
+          libasound2 \
           libxrandr2 \
           libgtk-3-0 \
           libxcomposite1 \
@@ -43,24 +53,53 @@ jobs:
           libappindicator3-1 \
           xdg-utils
 
+    # Step 5: Install OpenVPN
+    - name: Install OpenVPN
+      run: sudo apt-get install -y openvpn
 
-    # Step 4: Install Python dependencies
-    - name: Install Python dependencies
+    # Step 6: Setup VPNs Directory
+    - name: Setup VPNs Directory
+      run: mkdir -p VPNs
+
+    # Step 7: Install Python Dependencies
+    - name: Install Python Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    # Step 5: Install Playwright Browsers (WITH dependencies)
+    # Step 8: Install Playwright Browsers (WITH dependencies)
     - name: Install Playwright Browsers
       run: |
         python -m playwright install --with-deps
 
-    # Step 6: Load Environment Variables (Optional)
-    - name: Load .env Variables
-      run: |
-        echo "Loading .env variables..."  # dotenv inside script will auto-load if coded
+    # Step 9: Load Environment Variables
+    - name: Set Environment Variables
+      env:
+        APIKEY_2CAPTCHA: ${{ secrets.APIKEY_2CAPTCHA }}
+        VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
+        VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
 
-    # Step 7: Run the Playwright script
+    # Step 10: Run Linting
+    - name: Run Linting
+      run: |
+        pip install flake8
+        flake8 truppl_parser.py
+
+    # Step 11: Run Unit Tests
+    - name: Run Unit Tests
+      run: |
+        python -m unittest discover
+
+    # Step 12: Run the Playwright Script
     - name: Run Playwright Script
       run: |
+        set -e
         python truppl_parser.py
+
+    # Step 13: Archive Logs for Debugging (Optional)
+    - name: Archive Logs
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: playwright-logs
+        path: automation_logs.txt
