@@ -11,27 +11,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # Step 1: Checkout repository
+    # Step 1: Checkout Repository
     - name: Checkout Repository
       uses: actions/checkout@v3
 
-    # Step 2: Set up Python environment
-    - name: Set up Python
+    # Step 2: Set Up Python Environment
+    - name: Set Up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.12'
 
-    # Step 3: Set UTF-8 encoding
-    - name: Set UTF-8 Encoding
-      run: echo "PYTHONIOENCODING=UTF-8" >> $GITHUB_ENV
-
-    # Step 4: Install required system packages
-    - name: Install Required System Packages
+    # Step 3: Enable Required Repositories
+    - name: Enable Universe and Multiverse Repositories
       run: |
-        sudo apt-get update
         sudo add-apt-repository universe
         sudo add-apt-repository multiverse
         sudo apt-get update
+
+    # Step 4: Install System Dependencies
+    - name: Install Required System Packages
+      run: |
         sudo apt-get install -y \
           libnss3 \
           libgtk-3-0 \
@@ -41,18 +40,17 @@ jobs:
           ffmpeg \
           xvfb
 
-    # Step 5: Install Python dependencies
+    # Step 5: Install Python Dependencies
     - name: Install Python Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install playwright
 
-    # Step 6: Install Playwright browsers
+    # Step 6: Install Playwright Browsers
     - name: Install Playwright Browsers
-      run: |
-        python -m playwright install --with-deps
+      run: python -m playwright install --with-deps
 
-    # Step 7: Run Playwright script
+    # Step 7: Run Playwright Script
     - name: Run Playwright Script
       run: python "Skip Tracing/truppl_parser.py"
