@@ -1,4 +1,4 @@
-name: Run Multiple Python Scripts
+name: Playwright Automation Workflow
 
 on:
   push:
@@ -7,101 +7,52 @@ on:
   workflow_dispatch:
 
 jobs:
-  run-scripts:
+  playwright-automation-run:
     runs-on: ubuntu-latest
-    environment: production
-
-    strategy:
-      matrix:
-        script:
-          - "Skip Tracing/truppl_parser.py"
 
     steps:
-      # Step 1: Checkout repository
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+    # Step 1: Checkout repository
+    - name: Checkout Repository
+      uses: actions/checkout@v3
 
-      # Step 2: Set up Python environment
-      - name: Set Up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.12'
+    # Step 2: Set up Python environment
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
 
-      # Step 3: Set UTF-8 encoding
-      - name: Set UTF-8 Encoding
-        run: echo "PYTHONIOENCODING=UTF-8" >> $GITHUB_ENV
+    # Step 3: Set UTF-8 encoding
+    - name: Set UTF-8 Encoding
+      run: echo "PYTHONIOENCODING=UTF-8" >> $GITHUB_ENV
 
-      # Step 4: Install required system packages for Playwright
-      - name: Install Required System Packages
-        run: |
-          sudo apt-get update
-          sudo add-apt-repository universe
-          sudo add-apt-repository multiverse
-          sudo apt-get update
-          sudo apt-get install -y \
-            libnss3 \
-            libgtk-3-0 \
-            libgbm1 \
-            libasound2t64 \
-            libffi-dev \
-            ffmpeg \
-            xvfb
+    # Step 4: Install required system packages
+    - name: Install Required System Packages
+      run: |
+        sudo apt-get update
+        sudo add-apt-repository universe
+        sudo add-apt-repository multiverse
+        sudo apt-get update
+        sudo apt-get install -y \
+          libnss3 \
+          libgtk-3-0 \
+          libgbm1 \
+          libasound2t64 \
+          libffi-dev \
+          ffmpeg \
+          xvfb
 
-      # Step 5: Validate dependency installation
-      - name: Verify Installed Packages
-        run: dpkg -l | grep -E 'libnss3|libgtk-3-0|libgbm1' || echo "[!] Missing required packages."
+    # Step 5: Install Python dependencies
+    - name: Install Python Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install playwright
 
-      # Step 6: Install Python dependencies
-      - name: Install Python Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install setuptools playwright
+    # Step 6: Install Playwright browsers
+    - name: Install Playwright Browsers
+      run: |
+        python -m playwright install --with-deps
 
-      # Step 7: Install Playwright browsers
-      - name: Install Playwright Browsers
-        run: playwright install --with-deps
-
-      # Step 8: Restore credentials and tokens
-      - name: Restore Credentials and Token Files
-        run: |
-          echo "${{ secrets.GOOGLE_CREDENTIALS_B64 }}" | base64 -d > credentials.json
-          echo "${{ secrets.GOOGLE_TOKEN_B64 }}" | base64 -d > token.json
-
-      # Step 9: Verify credential files
-      - name: Verify Credential Files
-        run: ls -lh credentials.json token.json || echo "[!] Credentials files missing."
-
-      # Step 10: Test Playwright browser launch
-      - name: Test Playwright Browser Launch
-        run: |
-          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python -c "
-          from playwright.sync_api import sync_playwright;
-          with sync_playwright() as p:
-              print('🔄 Initializing Playwright Chromium...');
-              browser = p.chromium.launch(headless=False);
-              print('✅ Playwright test successful!');
-              browser.close();
-          "
-
-      # Step 11: Clean up stale Chrome instances
-      - name: Cleanup Stalled Chrome Instances
-        run: pkill -f 'chrome' || echo "[!] No stale Chrome instances found."
-
-      # Step 12: Debugging - capture alternative system logs
-      - name: Capture System Logs (Alternative)
-        run: journalctl -xe | tail -n 50 || echo "[!] No system logs available."
-
-      # Step 13: Capture Python execution logs in case of failure
-      - name: Capture Python Execution Logs
-        if: failure()
-        run: cat /home/runner/work/_temp/*.log | tail -n 50 || echo "[!] No Python execution logs found."
-
-      # Step 14: List running processes (debugging)
-      - name: List Running Processes
-        if: failure()
-        run: ps aux | grep 'chrome\|playwright' || echo "[!] No Playwright processes detected."
-
-      # Step 15: Run Playwright Python script
-      - name: Run Playwright Script
-        run: python "Skip Tracing/truepeople_tracer1.py" --disable-gpu --verbose
+    # Step 7: Run Playwright script
+    - name: Run Playwright Script
+      run: python "Skip Tracing/truppl_parser.py"
