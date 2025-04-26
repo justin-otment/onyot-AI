@@ -10,6 +10,6 @@ google-auth==2.29.0
 # google-auth-oauthlib==1.2.0  # Uncomment ONLY if using OAuth login, not service account.
 
 # --- Utilities ---
-requests==2.31.0
+requests==2.32.2
 python-dotenv==1.0.1
-certifi==2024.2.2  # optional but harmless
+certifi==2024.7.4  # optional but harmless
