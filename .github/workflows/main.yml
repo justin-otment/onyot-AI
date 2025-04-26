@@ -31,14 +31,11 @@ jobs:
     # Step 4: Install System Dependencies
     - name: Install Required System Packages
       run: |
-        sudo apt-get install -y \
-          libnss3 \
-          libgtk-3-0 \
-          libgbm1 \
-          libasound2t64 \
-          libffi-dev \
-          ffmpeg \
-          xvfb
+          sudo apt update
+          sudo apt install -y \
+            libwoff1 libvpx7 libevent-2.1-7 libopus0 \
+            libharfbuzz-icu0 libsecret-1-0 \
+            libgles2 libx11-dev
 
     # Step 5: Install Python Dependencies
     - name: Install Python Dependencies
