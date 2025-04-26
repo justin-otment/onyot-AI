@@ -7,12 +7,9 @@ lxml==5.2.1
 # --- Google Sheets API ---
 google-api-python-client==2.126.0
 google-auth==2.29.0
-# google-auth-oauthlib==1.2.0  # <-- Uncomment ONLY if using OAuth login, not service account.
+# google-auth-oauthlib==1.2.0  # Uncomment ONLY if using OAuth login, not service account.
 
 # --- Utilities ---
 requests==2.31.0
 python-dotenv==1.0.1
-certifi==2024.2.2  # optional, harmless
-
-# (chromedriver-autoinstaller removed)
-# (setuptools removed)
+certifi==2024.2.2  # optional but harmless
