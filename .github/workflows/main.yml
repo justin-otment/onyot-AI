@@ -49,11 +49,18 @@ jobs:
       - name: Install Playwright Browsers
         run: playwright install
 
-      # Step 6: Restore Credentials and Token Files
       - name: Restore Credentials and Token Files
         run: |
           echo "${{ secrets.GOOGLE_CREDENTIALS_B64 }}" | base64 -d > /home/runner/credentials.json
           echo "${{ secrets.GOOGLE_TOKEN_B64 }}" | base64 -d > /home/runner/token.json
+      
+      - name: Debug Credential and Token Files
+        run: |
+          echo "[*] Listing credential and token files:"
+          ls -lh /home/runner/credentials.json /home/runner/token.json
+          echo "[*] Checking the contents of credentials.json and token.json:"
+          cat /home/runner/credentials.json
+          cat /home/runner/token.json
 
       # Step 7: Verify Credentials and Token Files
       - name: Verify Credentials and Token Files
