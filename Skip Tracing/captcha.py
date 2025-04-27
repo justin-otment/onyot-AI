@@ -14,9 +14,9 @@ CAPTCHA_CONFIG = {
 }
 
 # Load API key securely
-API_KEY = os.getenv('APIKEY_2CAPTCHA')  # Use secrets injected via GitHub Actions
+API_KEY = os.getenv('TWO_CAPTCHA_API_KEY')  # Use secrets injected via GitHub Actions
 if not API_KEY:
-    logging.error("[!] Missing APIKEY_2CAPTCHA environment variable. Exiting...")
+    logging.error("[!] Missing TWO_CAPTCHA_API_KEY environment variable. Exiting...")
     exit(1)
 
 CAPTCHA_API_URL = "http://2captcha.com"
