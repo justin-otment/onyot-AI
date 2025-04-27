@@ -25,39 +25,54 @@ vpn_password = os.getenv("VPN_PASSWORD")
 if not vpn_username or not vpn_password:
     raise ValueError("[!] Missing VPN credentials. Please check environment variables.")
 
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-sheets_service = build('sheets', 'v4', credentials=creds)
-
-sys.stdout.reconfigure(encoding='utf-8')
-
 # === Config ===
-# Define file paths
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+CREDENTIALS_JSON = os.getenv("GITHUB_CREDENTIALS_JSON")
+TOKEN_JSON = os.getenv("GITHUB_TOKEN_JSON")
+
+# Define sheet names and settings
 SHEET_NAME = "CAPE CORAL FINAL"
 SHEET_NAME_2 = "For REI Upload"
 MAX_RETRIES = 1
 
 # === Google Sheets Auth ===
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+# Validate credentials environment variables
+if not CREDENTIALS_JSON:
+    raise ValueError("[!] Missing GITHUB_CREDENTIALS_JSON environment variable. Check GitHub Secrets configuration.")
+if not TOKEN_JSON:
+    raise ValueError("[!] Missing GITHUB_TOKEN_JSON environment variable. Check GitHub Secrets configuration.")
 
-CREDENTIALS_JSON = os.getenv("GITHUB_CREDENTIALS_JSON")
-TOKEN_JSON = os.getenv("GITHUB_TOKEN_JSON")
+# Save credentials and token JSON to files (useful for debugging and API requirements)
+CREDENTIALS_PATH = "/home/runner/credentials.json"
+TOKEN_PATH = "/home/runner/token.json"
+
+# Write credentials JSON to file
 if not os.path.exists(CREDENTIALS_PATH):
-    raise FileNotFoundError(f"Credentials file not found at {CREDENTIALS_JSON}")
-if not os.path.exists(TOKEN_PATH):
-    raise FileNotFoundError(f"Token file not found at {TOKEN_JSON}")
+    with open(CREDENTIALS_PATH, 'w') as cred_file:
+        cred_file.write(CREDENTIALS_JSON)
 
-if not CREDENTIALS_JSON or not TOKEN_JSON:
-    raise ValueError("[!] Missing credentials or token secrets. Please check GitHub Secrets configuration.")
+if not os.path.exists(TOKEN_PATH):
+    with open(TOKEN_PATH, 'w') as token_file:
+        token_file.write(TOKEN_JSON)
+
+# Ensure credentials and token files are accessible
+if not os.path.exists(CREDENTIALS_PATH):
+    raise FileNotFoundError(f"Credentials file not found at {CREDENTIALS_PATH}")
+if not os.path.exists(TOKEN_PATH):
+    raise FileNotFoundError(f"Token file not found at {TOKEN_PATH}")
 
 def authenticate_google_sheets():
-    """Authenticate with Google Sheets API using secrets."""
-    creds = Credentials.from_authorized_user_info(json.loads(TOKEN_JSON), SCOPES)
-    if not creds.valid:
-        raise ValueError("[!] Provided token is invalid.")
-    return build('sheets', 'v4', credentials=creds)
+    """Authenticate with Google Sheets API using credentials."""
+    try:
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+        if not creds.valid:
+            raise ValueError("[!] Provided token is invalid. Consider refreshing it.")
+        return build('sheets', 'v4', credentials=creds)
+    except Exception as e:
+        logging.error(f"[!] Google Sheets API Authentication failed: {e}")
+        raise
 
-# Replace with your Google Sheets integration
+# === Google Sheets Integration ===
 def get_sheet_data(sheet_id, range_name):
     """
     Fetches data from Google Sheets for a given range.
@@ -78,7 +93,7 @@ def get_sheet_data(sheet_id, range_name):
             if row and len(row) > 0 and row[0].strip()
         ]
     except Exception as e:
-        logging.error(f"Error fetching data from Google Sheets range '{range_name}': {e}")
+        logging.error(f"[!] Error fetching data from Google Sheets range '{range_name}': {e}")
         return []
     
 def append_to_google_sheet(first_name, last_name, phones, emails):
