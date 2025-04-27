@@ -43,9 +43,9 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 CREDENTIALS_JSON = os.getenv("GITHUB_CREDENTIALS_JSON")
 TOKEN_JSON = os.getenv("GITHUB_TOKEN_JSON")
 if not os.path.exists(CREDENTIALS_PATH):
-    raise FileNotFoundError(f"Credentials file not found at {CREDENTIALS_PATH}")
+    raise FileNotFoundError(f"Credentials file not found at {CREDENTIALS_JSON}")
 if not os.path.exists(TOKEN_PATH):
-    raise FileNotFoundError(f"Token file not found at {TOKEN_PATH}")
+    raise FileNotFoundError(f"Token file not found at {TOKEN_JSON}")
 
 if not CREDENTIALS_JSON or not TOKEN_JSON:
     raise ValueError("[!] Missing credentials or token secrets. Please check GitHub Secrets configuration.")
