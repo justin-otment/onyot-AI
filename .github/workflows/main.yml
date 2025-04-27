@@ -66,6 +66,9 @@ jobs:
           echo "VPN_USERNAME=${{ secrets.VPN_USERNAME }}" >> $GITHUB_ENV
           echo "VPN_PASSWORD=${{ secrets.VPN_PASSWORD }}" >> $GITHUB_ENV
 
+      - name: Set 2Captcha API Key as Environment Variable
+        run: echo "APIKEY_2CAPTCHA=${{ secrets.APIKEY_2CAPTCHA }}" >> $GITHUB_ENV
+
 
       - name: Test Playwright Browser Launch
         run: |
