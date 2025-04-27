@@ -52,18 +52,19 @@ jobs:
       # Step 6: Restore Credentials and Token Files
       - name: Restore Credentials and Token Files
         run: |
-          echo "${{ secrets.GOOGLE_CREDENTIALS_B64 }}" | base64 -d > credentials.json
-          echo "${{ secrets.GOOGLE_TOKEN_B64 }}" | base64 -d > token.json
+          echo "${{ secrets.GOOGLE_CREDENTIALS_B64 }}" | base64 -d > /home/runner/credentials.json
+          echo "${{ secrets.GOOGLE_TOKEN_B64 }}" | base64 -d > /home/runner/token.json
 
-      # Step 7: Set VPN Credentials as Environment Variables
-      - name: Set VPN Credentials as Environment Variables
+      # Step 7: Verify Credentials and Token Files
+      - name: Verify Credentials and Token Files
+        run: ls -lh /home/runner/credentials.json /home/runner/token.json || echo "[!] Credentials files missing."
+
+      # Step 8: Set VPN and 2Captcha API Credentials as Environment Variables
+      - name: Set Environment Variables
         run: |
           echo "VPN_USERNAME=${{ secrets.VPN_USERNAME }}" >> $GITHUB_ENV
           echo "VPN_PASSWORD=${{ secrets.VPN_PASSWORD }}" >> $GITHUB_ENV
-
-      # Step 8: Set 2Captcha API Key as Environment Variable
-      - name: Set 2Captcha API Key as Environment Variable
-        run: echo "TWO_CAPTCHA_API_KEY=${{ secrets.TWO_CAPTCHA_API_KEY }}" >> $GITHUB_ENV
+          echo "TWO_CAPTCHA_API_KEY=${{ secrets.TWO_CAPTCHA_API_KEY }}" >> $GITHUB_ENV
 
       # Step 9: Debug API Key (Optional)
       - name: Validate Environment Variables
