@@ -1,5 +1,4 @@
 import asyncio
-import os
 import re
 import string
 import sys
@@ -20,14 +19,11 @@ import traceback
 from dotenv import load_dotenv
 import os
 
-load_dotenv(dotenv_path="C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/Skip Tracing/.env")
-
 vpn_username = os.getenv("VPN_USERNAME")
 vpn_password = os.getenv("VPN_PASSWORD")
 
 if not vpn_username or not vpn_password:
-    raise ValueError("[!] Missing VPN credentials. Please check.")
-
+    raise ValueError("[!] Missing VPN credentials. Please check environment variables.")
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 creds = Credentials.from_authorized_user_file('token.json', SCOPES)
@@ -46,6 +42,10 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 CREDENTIALS_JSON = os.getenv("GITHUB_CREDENTIALS_JSON")
 TOKEN_JSON = os.getenv("GITHUB_TOKEN_JSON")
+if not os.path.exists(CREDENTIALS_PATH):
+    raise FileNotFoundError(f"Credentials file not found at {CREDENTIALS_PATH}")
+if not os.path.exists(TOKEN_PATH):
+    raise FileNotFoundError(f"Token file not found at {TOKEN_PATH}")
 
 if not CREDENTIALS_JSON or not TOKEN_JSON:
     raise ValueError("[!] Missing credentials or token secrets. Please check GitHub Secrets configuration.")
