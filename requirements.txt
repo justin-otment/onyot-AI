@@ -1,15 +1,29 @@
-# --- Core scraping ---
-playwright==1.43.0
+beautifulsoup4==4.13.4
+cachetools==5.5.2
+certifi==2025.1.31
+charset-normalizer==3.4.1
+google-api-core==2.24.2
+google-api-python-client==2.167.0
+google-auth==2.39.0
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.2.1
+googleapis-common-protos==1.70.0
+greenlet==3.2.0
+httplib2==0.22.0
+idna==3.10
+oauthlib==3.2.2
+playwright==1.51.0
 playwright-stealth==1.0.6
-beautifulsoup4==4.12.3
-lxml==5.2.1
-
-# --- Google Sheets API ---
-google-api-python-client==2.126.0
-google-auth==2.29.0
-# google-auth-oauthlib==1.2.0  # Uncomment ONLY if using OAuth login, not service account.
-
-# --- Utilities ---
-requests==2.31.0
-python-dotenv==1.0.1
-certifi==2024.2.2  # optional but harmless
+proto-plus==1.26.1
+protobuf==6.30.2
+pyasn1==0.6.1
+pyasn1_modules==0.4.2
+pyee==12.1.1
+pyparsing==3.2.3
+requests==2.32.3
+requests-oauthlib==2.0.0
+rsa==4.9.1
+soupsieve==2.6
+typing_extensions==4.13.2
+uritemplate==4.1.1
+urllib3==2.4.0
