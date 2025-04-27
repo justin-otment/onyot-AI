@@ -27,8 +27,8 @@ if not vpn_username or not vpn_password:
 
 # === Config ===
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-CREDENTIALS_JSON = os.getenv("GITHUB_CREDENTIALS_JSON")
-TOKEN_JSON = os.getenv("GITHUB_TOKEN_JSON")
+CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_B64")
+TOKEN_JSON = os.getenv("GOOGLE_TOKEN_B64")
 
 # Define sheet names and settings
 SHEET_NAME = "CAPE CORAL FINAL"
