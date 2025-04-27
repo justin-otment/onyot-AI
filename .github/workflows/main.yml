@@ -56,7 +56,7 @@ jobs:
           echo "${{ secrets.GOOGLE_TOKEN_B64 }}" | base64 -d > /home/runner/token.json
 
       # Step 7: Debug Credentials and Token Files
-      - name: Debug Credential and Token Files
+      - name: Debug Credentials and Token Files
         run: |
           echo "[*] Listing credential and token files:"
           ls -lh /home/runner/credentials.json /home/runner/token.json
@@ -64,37 +64,35 @@ jobs:
           cat /home/runner/credentials.json || echo "[!] credentials.json is empty!"
           cat /home/runner/token.json || echo "[!] token.json is empty!"
 
-      # Step 8: Set VPN and 2Captcha API Credentials as Environment Variables
+      # Step 8: Validate Credentials Files
+      - name: Validate Credentials Files
+        run: |
+          if [ ! -f /home/runner/credentials.json ]; then
+            echo "[!] Credentials file not found!"
+            exit 1
+          fi
+          if [ ! -f /home/runner/token.json ]; then
+            echo "[!] Token file not found!"
+            exit 1
+          fi
+          echo "[✓] Credentials and token files verified."
+
+      # Step 9: Set VPN and 2Captcha API Credentials as Environment Variables
       - name: Set Environment Variables
         run: |
           echo "VPN_USERNAME=${{ secrets.VPN_USERNAME }}" >> $GITHUB_ENV
           echo "VPN_PASSWORD=${{ secrets.VPN_PASSWORD }}" >> $GITHUB_ENV
           echo "TWO_CAPTCHA_API_KEY=${{ secrets.TWO_CAPTCHA_API_KEY }}" >> $GITHUB_ENV
 
-      # Step 9: Validate Environment Variables (Optional Debugging)
+      # Step 10: Validate Environment Variables (Debugging)
       - name: Validate Environment Variables
         run: |
           if [ -z "$TWO_CAPTCHA_API_KEY" ]; then
-            echo "[!] TWO_CAPTCHA_API_KEY is not set!";
-            exit 1;
-          else
-            echo "[✓] TWO_CAPTCHA_API_KEY is set!";
+            echo "[!] TWO_CAPTCHA_API_KEY is not set!"
+            exit 1
           fi
-
-      # Step 10: Verify Credentials and Token Files (Optional Debugging)
-      - name: Validate Credentials Files
-        run: |
-          if [ ! -f /home/runner/credentials.json ]; then
-            echo "[!] Credentials file not found!";
-            exit 1;
-          fi
-          if [ ! -f /home/runner/token.json ]; then
-            echo "[!] Token file not found!";
-            exit 1;
-          fi
-          echo "[✓] Credentials and token files verified."
+          echo "[✓] TWO_CAPTCHA_API_KEY is set."
 
       # Step 11: Run Playwright Script
       - name: Run Playwright Script
         run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python "${{ matrix.script }}"
-      
