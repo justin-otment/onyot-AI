@@ -19,6 +19,8 @@ import traceback
 from dotenv import load_dotenv
 import os
 
+load_dotenv()
+
 vpn_username = os.getenv("VPN_USERNAME")
 vpn_password = os.getenv("VPN_PASSWORD")
 
