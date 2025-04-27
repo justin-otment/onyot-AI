@@ -61,6 +61,12 @@ jobs:
       - name: Verify Credential Files
         run: ls -lh credentials.json token.json || echo "[!] Credentials files missing."
 
+      - name: Set VPN Credentials as Environment Variables
+        run: |
+          echo "VPN_USERNAME=${{ secrets.VPN_USERNAME }}" >> $GITHUB_ENV
+          echo "VPN_PASSWORD=${{ secrets.VPN_PASSWORD }}" >> $GITHUB_ENV
+
+
       - name: Test Playwright Browser Launch
         run: |
           xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python -c "
