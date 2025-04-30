@@ -40,4 +40,4 @@ jobs:
           VPN_USERNAME: ${{ secrets.VPN_USERNAME }}         # Secret for VPN username
           VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}         # Secret for VPN password
         run: |
-          python truppl_parser.py # Corrected script name
+          python Skip Tracing/truppl_parser.py # Corrected script name
