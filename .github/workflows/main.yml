@@ -55,6 +55,16 @@ jobs:
           echo "${{ secrets.GOOGLE_CREDENTIALS_B64 }}" | base64 -d > /home/runner/credentials.json
           echo "${{ secrets.GOOGLE_TOKEN_B64 }}" | base64 -d > /home/runner/token.json
 
+      # Step 7: Debug Credentials and Token Files
+      - name: Debug Credential and Token Files
+        run: |
+          echo "[*] Listing credential and token files:"
+          ls -lh /home/runner/credentials.json /home/runner/token.json
+          echo "[*] Checking the contents of credentials.json:"
+          cat /home/runner/credentials.json || echo "[!] credentials.json is empty!"
+          echo "[*] Checking the contents of token.json:"
+          cat /home/runner/token.json || echo "[!] token.json is empty!"
+
       # Step 8: Set VPN and 2Captcha API Credentials as Environment Variables
       - name: Set Environment Variables
         run: |
@@ -72,6 +82,18 @@ jobs:
             echo "[✓] TWO_CAPTCHA_API_KEY is set!";
           fi
 
+      # Step 10: Verify Credentials and Token Files (Optional Debugging)
+      - name: Validate Credentials Files
+        run: |
+          if [ ! -f /home/runner/credentials.json ]; then
+            echo "[!] Credentials file not found!";
+            exit 1;
+          fi
+          if [ ! -f /home/runner/token.json ]; then
+            echo "[!] Token file not found!";
+            exit 1;
+          fi
+          echo "[✓] Credentials and token files verified."
 
       # Step 11: Run Playwright Script
       - name: Run Playwright Script
