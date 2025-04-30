@@ -1,8 +1,8 @@
 name: Automation Workflow
 
 on:
-  workflow_dispatch: # Allows manual triggering of the workflow
-  schedule:          # Optional: Run the workflow daily at 2:00 AM UTC
+  workflow_dispatch: # Allows manual triggering
+  schedule:          # Optional: Run daily at 2:00 AM UTC
     - cron: "0 2 * * *"
 
 jobs:
@@ -24,7 +24,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt # Install necessary Python packages
+          pip install -r requirements.txt
 
       # Step 4: Install Playwright Browsers
       - name: Install Playwright Browsers
@@ -33,11 +33,11 @@ jobs:
       # Step 5: Run the Automation Script
       - name: Run Automation
         env:
-          SHEET_ID: ${{ secrets.SHEET_ID }}                 # Secret for Google Sheet ID
-          GOOGLE_CREDENTIALS_B64: ${{ secrets.GOOGLE_CREDENTIALS_B64 }} # Secret for Google credentials (base64-encoded)
-          GOOGLE_TOKEN_B64: ${{ secrets.GOOGLE_TOKEN_B64 }} # Secret for Google API token (base64-encoded)
-          TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}       # Secret for 2Captcha API key
-          VPN_USERNAME: ${{ secrets.VPN_USERNAME }}         # Secret for VPN username
-          VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}         # Secret for VPN password
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          GOOGLE_CREDENTIALS_B64: ${{ secrets.GOOGLE_CREDENTIALS_B64 }}
+          GOOGLE_TOKEN_B64: ${{ secrets.GOOGLE_TOKEN_B64 }}
+          TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
+          VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
+          VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
         run: |
-          python Skip Tracing/truppl_parser.py # Corrected script name
+          python Skip\ Tracing/truppl_parser.py # Adjusted path to include the subfolder
