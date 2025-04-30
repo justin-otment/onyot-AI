@@ -82,28 +82,26 @@ def authenticate_google_sheets():
         sys.exit(1)
 
 # Replace with your Google Sheets integration
-def get_sheet_data(sheet_id, range_name):
-    """
-    Fetches data from Google Sheets for a given range.
-    Returns list of (row_index, value) tuples for non-empty first-column values.
-    """
-    try:
-        service = authenticate_google_sheets()
-        result = service.spreadsheets().values().get(
-            spreadsheetId=sheet_id,
-            range=range_name
-        ).execute()
-        values = result.get("values", [])
-        base_row = int(re.search(r"(\d+):", range_name).group(1))
+def authenticate_google_sheets():
+    """Authenticate with Google Sheets API using base64 environment secrets."""
+    token_b64 = os.getenv('GOOGLE_TOKEN_B64')
+    credentials_b64 = os.getenv('GOOGLE_CREDENTIALS_B64')
 
-        return [
-            (i + base_row, row[0])
-            for i, row in enumerate(values)
-            if row and len(row) > 0 and row[0].strip()
-        ]
+    if not token_b64:
+        logging.error("[!] GOOGLE_TOKEN_B64 environment variable is missing!")
+    if not credentials_b64:
+        logging.error("[!] GOOGLE_CREDENTIALS_B64 environment variable is missing!")
+    if not token_b64 or not credentials_b64:
+        raise ValueError("[!] Missing environment variables for Google Sheets authentication!")
+
+    try:
+        token_content = json.loads(base64.b64decode(token_b64).decode('utf-8'))
+        creds_content = json.loads(base64.b64decode(credentials_b64).decode('utf-8'))
+        creds = Credentials.from_authorized_user_info(token_content, SCOPES)
+        return build('sheets', 'v4', credentials=creds)
     except Exception as e:
-        logging.error(f"Error fetching data from Google Sheets range '{range_name}': {e}")
-        return []
+        logging.error(f"[!] Failed to authenticate with Google Sheets: {e}")
+        sys.exit(1)
     
 def append_to_google_sheet(first_name, last_name, phones, emails):
     """
