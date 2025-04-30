@@ -3,78 +3,100 @@ import re
 import string
 import sys
 import random
+import time
 
 from bs4 import BeautifulSoup
-from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
+from playwright.async_api import async_playwright
 from playwright_stealth import stealth_async
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from nordvpn import handle_rate_limit
-import logging
 from dotenv import load_dotenv
-from captcha import get_site_key, solve_turnstile_captcha, detect_captcha, inject_token, solve_captcha
+from nordvpn import verify_vpn_connection  # VPN functionality from nordvpn.py
+from captcha import get_site_key, solve_turnstile_captcha, inject_token  # CAPTCHA functionalities from captcha.py
 import traceback
 from dotenv import load_dotenv
 import os
+print("Current Working Directory:", os.getcwd())
+import logging
+logging.basicConfig(level=logging.DEBUG, filename="logfile.log", filemode="a",
+                    format="%(asctime)s - %(levelname)s - %(message)s")
+logging.info("Script started")
 
-load_dotenv()
+load_dotenv("C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/Skip Tracing/.env")
+
+# === Global Configurations ===
+CAPTCHA_CONFIG = {
+    "max_retries": 5,
+    "wait_time_ms": 7000,
+    "poll_interval_seconds": 5,
+    "captcha_timeout_seconds": 75,
+}
+API_KEY = os.getenv('APIKEY_2CAPTCHA', 'a01559936e2950720a2c0126309a824e')
+CAPTCHA_API_URL = "http://2captcha.com"
+LOGGING_FORMAT = "[%(asctime)s] %(levelname)s: %(message)s"
+logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
+
+MAX_RETRIES = 5  # Maximum retry attempts for main function
+BACKOFF_FACTOR = 2  # Exponential backoff factor
 
 vpn_username = os.getenv("VPN_USERNAME")
 vpn_password = os.getenv("VPN_PASSWORD")
 
 if not vpn_username or not vpn_password:
-    raise ValueError("[!] Missing VPN credentials. Please check environment variables.")
+    print("[!] Failed to load VPN credentials!")
+else:
+    print("VPN Username:", vpn_username)
+    print("VPN Password: Loaded successfully")
+
+
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+creds = Credentials.from_authorized_user_file('C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/Skip Tracing/token.json', SCOPES)
+sheets_service = build('sheets', 'v4', credentials=creds)
+
+sys.stdout.reconfigure(encoding='utf-8')
 
 # === Config ===
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_B64")
-TOKEN_JSON = os.getenv("GOOGLE_TOKEN_B64")
-
-# Define sheet names and settings
+# Define file paths
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
+TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
+SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "CAPE CORAL FINAL"
 SHEET_NAME_2 = "For REI Upload"
 MAX_RETRIES = 1
 
 # === Google Sheets Auth ===
-# Validate credentials environment variables
-if not CREDENTIALS_JSON:
-    raise ValueError("[!] Missing GITHUB_CREDENTIALS_JSON environment variable. Check GitHub Secrets configuration.")
-if not TOKEN_JSON:
-    raise ValueError("[!] Missing GITHUB_TOKEN_JSON environment variable. Check GitHub Secrets configuration.")
-
-# Save credentials and token JSON to files (useful for debugging and API requirements)
-CREDENTIALS_PATH = "/home/runner/credentials.json"
-TOKEN_PATH = "/home/runner/token.json"
-
-# Write credentials JSON to file
-if not os.path.exists(CREDENTIALS_PATH):
-    with open(CREDENTIALS_PATH, 'w') as cred_file:
-        cred_file.write(CREDENTIALS_JSON)
-
-if not os.path.exists(TOKEN_PATH):
-    with open(TOKEN_PATH, 'w') as token_file:
-        token_file.write(TOKEN_JSON)
-
-# Ensure credentials and token files are accessible
-if not os.path.exists(CREDENTIALS_PATH):
-    raise FileNotFoundError(f"Credentials file not found at {CREDENTIALS_PATH}")
-if not os.path.exists(TOKEN_PATH):
-    raise FileNotFoundError(f"Token file not found at {TOKEN_PATH}")
-
 def authenticate_google_sheets():
-    """Authenticate with Google Sheets API using credentials."""
-    try:
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-        if not creds.valid:
-            raise ValueError("[!] Provided token is invalid. Consider refreshing it.")
-        return build('sheets', 'v4', credentials=creds)
-    except Exception as e:
-        logging.error(f"[!] Google Sheets API Authentication failed: {e}")
-        raise
+    """Authenticate with Google Sheets API."""
+    creds = None
 
-# === Google Sheets Integration ===
+    if os.path.exists(TOKEN_PATH):
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            try:
+                creds.refresh(Request())
+                print("[✓] Token refreshed successfully.")
+                with open(TOKEN_PATH, 'w') as token:
+                    token.write(creds.to_json())
+            except Exception as e:
+                print(f"[!] Error refreshing token: {e}")
+                creds = None
+
+        if not creds:
+            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
+            creds = flow.run_local_server(port=0)
+            with open(TOKEN_PATH, 'w') as token:
+                token.write(creds.to_json())
+            print("[✓] New credentials obtained and saved.")
+
+    return build('sheets', 'v4', credentials=creds)
+
+# Replace with your Google Sheets integration
 def get_sheet_data(sheet_id, range_name):
     """
     Fetches data from Google Sheets for a given range.
@@ -95,7 +117,7 @@ def get_sheet_data(sheet_id, range_name):
             if row and len(row) > 0 and row[0].strip()
         ]
     except Exception as e:
-        logging.error(f"[!] Error fetching data from Google Sheets range '{range_name}': {e}")
+        logging.error(f"Error fetching data from Google Sheets range '{range_name}': {e}")
         return []
     
 def append_to_google_sheet(first_name, last_name, phones, emails):
@@ -262,6 +284,26 @@ async def detect_rate_limit(content):
         return True
     return False
 
+# === Utility: Switch VPN with Retry ===
+def switch_vpn_with_retry(max_attempts=3):
+    """
+    Attempts to switch VPN connection using 'verify_vpn_connection' function from nordvpn.py.
+    :param max_attempts: Number of retries for VPN connection.
+    :return: True if VPN switched successfully, False otherwise.
+    """
+    for attempt in range(1, max_attempts + 1):
+        logging.info(f"[*] Attempting VPN switch (Attempt {attempt}/{max_attempts})...")
+        vpn_success = verify_vpn_connection()
+        if vpn_success:
+            logging.info("[✓] VPN rotated successfully.")
+            return True
+        else:
+            logging.error("[✗] VPN rotation failed.")
+            time.sleep(5)  # Introduce a brief delay before retrying.
+    logging.error("[!] VPN switch attempts exceeded maximum retries. Operation failed.")
+    return False
+
+# === Main Function ===
 async def fetch_truepeoplesearch_data(row_index, mailing_street, zip_code, browser, context, page):
     """
     Fetches page content while handling CAPTCHA detection and rate-limit errors dynamically.
@@ -275,50 +317,48 @@ async def fetch_truepeoplesearch_data(row_index, mailing_street, zip_code, brows
     :param page: Playwright page object.
     :return: Fetched content or None if retries fail.
     """
-    MAX_RETRIES = 5  # Maximum retry attempts
-    BACKOFF_FACTOR = 2  # Exponential backoff for retries
-
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             logging.info(f"[!] Navigating to the page and processing row {row_index} (Attempt {attempt}/{MAX_RETRIES}).")
+            await page.goto("https://www.truepeoplesearch.com", wait_until="networkidle", timeout=60000)
 
-            # Navigate to the main page
-            await page.goto("https://www.truepeoplesearch.com", wait_until="domcontentloaded", timeout=60000)
-            
             # Check for rate limits and block messages
             content = await page.content()
-            if "ratelimited" in content.lower() or "rate limit" in content.lower() or "you have been blocked" in content.lower():
-                logging.warning("[!] Rate limit or block detected. Switching VPN server and retrying...")
-                await handle_rate_limit(page)  # Ensure you’ve implemented this function
-                await asyncio.sleep(BACKOFF_FACTOR ** attempt)  # Exponential backoff
-                continue
+            if "rate limited" in content.lower() or "rate limit" in content.lower() or "blocked" in content.lower():
+                logging.warning("[!] Rate limit or block detected. Attempting to resolve...")
+                if await handle_rate_limit(page):
+                    await asyncio.sleep(BACKOFF_FACTOR ** attempt)
+                    continue
+                else:
+                    logging.error("[!] Rate limit handling failed. Exiting...")
+                    break
 
-            # Ensure form fields are visible and fill them
+            # Fill and submit the form
             await page.wait_for_selector('#id-d-n', state='visible', timeout=60000)
             await page.fill('#id-d-n', mailing_street)
             await page.wait_for_selector('#id-d-loc-name', state='visible', timeout=60000)
             await page.fill('#id-d-loc-name', zip_code)
-
-            # Submit the form
             await page.click('#btnSubmit-d-n')
-            await page.wait_for_load_state("networkidle")
+            await page.wait_for_load_state("domcontentloaded", timeout=60000)
 
             # Simulate human-like interactions for stealth
-            await asyncio.sleep(random.uniform(3, 5))  # Random short delay
+            await asyncio.sleep(random.uniform(3, 5))
             await page.mouse.move(random.randint(100, 400), random.randint(100, 400), steps=20)
             await page.mouse.wheel(0, random.randint(400, 800))
-            await asyncio.sleep(random.uniform(3, 5))  # Another short random delay
+            await asyncio.sleep(random.uniform(3, 5))
 
-            # Detect CAPTCHA
+            content = await page.content()
+            logging.debug(f"[DEBUG] Full page content at timeout: {content[:1000]}")  # Logs a snippet (1000 characters).
+
+            # CAPTCHA handling logic
             if "captcha" in content.lower() or "are you a human" in content.lower():
                 logging.warning(f"[!] CAPTCHA detected on attempt {attempt}. Fetching sitekey dynamically...")
                 sitekey = await get_site_key(page)
                 if not sitekey:
                     logging.error("[!] Failed to retrieve sitekey. Retrying...")
-                    await asyncio.sleep(BACKOFF_FACTOR ** attempt)  # Exponential backoff
+                    await asyncio.sleep(BACKOFF_FACTOR ** attempt)
                     continue
 
-                # Solve CAPTCHA
                 logging.info(f"[✓] Sitekey found: {sitekey}. Solving CAPTCHA via 2Captcha API.")
                 captcha_token = solve_turnstile_captcha(sitekey, page.url)
                 if not captcha_token:
@@ -326,19 +366,17 @@ async def fetch_truepeoplesearch_data(row_index, mailing_street, zip_code, brows
                     await asyncio.sleep(BACKOFF_FACTOR ** attempt)
                     continue
 
-                # Inject the solved CAPTCHA token
                 success = await inject_token(page, captcha_token, page.url)
                 if not success:
                     logging.error("[!] CAPTCHA token injection failed. Retrying...")
                     await asyncio.sleep(BACKOFF_FACTOR ** attempt)
                     continue
 
-                # Reload the page and validate CAPTCHA
                 await page.reload(wait_until="networkidle")
                 content = await page.content()
                 if "captcha" not in content.lower():
                     logging.info("[✓] CAPTCHA solved and page loaded successfully.")
-                    return content  # Return content if CAPTCHA solved
+                    return content
                 else:
                     logging.warning("[!] CAPTCHA challenge persists after solving. Retrying...")
                     continue
@@ -348,7 +386,7 @@ async def fetch_truepeoplesearch_data(row_index, mailing_street, zip_code, brows
 
         except Exception as e:
             logging.error(f"[!] Error during attempt {attempt}: {str(e)}")
-            await asyncio.sleep(BACKOFF_FACTOR ** attempt)  # Exponential backoff on errors
+            await asyncio.sleep(BACKOFF_FACTOR ** attempt)
             continue
 
     logging.error(f"[!] Maximum retries reached. Failed to fetch data for row {row_index}.")
@@ -501,16 +539,36 @@ async def clear_browser_cookies(page):
     except Exception as e:
         print(f"[!] Error clearing browser session: {e}")
 
+import re
+
+def extract_sitekey(response_body):
+    """
+    Extracts the CAPTCHA sitekey from the network response body.
+    :param response_body: The raw response content as a string.
+    :return: The extracted sitekey or None if not found.
+    """
+    try:
+        # Use regex to search for "data-sitekey" in the response
+        match = re.search(r'data-sitekey="([a-zA-Z0-9_\-]+)"', response_body)
+        if match:
+            sitekey = match.group(1)
+            logging.info(f"[✓] Sitekey extracted: {sitekey}")
+            return sitekey
+        else:
+            logging.warning("[!] Sitekey not found in the response body.")
+            return None
+    except Exception as e:
+        logging.error(f"[!] Error extracting sitekey: {e}")
+        return None
+
 async def main():
-
-    MAILING_STREETS_RANGE = "CAPE CORAL FINAL!P95:P"
-    ZIPCODE_RANGE = "CAPE CORAL FINAL!Q95:Q"
-    SHEET_ID = os.getenv("SHEET_ID")
+    MAILING_STREETS_RANGE = "CAPE CORAL FINAL!P756:P"
+    ZIPCODE_RANGE = "CAPE CORAL FINAL!Q756:Q"
+    SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
     
-    if not SHEET_ID:
-        logging.error("[!] Missing SHEET_ID environment variable. Exiting...")
-        sys.exit(1)
-
+    BATCH_SIZE = 10  # Process entries in batches to avoid resource exhaustion
+    MAX_CAPTCHA_RETRIES = 3  # Retry limit for CAPTCHA-solving attempts
+    
     mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE)
     zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE)
 
@@ -535,76 +593,125 @@ async def main():
 
     async with async_playwright() as p:
         browser = None
+        context = None  # Initialize context for cleanup
         try:
-            is_ci = os.getenv("CI") == "true"
-            args = ["--no-sandbox", "--disable-setuid-sandbox"] if is_ci else []
-            browser = await p.chromium.launch(headless=False, args=args)
+            # Launch the browser
+            browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
             context = await browser.new_context(user_agent=random.choice(user_agents))
+            await context.add_init_script(stealth_js)  # Add stealth script for anti-bot measures
+            
+            # === Define and Activate Network Interception ===
+            async def intercept_sitekey(route):
+                try:
+                    url = route.request.url
+                    # Filter irrelevant resource types
+                    if url.endswith(('.css', '.js', '.png', '.jpg', '.woff', '.woff2', '.svg')):
+                        await route.continue_()  # Allow these requests to proceed
+                        return
 
-            await context.add_init_script(stealth_js)
+                    logging.debug(f"[DEBUG] Intercepting route: {url}")
+                    response = await route.continue_()
+
+                    # Validate response existence
+                    if response and hasattr(response, "body"):
+                        response_body = response.body.decode() if response.body else None
+                        if response_body:
+                            logging.debug(f"[DEBUG] Intercepted response body: {response_body[:500]}")  # Log snippet
+                            sitekey = extract_sitekey(response_body)  # Use helper to extract sitekey
+                            if sitekey:
+                                logging.info(f"[✓] Extracted sitekey: {sitekey}")
+                    else:
+                        logging.warning(f"[!] No response body for route: {url}")
+                except Exception as e:
+                    logging.error(f"[!] Error intercepting route: {e}")
+                    await route.continue_()  # Continue request on error
+
+            await context.route("**/*", intercept_sitekey)  # Route all network requests
+
+            # Open a new page
             page = await context.new_page()
             await stealth_async(page)
 
-            for row_index, mailing_street, zip_code in valid_entries:
-                logging.info(f"[→] Processing Row {row_index}: {mailing_street}, {zip_code}")
-                try:
-                    html_content = await fetch_truepeoplesearch_data(
-                        row_index, mailing_street, zip_code, browser, context, page
-                    )
-                    if not html_content:
-                        continue
-
-                    extracted_links = extract_links(html_content)
-                    print(f"[DEBUG] Extracted {len(extracted_links)} links:")
-                    for entry in extracted_links:
-                        print(f"    - {entry['text']}")
-
-                    if not extracted_links:
-                        continue
-
-                    ref_names = extract_reference_names(SHEET_ID, row_index)
-                    matched_results = match_entries(extracted_links, ref_names)
-
-                    if not matched_results:
-                        print(f"[!] No match found in row {row_index}. Skipping second batch extraction.")
-                        continue
-
-                    for matched_entry in matched_results:
-                        matched_url = matched_entry["link"]
-                        matched_name = matched_entry["text"]
-                        print(f"[→] Navigating to matched profile: {matched_url}")
-                    
-                        matched_html = await navigate_to_profile(page, matched_url)
-                        if not matched_html:
-                            print(f"[!] CAPTCHA blocked access to: {matched_url}")
+            # === Process Entries in Batches ===
+            for batch_start in range(0, len(valid_entries), BATCH_SIZE):
+                batch = valid_entries[batch_start:batch_start + BATCH_SIZE]
+                print(f"[→] Processing batch {batch_start // BATCH_SIZE + 1} with {len(batch)} entries...")
+                for row_index, mailing_street, zip_code in batch:
+                    print(f"\n[→] Processing Row {row_index}: Mailing Street '{mailing_street}', ZIP '{zip_code}'")
+                    try:
+                        # Retry CAPTCHA solving if needed
+                        captcha_retries = 0
+                        html_content = None
+                        while captcha_retries < MAX_CAPTCHA_RETRIES:
+                            html_content = await fetch_truepeoplesearch_data(
+                                row_index, mailing_street, zip_code, browser, context, page
+                            )
+                            if html_content:
+                                break
+                            captcha_retries += 1
+                            print(f"[!] Retrying CAPTCHA solving for row {row_index} ({captcha_retries}/{MAX_CAPTCHA_RETRIES})...")
+                        
+                        if not html_content:
+                            print("[!] Skipping row due to repeated CAPTCHA failures.")
                             continue
 
-                        phone_numbers, phone_types, emails = parse_contact_info(matched_html)
-                        phone_data = list(zip(phone_numbers, phone_types))
+                        # Extract links
+                        extracted_links = extract_links(html_content)
+                        print(f"[DEBUG] Extracted {len(extracted_links)} links:")
+                        for entry in extracted_links:
+                            print(f"    - {entry['text']}")
 
-                        if not phone_numbers or not phone_types:
-                            print(f"[!] Skipping row {row_index}: No phone data found.")
+                        if not extracted_links:
                             continue
 
-                        name_parts = matched_name.strip().split()
-                        first_name = name_parts[0] if name_parts else ""
-                        last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
+                        ref_names = extract_reference_names(SHEET_ID, row_index)
+                        matched_results = match_entries(extracted_links, ref_names)
 
-                        append_to_google_sheet(
-                            first_name=first_name,
-                            last_name=last_name,
-                            phones=phone_data,
-                            emails=emails
-                        )
+                        if not matched_results:
+                            print(f"[!] No match found in row {row_index}. Skipping second batch extraction.")
+                            continue
 
-                except Exception as e:
-                    print(f"[!] Error processing row {row_index}: {e}")
-                    continue
+                        # Navigate to matched profiles and parse information
+                        for matched_entry in matched_results:
+                            matched_url = matched_entry["link"]
+                            matched_name = matched_entry["text"]
+                            print(f"[→] Navigating to matched profile: {matched_url}")
+
+                            matched_html = await navigate_to_profile(page, matched_url)
+                            if not matched_html:
+                                print(f"[!] CAPTCHA blocked access to: {matched_url}")
+                                continue
+
+                            phone_numbers, phone_types, emails = parse_contact_info(matched_html)
+                            phone_data = list(zip(phone_numbers, phone_types))
+
+                            if not phone_numbers or not phone_types:
+                                print(f"[!] Skipping row {row_index}: No phone data found.")
+                                continue
+
+                            # Extract name parts
+                            name_parts = matched_name.strip().split()
+                            first_name = name_parts[0] if name_parts else ""
+                            last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
+
+                            # Append data to Google Sheet
+                            append_to_google_sheet(
+                                first_name=first_name,
+                                last_name=last_name,
+                                phones=phone_data,
+                                emails=emails
+                            )
+
+                    except Exception as e:
+                        print(f"[!] Error processing row {row_index}: {e}")
+                        continue
 
         except Exception as e:
             print(f"[!] Error launching or processing browser: {e}")
         finally:
-            # Close the browser after completing all iterations
+            # Cleanup browser and context
+            if context:
+                await context.close()
             if browser:
                 await browser.close()
 
