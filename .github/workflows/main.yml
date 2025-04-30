@@ -1,98 +1,43 @@
-name: Run Multiple Python Scripts
+name: Automation Workflow
 
 on:
-  push:
-  workflow_dispatch:
+  workflow_dispatch: # Allows manual triggering
+  schedule:          # Example schedule: Runs daily at 2:00 AM UTC
+    - cron: "0 2 * * *"
 
 jobs:
-  run-scripts:
-    runs-on: ubuntu-latest
-    environment: production
-
-    strategy:
-      matrix:
-        script:
-          - "Skip Tracing/truppl_parser.py"
+  automation-job:
+    runs-on: ubuntu-latest # GitHub-hosted runner with Ubuntu environment
 
     steps:
-      # Step 1: Checkout Repository
+      # Step 1: Checkout the repository
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      # Step 2: Set Up Python Environment
-      - name: Set Up Python
+      # Step 2: Set up Python
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
+          python-version: "3.9" # Specify the Python version
 
-      # Step 3: Install Required System Packages
-      - name: Install Required System Packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libnss3 \
-            libgtk-3-0 \
-            libgbm1 \
-            libasound2t64 \
-            libffi8 \
-            libx264-dev \
-            xvfb
-
-      # Step 4: Install Python Dependencies
-      - name: Install Python Dependencies
+      # Step 3: Install Dependencies
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install setuptools playwright google-auth google-auth-oauthlib google-auth-httplib2
 
-      # Step 5: Install Playwright Browsers
+      # Step 4: Install Playwright Browsers
       - name: Install Playwright Browsers
         run: playwright install
 
-      # Step 6: Restore Credentials and Token Files
-      - name: Restore Credentials and Token Files
+      # Step 5: Run the Automation Script
+      - name: Run Automation
+        env:
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          GOOGLE_CREDENTIALS_B64: ${{ secrets.GOOGLE_CREDENTIALS_B64 }}
+          GOOGLE_TOKEN_B64: ${{ secrets.GOOGLE_TOKEN_B64 }}
+          TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
+          VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
+          VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
         run: |
-          echo "${{ secrets.GOOGLE_CREDENTIALS_B64 }}" | base64 -d > /home/runner/credentials.json
-          echo "${{ secrets.GOOGLE_TOKEN_B64 }}" | base64 -d > /home/runner/token.json
-
-      # Step 7: Debug Credentials and Token Files
-      - name: Debug Credentials and Token Files
-        run: |
-          echo "[*] Listing credential and token files:"
-          ls -lh /home/runner/credentials.json /home/runner/token.json
-          echo "[*] Checking the contents of credentials.json and token.json:"
-          cat /home/runner/credentials.json || echo "[!] credentials.json is empty!"
-          cat /home/runner/token.json || echo "[!] token.json is empty!"
-
-      # Step 8: Validate Credentials Files
-      - name: Validate Credentials Files
-        run: |
-          if [ ! -f /home/runner/credentials.json ]; then
-            echo "[!] Credentials file not found!"
-            exit 1
-          fi
-          if [ ! -f /home/runner/token.json ]; then
-            echo "[!] Token file not found!"
-            exit 1
-          fi
-          echo "[✓] Credentials and token files verified."
-
-      # Step 9: Set VPN and 2Captcha API Credentials as Environment Variables
-      - name: Set Environment Variables
-        run: |
-          echo "VPN_USERNAME=${{ secrets.VPN_USERNAME }}" >> $GITHUB_ENV
-          echo "VPN_PASSWORD=${{ secrets.VPN_PASSWORD }}" >> $GITHUB_ENV
-          echo "TWO_CAPTCHA_API_KEY=${{ secrets.TWO_CAPTCHA_API_KEY }}" >> $GITHUB_ENV
-
-      # Step 10: Validate Environment Variables (Debugging)
-      - name: Validate Environment Variables
-        run: |
-          if [ -z "$TWO_CAPTCHA_API_KEY" ]; then
-            echo "[!] TWO_CAPTCHA_API_KEY is not set!"
-            exit 1
-          fi
-          echo "[✓] TWO_CAPTCHA_API_KEY is set."
-
-      # Step 11: Run Playwright Script
-      - name: Run Playwright Script
-        run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python "${{ matrix.script }}"
+          python automation_script.py # Replace with your main script name
