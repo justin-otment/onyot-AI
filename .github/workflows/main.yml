@@ -33,7 +33,7 @@ jobs:
             libnss3 \
             libgtk-3-0 \
             libgbm1 \
-            libasound2 \
+            libasound2t64 \  # Replaced `libasound2` with `libasound2t64`
             libffi-dev \
             libx264-dev \
             xvfb
