@@ -17,7 +17,7 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from nordvpn import handle_rate_limit, verify_vpn_connection
 from captcha import get_site_key, solve_turnstile_captcha, inject_token
-from dotenv import load_dotenv()
+from dotenv import load_dotenv
 
 # === Load Environment Variables ===
 load_dotenv()
