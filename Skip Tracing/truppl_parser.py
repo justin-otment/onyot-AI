@@ -64,6 +64,10 @@ def authenticate_google_sheets():
     token_b64 = os.getenv('GOOGLE_TOKEN_B64')
     credentials_b64 = os.getenv('GOOGLE_CREDENTIALS_B64')
 
+    if not token_b64:
+        logging.error("[!] GOOGLE_TOKEN_B64 environment variable is missing!")
+    if not credentials_b64:
+        logging.error("[!] GOOGLE_CREDENTIALS_B64 environment variable is missing!")
     if not token_b64 or not credentials_b64:
         raise ValueError("[!] Missing environment variables for Google Sheets authentication!")
 
@@ -77,9 +81,6 @@ def authenticate_google_sheets():
     except Exception as e:
         logging.error(f"[!] Failed to authenticate with Google Sheets: {e}")
         sys.exit(1)
-
-# Initialize Sheets service
-sheets_service = authenticate_google_sheets()
 
 # Replace with your Google Sheets integration
 def get_sheet_data(sheet_id, range_name):
