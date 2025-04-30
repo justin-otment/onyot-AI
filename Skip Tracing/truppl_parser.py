@@ -1,12 +1,9 @@
 import asyncio
-import os
+import re
+import string
 import sys
-import time
 import random
-import logging
-import traceback
-import base64
-import json
+import time
 
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
@@ -15,70 +12,91 @@ from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
-from nordvpn import handle_rate_limit, verify_vpn_connection
-from captcha import get_site_key, solve_turnstile_captcha, inject_token
+from nordvpn import handle_rate_limit
 from dotenv import load_dotenv
-
-# === Load Environment Variables ===
-load_dotenv()
-
-# === Logging Configuration ===
-logging.basicConfig(level=logging.INFO, filename="logfile.log", filemode="a",
-                    format="[%(asctime)s] %(levelname)s: %(message)s")
+from nordvpn import verify_vpn_connection  # VPN functionality from nordvpn.py
+from captcha import get_site_key, solve_turnstile_captcha, inject_token  # CAPTCHA functionalities from captcha.py
+import traceback
+from dotenv import load_dotenv
+import os
+print("Current Working Directory:", os.getcwd())
+import logging
+logging.basicConfig(level=logging.DEBUG, filename="logfile.log", filemode="a",
+                    format="%(asctime)s - %(levelname)s - %(message)s")
 logging.info("Script started")
 
-# === Global Constants ===
+load_dotenv("C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/Skip Tracing/.env")
+
+# === Global Configurations ===
 CAPTCHA_CONFIG = {
     "max_retries": 5,
     "wait_time_ms": 7000,
     "poll_interval_seconds": 5,
     "captcha_timeout_seconds": 75,
 }
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-token_b64 = os.getenv('GOOGLE_TOKEN_B64')
-credentials_b64 = os.getenv('GOOGLE_CREDENTIALS_B64')
+API_KEY = os.getenv('APIKEY_2CAPTCHA', 'a01559936e2950720a2c0126309a824e')
+CAPTCHA_API_URL = "http://2captcha.com"
+LOGGING_FORMAT = "[%(asctime)s] %(levelname)s: %(message)s"
+logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
+
+MAX_RETRIES = 5  # Maximum retry attempts for main function
+BACKOFF_FACTOR = 2  # Exponential backoff factor
 
 vpn_username = os.getenv("VPN_USERNAME")
 vpn_password = os.getenv("VPN_PASSWORD")
-captcha_api_key = os.getenv('TWO_CAPTCHA_API_KEY')
 
-# === Validate Environment Variables ===
 if not vpn_username or not vpn_password:
-    logging.error("[!] VPN credentials are missing. Terminating...")
-    sys.exit(1)
+    print("[!] Failed to load VPN credentials!")
 else:
-    logging.info("VPN credentials loaded successfully.")
+    print("VPN Username:", vpn_username)
+    print("VPN Password: Loaded successfully")
 
-if not captcha_api_key:
-    logging.error("[!] CAPTCHA API key is missing. Terminating...")
-    sys.exit(1)
 
-logging.debug(f"Current Working Directory: {BASE_DIR}")
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+creds = Credentials.from_authorized_user_file('C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/Skip Tracing/token.json', SCOPES)
+sheets_service = build('sheets', 'v4', credentials=creds)
 
-# === Google Sheets Authentication ===
+sys.stdout.reconfigure(encoding='utf-8')
+
+# === Config ===
+# Define file paths
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
+TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
+SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
+SHEET_NAME = "CAPE CORAL FINAL"
+SHEET_NAME_2 = "For REI Upload"
+MAX_RETRIES = 1
+
+# === Google Sheets Auth ===
 def authenticate_google_sheets():
-    """Authenticate with Google Sheets API using base64 environment secrets."""
-    token_b64 = os.getenv('GOOGLE_TOKEN_B64')
-    credentials_b64 = os.getenv('GOOGLE_CREDENTIALS_B64')
+    """Authenticate with Google Sheets API."""
+    creds = None
 
-    if not token_b64:
-        logging.error("[!] GOOGLE_TOKEN_B64 environment variable is missing!")
-    if not credentials_b64:
-        logging.error("[!] GOOGLE_CREDENTIALS_B64 environment variable is missing!")
-    if not token_b64 or not credentials_b64:
-        raise ValueError("[!] Missing environment variables for Google Sheets authentication!")
+    if os.path.exists(TOKEN_PATH):
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
 
-    try:
-        token_content = json.loads(base64.b64decode(token_b64).decode('utf-8'))
-        creds_content = json.loads(base64.b64decode(credentials_b64).decode('utf-8'))
-        creds = Credentials.from_authorized_user_info(token_content, ["https://www.googleapis.com/auth/spreadsheets"])
-        return build('sheets', 'v4', credentials=creds)
-    except Exception as e:
-        logging.error(f"[!] Failed to authenticate with Google Sheets: {e}")
-        raise
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            try:
+                creds.refresh(Request())
+                print("[✓] Token refreshed successfully.")
+                with open(TOKEN_PATH, 'w') as token:
+                    token.write(creds.to_json())
+            except Exception as e:
+                print(f"[!] Error refreshing token: {e}")
+                creds = None
 
+        if not creds:
+            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
+            creds = flow.run_local_server(port=0)
+            with open(TOKEN_PATH, 'w') as token:
+                token.write(creds.to_json())
+            print("[✓] New credentials obtained and saved.")
+
+    return build('sheets', 'v4', credentials=creds)
+
+# Replace with your Google Sheets integration
 def get_sheet_data(sheet_id, range_name):
     """
     Fetches data from Google Sheets for a given range.
@@ -544,8 +562,8 @@ def extract_sitekey(response_body):
         return None
 
 async def main():
-    MAILING_STREETS_RANGE = "CAPE CORAL FINAL!P756:P"
-    ZIPCODE_RANGE = "CAPE CORAL FINAL!Q756:Q"
+    MAILING_STREETS_RANGE = "CAPE CORAL FINAL!P1375:P"
+    ZIPCODE_RANGE = "CAPE CORAL FINAL!Q1375:Q"
     SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
     
     BATCH_SIZE = 10  # Process entries in batches to avoid resource exhaustion
