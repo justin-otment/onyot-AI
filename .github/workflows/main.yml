@@ -49,7 +49,7 @@ jobs:
       - name: Install Playwright Browsers
         run: playwright install
 
-            # Step 6: Restore Credentials and Token Files
+      # Step 6: Restore Credentials and Token Files
       - name: Restore Credentials and Token Files
         run: |
           if [ -z "${{ secrets.GOOGLE_CREDENTIALS_B64 }}" ]; then
