@@ -71,15 +71,13 @@ def authenticate_google_sheets():
         raise ValueError("[!] Missing environment variables for Google Sheets authentication!")
 
     try:
-        # Decode and parse base64 credentials
         token_content = json.loads(base64.b64decode(token_b64).decode('utf-8'))
         creds_content = json.loads(base64.b64decode(credentials_b64).decode('utf-8'))
-
-        creds = Credentials.from_authorized_user_info(token_content, SCOPES)
+        creds = Credentials.from_authorized_user_info(token_content, ["https://www.googleapis.com/auth/spreadsheets"])
         return build('sheets', 'v4', credentials=creds)
     except Exception as e:
         logging.error(f"[!] Failed to authenticate with Google Sheets: {e}")
-        sys.exit(1)
+        raise
 
 def get_sheet_data(sheet_id, range_name):
     """
