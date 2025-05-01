@@ -69,21 +69,27 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 # Decode credentials and tokens in CI environment
 def decode_credentials():
     """Decode credentials and tokens from environment variables."""
-    if not CREDENTIALS_JSON or not TOKEN_JSON:
+    # Use plain JSON credentials and tokens directly from environment variables
+    if not os.getenv("GOOGLE_CREDENTIALS_JSON") or not os.getenv("GOOGLE_TOKEN_JSON"):
         raise ValueError("[!] Missing Google Sheets credentials in environment variables.")
 
-    credentials = json.loads(base64.b64decode(CREDENTIALS_JSON).decode())
-    token = json.loads(base64.b64decode(TOKEN_JSON).decode())
+    # Load credentials and tokens directly as JSON
+    credentials = json.loads(os.getenv("GOOGLE_CREDENTIALS_JSON"))
+    token = json.loads(os.getenv("GOOGLE_TOKEN_JSON"))
     return credentials, token
+
 
 def authenticate_google_sheets():
     """Authenticate with Google Sheets API."""
     creds = None
 
+    # Decode credentials and tokens directly
     credentials, token = decode_credentials()
 
+    # Load credentials object from JSON token
     creds = Credentials.from_authorized_user_info(token, SCOPES)
 
+    # Refresh the token if needed
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             try:
@@ -95,8 +101,9 @@ def authenticate_google_sheets():
 
         if not creds:
             raise ValueError("[!] Failed to authenticate Google Sheets API credentials.")
-    
-    return build('sheets', 'v4', credentials=creds)
+
+    # Return authenticated Sheets API client
+    return build("sheets", "v4", credentials=creds)
     
 def append_to_google_sheet(first_name, last_name, phones, emails):
     """
