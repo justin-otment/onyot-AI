@@ -43,13 +43,9 @@ jobs:
 
     # Step 7: Debug Environment Variables
     - name: Debug Environment Variables
+      shell: pwsh
       run: |
-        echo GOOGLE_CREDENTIALS_JSON=$env:GOOGLE_CREDENTIALS_JSON
-        echo GOOGLE_TOKEN_JSON=$env:GOOGLE_TOKEN_JSON
-        echo TWO_CAPTCHA_API_KEY=$env:TWO_CAPTCHA_API_KEY
-        echo VPN_USERNAME=$env:VPN_USERNAME
-        echo VPN_PASSWORD=$env:VPN_PASSWORD
-        echo VPN_FOLDER_PATH=$env:VPN_FOLDER_PATH
+        Get-ChildItem Env: | Sort-Object Name
 
     # Step 8: Validate Environment Variables
     - name: Validate Environment Variables
