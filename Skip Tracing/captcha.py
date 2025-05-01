@@ -5,6 +5,9 @@ import asyncio
 import os
 import dotenv
 
+# === Load Environment Variables ===
+dotenv.load_dotenv()  # Loads variables from a .env file if present
+
 # === CAPTCHA Configuration ===
 CAPTCHA_CONFIG = {
     "max_retries": 5,
@@ -13,17 +16,18 @@ CAPTCHA_CONFIG = {
     "captcha_timeout_seconds": 75,  # Maximum waiting time for CAPTCHA solving
 }
 
-# Load TWO_CAPTCHA_API_KEY from environment variables
-TWO_CAPTCHA_API_KEY = os.getenv("TWO_CAPTCHA_API_KEY")
+# === 2Captcha API Configuration ===
+CAPTCHA_API_URL = "https://2captcha.com"  # 2Captcha API Base URL
+TWO_CAPTCHA_API_KEY = os.getenv("TWO_CAPTCHA_API_KEY")  # API key from environment variables
 
+# === Validate API Key ===
 if not TWO_CAPTCHA_API_KEY:
     logging.error("[!] TWO_CAPTCHA_API_KEY is missing! Ensure it's set in your environment variables.")
     raise ValueError("[!] TWO_CAPTCHA_API_KEY is missing.")
 else:
     logging.info("[✓] TWO_CAPTCHA_API_KEY loaded successfully.")
-    logging.debug("[DEBUG] TWO_CAPTCHA_API_KEY: [HIDDEN]")  # Mask sensitive value
 
-# Logging configuration
+# === Logging Configuration ===
 LOGGING_FORMAT = "[%(asctime)s] %(levelname)s: %(message)s"
 logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
 
@@ -37,9 +41,9 @@ def solve_turnstile_captcha(sitekey, url):
     :return: The solved CAPTCHA token or None if solving fails.
     """
     try:
-        # Send CAPTCHA solving request to 2Captcha
+        # Send CAPTCHA solving request
         response = requests.post(f"{CAPTCHA_API_URL}/in.php", data={
-            "key": API_KEY,
+            "key": TWO_CAPTCHA_API_KEY,
             "method": "turnstile",
             "sitekey": sitekey,
             "pageurl": url,
@@ -59,7 +63,12 @@ def solve_turnstile_captcha(sitekey, url):
         start_time = time.time()
         while time.time() - start_time < CAPTCHA_CONFIG["captcha_timeout_seconds"]:
             time.sleep(CAPTCHA_CONFIG["poll_interval_seconds"])
-            solved_response = requests.get(f"{CAPTCHA_API_URL}/res.php?key={API_KEY}&action=get&id={captcha_id}&json=1")
+            solved_response = requests.get(f"{CAPTCHA_API_URL}/res.php", params={
+                "key": TWO_CAPTCHA_API_KEY,
+                "action": "get",
+                "id": captcha_id,
+                "json": 1
+            })
             solved_response.raise_for_status()
 
             solved_data = solved_response.json()
@@ -72,9 +81,6 @@ def solve_turnstile_captcha(sitekey, url):
         return None
     except requests.exceptions.RequestException as e:
         logging.error(f"[!] Network or HTTP error during CAPTCHA solving: {e}")
-        return None
-    except ValueError as e:
-        logging.error(f"[!] JSON decoding error during CAPTCHA solving: {e}")
         return None
 
 
@@ -109,10 +115,10 @@ async def get_site_key(page):
                 return sitekey
             else:
                 logging.warning(f"[!] Sitekey not found on attempt {attempt + 1}. Retrying...")
-                await asyncio.sleep(3)  # Shorter retry delay for dynamic loading
+                await asyncio.sleep(3)  # Retry delay for dynamic loading
         except Exception as e:
             logging.warning(f"[!] Error during sitekey fetch attempt {attempt + 1}: {e}")
-            await asyncio.sleep(3)  # Retry delay
+            await asyncio.sleep(3)
 
     logging.error("[✗] Sitekey extraction failed after maximum retries.")
     return None
