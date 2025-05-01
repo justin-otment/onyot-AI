@@ -6,15 +6,19 @@ from dotenv import load_dotenv
 import logging
 import time
 
-# Load credentials from environment variables
+# Load VPN credentials
 VPN_USERNAME = os.getenv("VPN_USERNAME")
 VPN_PASSWORD = os.getenv("VPN_PASSWORD")
-vpn_folder_path = os.getenv("vpn_folder_path", "externals/VPNs")  # Default folder path for GitHub
+VPN_FOLDER_PATH = os.getenv("VPN_FOLDER_PATH", "externals/VPNs")  # Default folder path
 
 if not VPN_USERNAME or not VPN_PASSWORD:
-    logging.error("[!] Missing VPN credentials in environment variables. Please check.")
-    exit(1)
-
+    logging.error("[!] Missing VPN credentials in environment variables.")
+    logging.debug(f"VPN_USERNAME: {VPN_USERNAME}")
+    logging.debug(f"VPN_PASSWORD: [HIDDEN]")  # Mask sensitive data
+    raise ValueError("[!] Missing VPN credentials.")
+else:
+    logging.info("[✓] VPN credentials loaded successfully.")
+    logging.info(f"[INFO] VPN configuration files will be loaded from: {VPN_FOLDER_PATH}")
 logging.info("[✓] VPN credentials loaded successfully.")
 
 def list_vpn_configs(folder_path):
