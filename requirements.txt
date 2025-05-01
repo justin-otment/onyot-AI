@@ -29,7 +29,6 @@ uritemplate==4.1.1                  # URI templating
 urllib3==2.4.0                      # HTTP library with threading and SSL
 pyaml                               # For YAML parsing (not version-specific)
 python-dotenv                       # Load variables from .env files
-python3-disutils
 
 # Custom modules (no need to list):
 # - captcha
