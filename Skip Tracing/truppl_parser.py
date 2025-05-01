@@ -52,16 +52,6 @@ logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
 MAX_RETRIES = 5  # Maximum retry attempts for main function
 BACKOFF_FACTOR = 2  # Exponential backoff factor
 
-vpn_username = os.getenv("VPN_USERNAME")
-vpn_password = os.getenv("VPN_PASSWORD")
-
-if not vpn_username or not vpn_password:
-    print("[!] Failed to load VPN credentials!")
-else:
-    print("VPN Username:", vpn_username)
-    print("VPN Password: Loaded successfully")
-
-
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 creds = Credentials.from_authorized_user_file('C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/Skip Tracing/token.json', SCOPES)
 sheets_service = build('sheets', 'v4', credentials=creds)
