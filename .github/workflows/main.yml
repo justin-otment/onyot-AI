@@ -46,4 +46,4 @@ jobs:
 
     # Step 6: Run Main Python Script
     - name: Run Main Script
-      run: python Skip\ Tracing/main_script.py
+      run: python Skip\ Tracing/truppl_parser.py
