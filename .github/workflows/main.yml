@@ -18,11 +18,11 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v3
 
-    # Step 2: Install distutils for Python 3.12+
-    - name: Install distutils
+    # Step 2: Ensure Python 3.12 and install distutils via python3.12-venv
+    - name: Install distutils for Python 3.12
       run: |
         sudo apt-get update
-        sudo apt-get install -y python3-distutils
+        sudo apt-get install -y python3.12-venv
 
     # Step 3: Display Requirements File
     - name: Display Requirements File
