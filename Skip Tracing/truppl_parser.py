@@ -4,6 +4,7 @@ import string
 import sys
 import random
 import time
+import json
 
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
@@ -59,66 +60,43 @@ sheets_service = build('sheets', 'v4', credentials=creds)
 sys.stdout.reconfigure(encoding='utf-8')
 
 # === Config ===
-# Define file paths
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
-TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
+# Environment variable-based file paths for credentials
+CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_B64")  # Base64-encoded credentials.json
+TOKEN_JSON = os.getenv("GOOGLE_TOKEN_B64")  # Base64-encoded token.json
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
-SHEET_NAME = "CAPE CORAL FINAL"
-SHEET_NAME_2 = "For REI Upload"
-MAX_RETRIES = 1
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# === Google Sheets Auth ===
+# Decode credentials and tokens in CI environment
+def decode_credentials():
+    """Decode credentials and tokens from environment variables."""
+    if not CREDENTIALS_JSON or not TOKEN_JSON:
+        raise ValueError("[!] Missing Google Sheets credentials in environment variables.")
+
+    credentials = json.loads(base64.b64decode(CREDENTIALS_JSON).decode())
+    token = json.loads(base64.b64decode(TOKEN_JSON).decode())
+    return credentials, token
+
 def authenticate_google_sheets():
     """Authenticate with Google Sheets API."""
     creds = None
 
-    if os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+    credentials, token = decode_credentials()
+
+    creds = Credentials.from_authorized_user_info(token, SCOPES)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
                 print("[✓] Token refreshed successfully.")
-                with open(TOKEN_PATH, 'w') as token:
-                    token.write(creds.to_json())
             except Exception as e:
                 print(f"[!] Error refreshing token: {e}")
                 creds = None
 
         if not creds:
-            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
-            creds = flow.run_local_server(port=0)
-            with open(TOKEN_PATH, 'w') as token:
-                token.write(creds.to_json())
-            print("[✓] New credentials obtained and saved.")
-
+            raise ValueError("[!] Failed to authenticate Google Sheets API credentials.")
+    
     return build('sheets', 'v4', credentials=creds)
-
-# Replace with your Google Sheets integration
-def get_sheet_data(sheet_id, range_name):
-    """
-    Fetches data from Google Sheets for a given range.
-    Returns list of (row_index, value) tuples for non-empty first-column values.
-    """
-    try:
-        service = authenticate_google_sheets()
-        result = service.spreadsheets().values().get(
-            spreadsheetId=sheet_id,
-            range=range_name
-        ).execute()
-        values = result.get("values", [])
-        base_row = int(re.search(r"(\d+):", range_name).group(1))
-
-        return [
-            (i + base_row, row[0])
-            for i, row in enumerate(values)
-            if row and len(row) > 0 and row[0].strip()
-        ]
-    except Exception as e:
-        logging.error(f"Error fetching data from Google Sheets range '{range_name}': {e}")
-        return []
     
 def append_to_google_sheet(first_name, last_name, phones, emails):
     """
