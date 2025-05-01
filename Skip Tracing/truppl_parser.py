@@ -33,7 +33,7 @@ CAPTCHA_CONFIG = {
     "poll_interval_seconds": 5,
     "captcha_timeout_seconds": 75,
 }
-API_KEY = os.getenv('APIKEY_2CAPTCHA', 'a01559936e2950720a2c0126309a824e')
+API_KEY = os.getenv('TWO_CAPTCHA_API_KEY', 'a01559936e2950720a2c0126309a824e')
 CAPTCHA_API_URL = "http://2captcha.com"
 LOGGING_FORMAT = "[%(asctime)s] %(levelname)s: %(message)s"
 logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
