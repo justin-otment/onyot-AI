@@ -12,7 +12,6 @@ on:
 jobs:
   run-script:
     runs-on: windows-latest
-  env: production
 
     steps:
     # Step 1: Set up Python 3.12
@@ -45,14 +44,14 @@ jobs:
     # Step 7: Debug Environment Variables
     - name: Debug Environment Variables
       run: |
-        echo GOOGLE_CREDENTIALS_JSON=%GOOGLE_CREDENTIALS_JSON%
-        echo GOOGLE_TOKEN_JSON=%GOOGLE_TOKEN_JSON%
-        echo TWO_CAPTCHA_API_KEY=%TWO_CAPTCHA_API_KEY%
-        echo VPN_USERNAME=%VPN_USERNAME%
-        echo VPN_PASSWORD=%VPN_PASSWORD%
-        echo VPN_FOLDER_PATH=%VPN_FOLDER_PATH%
+        echo GOOGLE_CREDENTIALS_JSON=$env:GOOGLE_CREDENTIALS_JSON
+        echo GOOGLE_TOKEN_JSON=$env:GOOGLE_TOKEN_JSON
+        echo TWO_CAPTCHA_API_KEY=$env:TWO_CAPTCHA_API_KEY
+        echo VPN_USERNAME=$env:VPN_USERNAME
+        echo VPN_PASSWORD=$env:VPN_PASSWORD
+        echo VPN_FOLDER_PATH=$env:VPN_FOLDER_PATH
 
-        # Step: Validate Environment Variables
+    # Step 8: Validate Environment Variables
     - name: Validate Environment Variables
       shell: pwsh
       run: |
@@ -71,7 +70,6 @@ jobs:
 
     # Step 9: Set Environment Variables
     - name: Set Environment Variables
-      run: echo "Environment variables set"
       env:
         GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
         GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
@@ -79,6 +77,7 @@ jobs:
         VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
         VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
         VPN_FOLDER_PATH: ${{ secrets.VPN_FOLDER_PATH }}
+      run: echo "Environment variables have been set successfully."
 
     # Step 10: Run Truppl Parser Script
     - name: Run Truppl Parser Script
