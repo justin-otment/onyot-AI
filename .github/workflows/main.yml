@@ -1,4 +1,4 @@
-name: CI Workflow for Skip Tracing Python Scripts
+name: CI Workflow for CAPTCHA Solving Python Script
 
 on:
   push:
@@ -12,6 +12,13 @@ on:
 jobs:
   run-script:
     runs-on: windows-latest
+    env:
+      TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
+      GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+      GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
+      VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
+      VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
+      VPN_FOLDER_PATH: ${{ secrets.VPN_FOLDER_PATH }}
 
     steps:
     # Step 1: Set up Python 3.12
@@ -34,7 +41,7 @@ jobs:
         python -m pip install --upgrade pip setuptools wheel
 
     # Step 5: Install Python Dependencies
-    - name: Install Python Dependencies
+    - name: Install Dependencies
       run: pip install -r requirements.txt
 
     # Step 6: Install Playwright Browsers
@@ -44,16 +51,10 @@ jobs:
     # Step 7: Debug Environment Variables
     - name: Debug Environment Variables
       shell: pwsh
-      env:
-        TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
       run: |
-        Write-Output "[DEBUG] Checking if TWO_CAPTCHA_API_KEY is available..."
-        if ($env:TWO_CAPTCHA_API_KEY) {
-            Write-Output "[✓] TWO_CAPTCHA_API_KEY is present."
-        } else {
-            Write-Output "[!] TWO_CAPTCHA_API_KEY is missing."
-            exit 1
-        }
+        Write-Output "[DEBUG] Dumping all environment variables..."
+        Get-ChildItem Env: | Sort-Object Name | Where-Object { $_.Name -like "*CAPTCHA*" -or $_.Name -like "*VPN*" -or $_.Name -like "*GOOGLE*" }
+
     # Step 8: Validate Environment Variables
     - name: Validate Environment Variables
       shell: pwsh
@@ -73,17 +74,6 @@ jobs:
         }
         Write-Output "[✓] All required environment variables are present."
 
-    # Step 9: Set Environment Variables
-    - name: Set Environment Variables
-      env:
-        GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
-        GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
-        TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
-        VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
-        VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
-        VPN_FOLDER_PATH: ${{ secrets.VPN_FOLDER_PATH }}
-      run: echo "[INFO] Environment variables have been set successfully."
-
-    # Step 10: Run Truppl Parser Script
-    - name: Run Truppl Parser Script
+    # Step 9: Run CAPTCHA Solving Script
+    - name: Run CAPTCHA Solving Script
       run: python "Skip Tracing\\truppl_parser.py"
