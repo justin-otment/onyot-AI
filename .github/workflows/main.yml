@@ -34,9 +34,11 @@ jobs:
     - name: Debug Individual Secrets
       shell: pwsh
       run: |
+        Write-Output "[DEBUG] TWO_CAPTCHA_API_KEY: $env:TWO_CAPTCHA_API_KEY"
+        Write-Output "[DEBUG] GOOGLE_CREDENTIALS_JSON: $env:GOOGLE_CREDENTIALS_JSON"
+        Write-Output "[DEBUG] GOOGLE_TOKEN_JSON: $env:GOOGLE_TOKEN_JSON"
         Write-Output "[DEBUG] VPN_USERNAME: $env:VPN_USERNAME"
         Write-Output "[DEBUG] VPN_PASSWORD: $env:VPN_PASSWORD"
-        Write-Output "[DEBUG] TWO_CAPTCHA_API_KEY: $env:TWO_CAPTCHA_API_KEY"
 
     # Step 4: Validate Environment Variables
     - name: Validate Environment Variables
@@ -63,7 +65,7 @@ jobs:
             Write-Output "[!] GOOGLE_TOKEN_JSON is missing."
             exit 1
         }
-        Write-Output "[✓] All required environment variables are validated."
+        Write-Output "[✓] All required environment variables are validated successfully."
 
     # Step 5: Install Python Dependencies
     - name: Install Dependencies
