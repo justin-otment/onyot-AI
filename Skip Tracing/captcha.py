@@ -13,12 +13,15 @@ CAPTCHA_CONFIG = {
     "captcha_timeout_seconds": 75,  # Maximum waiting time for CAPTCHA solving
 }
 
-# API Key and URL for 2Captcha
-API_KEY = os.getenv("TWO_CAPTCHA_API_KEY")  # Load 2Captcha API key from environment variable
-CAPTCHA_API_URL = "http://2captcha.com"
+# Load TWO_CAPTCHA_API_KEY from environment variables
+TWO_CAPTCHA_API_KEY = os.getenv("TWO_CAPTCHA_API_KEY")
 
-if not API_KEY:
-    raise ValueError("[!] TWO_CAPTCHA_API_KEY is missing. Ensure it's set in your environment variables.")
+if not TWO_CAPTCHA_API_KEY:
+    logging.error("[!] TWO_CAPTCHA_API_KEY is missing! Ensure it's set in your environment variables.")
+    raise ValueError("[!] TWO_CAPTCHA_API_KEY is missing.")
+else:
+    logging.info("[✓] TWO_CAPTCHA_API_KEY loaded successfully.")
+    logging.debug("[DEBUG] TWO_CAPTCHA_API_KEY: [HIDDEN]")  # Mask sensitive value
 
 # Logging configuration
 LOGGING_FORMAT = "[%(asctime)s] %(levelname)s: %(message)s"
