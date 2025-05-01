@@ -14,15 +14,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # Step 1: Check out the repository
+    # Step 1: Set up Python 3.11 (more compatible than 3.12)
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.11
+
+    # Step 2: Check out the repository
     - name: Checkout Code
       uses: actions/checkout@v3
-
-    # Step 2: Ensure Python 3.12 and install distutils via python3.12-venv
-    - name: Install distutils for Python 3.12
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y python3.12-venv
 
     # Step 3: Display Requirements File
     - name: Display Requirements File
