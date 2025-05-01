@@ -51,16 +51,22 @@ jobs:
         echo VPN_PASSWORD=%VPN_PASSWORD%
         echo VPN_FOLDER_PATH=%VPN_FOLDER_PATH%
 
-    # Step 8: Validate Environment Variables
+        # Step: Validate Environment Variables
     - name: Validate Environment Variables
+      shell: pwsh
       run: |
-        if "%TWO_CAPTCHA_API_KEY%"=="" exit /b 1
-        if "%VPN_USERNAME%"=="" exit /b 1
-        if "%VPN_PASSWORD%"=="" exit /b 1
-      env:
-        TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
-        VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
-        VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
+        if (-not $env:TWO_CAPTCHA_API_KEY) {
+            Write-Output "[!] TWO_CAPTCHA_API_KEY is missing."
+            exit 1
+        }
+        if (-not $env:VPN_USERNAME) {
+            Write-Output "[!] VPN_USERNAME is missing."
+            exit 1
+        }
+        if (-not $env:VPN_PASSWORD) {
+            Write-Output "[!] VPN_PASSWORD is missing."
+            exit 1
+        }
 
     # Step 9: Set Environment Variables
     - name: Set Environment Variables
