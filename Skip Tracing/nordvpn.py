@@ -6,11 +6,17 @@ from dotenv import load_dotenv
 import logging
 import time
 
-# Load VPN credentials
+# Load environment variables from .env file if present
+load_dotenv()  # Automatically looks for a .env file in the working directory
+
+# Load VPN credentials from environment variables
 VPN_USERNAME = os.getenv("VPN_USERNAME")
 VPN_PASSWORD = os.getenv("VPN_PASSWORD")
 VPN_FOLDER_PATH = os.getenv("VPN_FOLDER_PATH", "externals/VPNs")  # Default folder path
+AUTH_FILE_PATH = os.getenv("AUTH_FILE_PATH", os.path.join(VPN_FOLDER_PATH, "auth.txt"))  # Default auth file path
+OPENVPN_EXECUTABLE = os.getenv("OPENVPN_EXECUTABLE", r"C:\Program Files\OpenVPN\bin\openvpn.exe")  # Default path
 
+# Ensure required environment variables are set
 if not VPN_USERNAME or not VPN_PASSWORD:
     logging.error("[!] Missing VPN credentials in environment variables.")
     logging.debug(f"VPN_USERNAME: {VPN_USERNAME}")
@@ -19,7 +25,7 @@ if not VPN_USERNAME or not VPN_PASSWORD:
 else:
     logging.info("[✓] VPN credentials loaded successfully.")
     logging.info(f"[INFO] VPN configuration files will be loaded from: {VPN_FOLDER_PATH}")
-logging.info("[✓] VPN credentials loaded successfully.")
+
 
 def list_vpn_configs(folder_path):
     """
@@ -41,6 +47,7 @@ def list_vpn_configs(folder_path):
         logging.error(f"[!] Error listing VPN configs: {e}")
         return []
 
+
 def create_auth_file(auth_file_path):
     """
     Create a temporary auth.txt file containing VPN credentials.
@@ -54,6 +61,7 @@ def create_auth_file(auth_file_path):
         logging.error(f"[!] Error creating auth file: {e}")
         exit(1)
 
+
 def terminate_existing_vpn():
     """
     Terminate any existing OpenVPN processes to avoid conflicts.
@@ -63,6 +71,7 @@ def terminate_existing_vpn():
         logging.info("[✓] Terminated existing OpenVPN connections.")
     except Exception as e:
         logging.warning(f"[!] Failed to terminate existing VPN connections: {e}")
+
 
 async def monitor_vpn_logs_with_timeout(process, timeout=30):
     """
@@ -75,7 +84,7 @@ async def monitor_vpn_logs_with_timeout(process, timeout=30):
     while time.time() - start_time < timeout:
         line = process.stdout.readline()
         if line:
-            decoded_line = line.decode("utf-8")
+            decoded_line = line.decode("utf-8", errors="replace")
             logging.debug(f"[DEBUG] OpenVPN log: {decoded_line}")
             if "Initialization Sequence Completed" in decoded_line:
                 logging.info("[✓] VPN connected successfully!")
@@ -84,39 +93,39 @@ async def monitor_vpn_logs_with_timeout(process, timeout=30):
     logging.error("[!] VPN log monitoring timed out.")
     return False
 
+
 async def switch_vpn(config_file):
     """
     Switch VPN using the specified configuration file.
     :param config_file: Path to the .ovpn configuration file.
     :return: True if VPN switch succeeded, False otherwise.
     """
-    openvpn_executable = r"C:\Program Files\OpenVPN\bin\openvpn.exe"
-    auth_file_path = "C:\\Users\\DELL\\Documents\\Onyot.ai\\Lead_List-Generator\\python tests\\externals\\VPNs\\auth.txt"
-
     terminate_existing_vpn()  # Terminate any existing VPN processes
-    create_auth_file(auth_file_path)  # Create auth.txt file with credentials
+    create_auth_file(AUTH_FILE_PATH)  # Create auth.txt file with credentials
     logging.info(f"[→] Switching to VPN with config: {config_file}")
 
     try:
         process = subprocess.Popen(
-            [openvpn_executable, "--config", config_file, "--auth-user-pass", auth_file_path],
+            [OPENVPN_EXECUTABLE, "--config", config_file, "--auth-user-pass", AUTH_FILE_PATH],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
 
-        # Use monitor_vpn_logs_with_timeout for connection confirmation
+        # Monitor the logs for connection confirmation
         success = await monitor_vpn_logs_with_timeout(process)
         if success:
             return True
         else:
             logging.error("[!] VPN connection failed or logs did not confirm connection.")
+            process.terminate()
             return False
 
     except FileNotFoundError:
-        logging.error(f"[!] OpenVPN executable not found at {openvpn_executable}. Ensure it is installed.")
+        logging.error(f"[!] OpenVPN executable not found at {OPENVPN_EXECUTABLE}. Ensure it is installed.")
         return False
     except Exception as e:
         logging.error(f"[!] Error during VPN switch: {e}")
         return False
+
 
 async def verify_vpn_connection():
     """
@@ -135,8 +144,9 @@ async def verify_vpn_connection():
         logging.error(f"[!] Error verifying VPN connectivity: {e}")
         return False
 
+
 async def handle_rate_limit(page):
-    vpn_files = list_vpn_configs(vpn_folder_path)
+    vpn_files = list_vpn_configs(VPN_FOLDER_PATH)
     if not vpn_files:
         logging.error("[!] No VPN configuration files found. Exiting...")
         return False
