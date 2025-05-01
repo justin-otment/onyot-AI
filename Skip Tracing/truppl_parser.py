@@ -22,21 +22,6 @@ import dotenv
 import os
 print("Current Working Directory:", os.getcwd())
 import logging
-logging.basicConfig(level=logging.DEBUG, filename="logfile.log", filemode="a",
-                    format="%(asctime)s - %(levelname)s - %(message)s")
-logging.info("Script started")
-
-# === Global Configurations ===
-CAPTCHA_CONFIG = {
-    "max_retries": 5,
-    "wait_time_ms": 7000,
-    "poll_interval_seconds": 5,
-    "captcha_timeout_seconds": 75,
-}
-API_KEY = os.getenv("TWO_CAPTCHA_API_KEY", "a01559936e2950720a2c0126309a824e")
-CAPTCHA_API_URL = "http://2captcha.com"
-LOGGING_FORMAT = "[%(asctime)s] %(levelname)s: %(message)s"
-logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
 
 MAX_RETRIES = 5  # Maximum retry attempts for main function
 BACKOFF_FACTOR = 2  # Exponential backoff factor
