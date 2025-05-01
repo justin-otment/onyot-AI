@@ -18,9 +18,11 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v3
 
-    # Step 2: Install Distutils
-    - name: Install Distutils
-      run: sudo apt-get update && sudo apt-get install -y python3-distutils
+    # Upgrade Python
+    - name: Upgrade Python
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3.10 python3.10-distutils
 
     # Step 3: Install Setuptools and Wheel
     - name: Install Setuptools and Wheel
