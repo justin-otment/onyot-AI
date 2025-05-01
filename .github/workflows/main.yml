@@ -12,6 +12,7 @@ on:
 jobs:
   run-script:
     runs-on: windows-latest
+  env: production
 
     steps:
     # Step 1: Set up Python 3.12
