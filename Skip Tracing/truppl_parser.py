@@ -26,8 +26,6 @@ logging.basicConfig(level=logging.DEBUG, filename="logfile.log", filemode="a",
                     format="%(asctime)s - %(levelname)s - %(message)s")
 logging.info("Script started")
 
-logging.info(f"[✓] VPN credentials loaded successfully.")
-logging.info(f"[INFO] VPN configuration files will be loaded from: {VPN_FOLDER_PATH}")
 # === Global Configurations ===
 CAPTCHA_CONFIG = {
     "max_retries": 5,
