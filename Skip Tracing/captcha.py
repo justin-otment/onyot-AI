@@ -2,6 +2,7 @@ import requests
 import time
 import logging
 import asyncio
+import os
 
 # === CAPTCHA Configuration ===
 CAPTCHA_CONFIG = {
@@ -12,8 +13,11 @@ CAPTCHA_CONFIG = {
 }
 
 # API Key and URL for 2Captcha
-API_KEY = "a01559936e2950720a2c0126309a824e"  # Replace with your actual 2Captcha API key
+API_KEY = os.getenv("TWO_CAPTCHA_API_KEY")  # Load 2Captcha API key from environment variable
 CAPTCHA_API_URL = "http://2captcha.com"
+
+if not API_KEY:
+    raise ValueError("[!] TWO_CAPTCHA_API_KEY is missing. Ensure it's set in your environment variables.")
 
 # Logging configuration
 LOGGING_FORMAT = "[%(asctime)s] %(levelname)s: %(message)s"
