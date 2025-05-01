@@ -1,4 +1,4 @@
-name: Run Playwright Script with Environment Variables
+name: CI Workflow for Skip Tracing Python Scripts
 
 on:
   push:
@@ -30,7 +30,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    # Step 4: Install Playwright browsers
+    # Step 4: Install Playwright Browsers
     - name: Install Playwright Browsers
       run: playwright install
 
@@ -40,13 +40,10 @@ jobs:
         GOOGLE_CREDENTIALS_B64: ${{ secrets.GOOGLE_CREDENTIALS_B64 }}
         GOOGLE_TOKEN_B64: ${{ secrets.GOOGLE_TOKEN_B64 }}
         TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
-      run: |
-        echo "Environment variables set."
+        VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
+        VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
+        VPN_FOLDER_PATH: ${{ secrets.VPN_FOLDER_PATH }}
 
-    # Step 6: Run the Python script
-    - name: Run Script
-      env:
-        GOOGLE_CREDENTIALS_B64: ${{ secrets.GOOGLE_CREDENTIALS_B64 }}
-        GOOGLE_TOKEN_B64: ${{ secrets.GOOGLE_TOKEN_B64 }}
-        TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
-      run: python Skip\ Tracing/truppl_parser.py
+    # Step 6: Run Main Python Script
+    - name: Run Main Script
+      run: python Skip\ Tracing/main_script.py
