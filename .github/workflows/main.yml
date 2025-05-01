@@ -44,10 +44,16 @@ jobs:
     # Step 7: Debug Environment Variables
     - name: Debug Environment Variables
       shell: pwsh
+      env:
+        TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
       run: |
-        Write-Output "[INFO] Debugging environment variables..."
-        Get-ChildItem Env: | Sort-Object Name | Where-Object { $_.Name -like "*CAPTCHA*" -or $_.Name -like "*VPN*" -or $_.Name -like "*GOOGLE*" }
-
+        Write-Output "[DEBUG] Checking if TWO_CAPTCHA_API_KEY is available..."
+        if ($env:TWO_CAPTCHA_API_KEY) {
+            Write-Output "[✓] TWO_CAPTCHA_API_KEY is present."
+        } else {
+            Write-Output "[!] TWO_CAPTCHA_API_KEY is missing."
+            exit 1
+        }
     # Step 8: Validate Environment Variables
     - name: Validate Environment Variables
       shell: pwsh
