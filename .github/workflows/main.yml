@@ -11,39 +11,44 @@ on:
 
 jobs:
   run-script:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
     # Step 1: Check out the repository
     - name: Checkout Code
       uses: actions/checkout@v3
 
-    # Step 2: Install Playwright Dependencies
+    # Step 2: Enable Universe Repository (optional, for missing packages)
+    - name: Enable Universe Repository
+      run: sudo add-apt-repository universe
+
+    # Step 3: Install Playwright Dependencies
     - name: Install Playwright Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libgtk-4-1 libgraphene-1.0-0 libwoff1 libvpx6 \
-        libevent-2.1-7 libopus0 libgstreamer-plugins-base1.0-dev libflite1 \
-        libavif13 libharfbuzz-dev libsecret-1-dev libhyphen0 libmanette-0.2-0 \
-        libgles2-mesa-dev libx264-155
+        sudo apt-get install -y \
+          libgtk-4-1 libgraphene-1.0-0 libwoff1 libvpx-dev libavif-dev \
+          libevent-2.1-7 libopus0 libgstreamer-plugins-base1.0-dev libflite1 \
+          libharfbuzz-dev libsecret-1-dev libhyphen0 libmanette-0.2-0 \
+          libgles2-mesa-dev libx264-dev
 
-    # Step 3: Set up Python
+    # Step 4: Set up Python
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
 
-    # Step 4: Install dependencies
+    # Step 5: Install Python Dependencies
     - name: Install Python Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    # Step 5: Install Playwright Browsers
+    # Step 6: Install Playwright Browsers
     - name: Install Playwright Browsers
       run: playwright install
 
-    # Step 6: Set environment variables for the script
+    # Step 7: Set environment variables for the script
     - name: Set Environment Variables
       env:
         GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
@@ -54,6 +59,6 @@ jobs:
         VPN_FOLDER_PATH: ${{ secrets.VPN_FOLDER_PATH }}
       run: echo "Environment variables set."
 
-    # Step 7: Run Truppl Parser Script
+    # Step 8: Run Truppl Parser Script
     - name: Run Truppl Parser Script
       run: python Skip\ Tracing/truppl_parser.py
