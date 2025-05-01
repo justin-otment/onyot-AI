@@ -49,4 +49,4 @@ jobs:
         GOOGLE_CREDENTIALS_B64: ${{ secrets.GOOGLE_CREDENTIALS_B64 }}
         GOOGLE_TOKEN_B64: ${{ secrets.GOOGLE_TOKEN_B64 }}
         TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
-      run: python Skip\ Tracing/<name_of_your_script>.py
+      run: python Skip\ Tracing/truppl_parser.py
