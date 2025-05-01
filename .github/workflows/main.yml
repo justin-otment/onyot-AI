@@ -18,7 +18,6 @@ jobs:
       GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
       VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
       VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
-      VPN_FOLDER_PATH: ${{ secrets.VPN_FOLDER_PATH }}
 
     steps:
     # Step 1: Set up Python 3.12
@@ -28,27 +27,18 @@ jobs:
         python-version: 3.12
 
     # Step 2: Check out the repository
-    - name: Checkout Code
+    - name: Checkout Repository Code
       uses: actions/checkout@v3
 
-    # Step 3: Debug Environment Variables
-    - name: Debug Environment Variables
-      shell: pwsh
-      run: |
-        Write-Output "[DEBUG] Dumping all environment variables..."
-        Get-ChildItem Env: | Sort-Object Name
-
-    # Step 4: Debug Individual Secrets
+    # Step 3: Debug Secrets
     - name: Debug Individual Secrets
       shell: pwsh
       run: |
-        Write-Output "[DEBUG] GOOGLE_CREDENTIALS_JSON: $env:GOOGLE_CREDENTIALS_JSON"
-        Write-Output "[DEBUG] GOOGLE_TOKEN_JSON: $env:GOOGLE_TOKEN_JSON"
         Write-Output "[DEBUG] VPN_USERNAME: $env:VPN_USERNAME"
         Write-Output "[DEBUG] VPN_PASSWORD: $env:VPN_PASSWORD"
-        Write-Output "[DEBUG] VPN_FOLDER_PATH: $env:VPN_FOLDER_PATH"
+        Write-Output "[DEBUG] TWO_CAPTCHA_API_KEY: $env:TWO_CAPTCHA_API_KEY"
 
-    # Step 5: Validate Environment Variables
+    # Step 4: Validate Environment Variables
     - name: Validate Environment Variables
       shell: pwsh
       run: |
@@ -73,12 +63,18 @@ jobs:
             Write-Output "[!] GOOGLE_TOKEN_JSON is missing."
             exit 1
         }
-        if (-not $env:VPN_FOLDER_PATH) {
-            Write-Output "[!] VPN_FOLDER_PATH is missing."
-            exit 1
-        }
         Write-Output "[✓] All required environment variables are validated."
 
-    # Step 6: Run CAPTCHA Solving Script
+    # Step 5: Install Python Dependencies
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+        pip install -r requirements.txt
+
+    # Step 6: Install Playwright Browsers
+    - name: Install Playwright Browsers
+      run: python -m playwright install
+
+    # Step 7: Run CAPTCHA Solving Script
     - name: Run CAPTCHA Solving Script
       run: python "Skip Tracing\\truppl_parser.py"
