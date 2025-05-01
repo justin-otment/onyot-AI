@@ -23,6 +23,8 @@ import os
 print("Current Working Directory:", os.getcwd())
 import logging
 
+load_dotenv()
+
 MAX_RETRIES = 5  # Maximum retry attempts for main function
 BACKOFF_FACTOR = 2  # Exponential backoff factor
 
