@@ -26,15 +26,6 @@ logging.basicConfig(level=logging.DEBUG, filename="logfile.log", filemode="a",
                     format="%(asctime)s - %(levelname)s - %(message)s")
 logging.info("Script started")
 
-# Load VPN credentials directly from environment variables
-VPN_USERNAME = os.getenv("VPN_USERNAME")
-VPN_PASSWORD = os.getenv("VPN_PASSWORD")
-VPN_FOLDER_PATH = os.getenv("VPN_FOLDER_PATH", "externals/VPNs")  # Default path if not provided
-
-if not VPN_USERNAME or not VPN_PASSWORD:
-    logging.error("[!] Missing VPN credentials in environment variables. Please check.")
-    raise ValueError("[!] Missing VPN credentials.")
-
 logging.info(f"[✓] VPN credentials loaded successfully.")
 logging.info(f"[INFO] VPN configuration files will be loaded from: {VPN_FOLDER_PATH}")
 # === Global Configurations ===
