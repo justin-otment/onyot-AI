@@ -562,8 +562,8 @@ def extract_sitekey(response_body):
         return None
 
 async def main():
-    MAILING_STREETS_RANGE = "CAPE CORAL FINAL!P1375:P"
-    ZIPCODE_RANGE = "CAPE CORAL FINAL!Q1375:Q"
+    MAILING_STREETS_RANGE = "CAPE CORAL FINAL!P1685:P"
+    ZIPCODE_RANGE = "CAPE CORAL FINAL!Q1685:Q"
     SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
     
     BATCH_SIZE = 10  # Process entries in batches to avoid resource exhaustion
@@ -657,12 +657,19 @@ async def main():
 
                         # Extract links
                         extracted_links = extract_links(html_content)
-                        print(f"[DEBUG] Extracted {len(extracted_links)} links:")
-                        for entry in extracted_links:
-                            print(f"    - {entry['text']}")
 
-                        if not extracted_links:
-                            continue
+                        # Check and log extracted links
+                        if extracted_links:
+                            print(f"[DEBUG] Extracted {len(extracted_links)} links:")
+                            for entry in extracted_links:
+                                print(f"    - {entry['text']}")
+                        else:
+                            print("[DEBUG] Extracted 0 links:")
+                            print("[DEBUG] Extracted 0 links:")
+                            
+                            # Trigger rate limit handling if no links are extracted
+                            await handle_rate_limit(page)
+                            continue  # Proceed to the next iteration if applicable
 
                         ref_names = extract_reference_names(SHEET_ID, row_index)
                         matched_results = match_entries(extracted_links, ref_names)
