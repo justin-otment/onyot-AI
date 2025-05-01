@@ -18,13 +18,13 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v3
 
-    # Step 2: Enable Universe Repository
-    - name: Enable Universe Repository
-      run: sudo add-apt-repository universe && sudo apt-get update
-
-    # Step 3: Install Distutils
+    # Step 2: Install Distutils
     - name: Install Distutils
-      run: sudo apt-get install -y python3-distutils
+      run: sudo apt-get update && sudo apt-get install -y python3-distutils
+
+    # Step 3: Install Setuptools and Wheel
+    - name: Install Setuptools and Wheel
+      run: pip install --upgrade setuptools wheel
 
     # Step 4: Install Python Dependencies
     - name: Install Python Dependencies
