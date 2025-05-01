@@ -4,6 +4,7 @@ import random
 import asyncio
 from dotenv import load_dotenv
 import logging
+import time
 
 # Load credentials from .env file
 dotenv_path = "C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/Skip Tracing/.env"
@@ -61,6 +62,26 @@ def terminate_existing_vpn():
     except Exception as e:
         logging.warning(f"[!] Failed to terminate existing VPN connections: {e}")
 
+async def monitor_vpn_logs_with_timeout(process, timeout=30):
+    """
+    Monitor VPN logs for connection success, with a timeout.
+    :param process: The OpenVPN process to monitor.
+    :param timeout: Maximum time (in seconds) to wait for connection confirmation.
+    :return: True if connection is confirmed, False otherwise.
+    """
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        line = process.stdout.readline()
+        if line:
+            decoded_line = line.decode("utf-8")
+            logging.debug(f"[DEBUG] OpenVPN log: {decoded_line}")
+            if "Initialization Sequence Completed" in decoded_line:
+                logging.info("[✓] VPN connected successfully!")
+                return True
+        await asyncio.sleep(0.5)  # Avoid blocking
+    logging.error("[!] VPN log monitoring timed out.")
+    return False
+
 async def switch_vpn(config_file):
     """
     Switch VPN using the specified configuration file.
@@ -80,15 +101,13 @@ async def switch_vpn(config_file):
             stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
 
-        # Monitor VPN logs for connection confirmation
-        for line in process.stdout:
-            decoded_line = line.decode("utf-8")
-            if "Initialization Sequence Completed" in decoded_line:
-                logging.info("[✓] VPN connected successfully!")
-                return True
-
-        logging.error("[!] VPN connection failed or logs did not confirm connection.")
-        return False
+        # Use monitor_vpn_logs_with_timeout for connection confirmation
+        success = await monitor_vpn_logs_with_timeout(process)
+        if success:
+            return True
+        else:
+            logging.error("[!] VPN connection failed or logs did not confirm connection.")
+            return False
 
     except FileNotFoundError:
         logging.error(f"[!] OpenVPN executable not found at {openvpn_executable}. Ensure it is installed.")
@@ -96,7 +115,7 @@ async def switch_vpn(config_file):
     except Exception as e:
         logging.error(f"[!] Error during VPN switch: {e}")
         return False
-    
+
 async def verify_vpn_connection():
     """
     Verify if the VPN connection is established by pinging a reliable external host.
@@ -134,6 +153,7 @@ async def handle_rate_limit(page):
 
             logging.info(f"[✓] VPN switched successfully on attempt {attempt}. Reloading page...")
             try:
+                await page.reload(wait_until="domcontentloaded", timeout=60000)
                 logging.info("[✓] Page reloaded successfully after VPN switch.")
                 await asyncio.sleep(3)  # Stabilization delay for CAPTCHA scripts
                 return True
