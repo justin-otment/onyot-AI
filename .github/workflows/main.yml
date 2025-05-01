@@ -31,31 +31,24 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v3
 
-    # Step 3: Display Requirements File for Debugging
-    - name: Display Requirements File
-      run: type requirements.txt
-
-    # Step 4: Upgrade pip, setuptools, and wheel
-    - name: Upgrade pip, setuptools, and wheel
-      run: |
-        python -m pip install --upgrade pip setuptools wheel
-
-    # Step 5: Install Python Dependencies
-    - name: Install Dependencies
-      run: pip install -r requirements.txt
-
-    # Step 6: Install Playwright Browsers
-    - name: Install Playwright Browsers
-      run: python -m playwright install
-
-    # Step 7: Debug Environment Variables
+    # Step 3: Debug Environment Variables
     - name: Debug Environment Variables
       shell: pwsh
       run: |
         Write-Output "[DEBUG] Dumping all environment variables..."
-        Get-ChildItem Env: | Sort-Object Name | Where-Object { $_.Name -like "*CAPTCHA*" -or $_.Name -like "*VPN*" -or $_.Name -like "*GOOGLE*" }
+        Get-ChildItem Env: | Sort-Object Name
 
-    # Step 8: Validate Environment Variables
+    # Step 4: Debug Individual Secrets
+    - name: Debug Individual Secrets
+      shell: pwsh
+      run: |
+        Write-Output "[DEBUG] GOOGLE_CREDENTIALS_JSON: $env:GOOGLE_CREDENTIALS_JSON"
+        Write-Output "[DEBUG] GOOGLE_TOKEN_JSON: $env:GOOGLE_TOKEN_JSON"
+        Write-Output "[DEBUG] VPN_USERNAME: $env:VPN_USERNAME"
+        Write-Output "[DEBUG] VPN_PASSWORD: $env:VPN_PASSWORD"
+        Write-Output "[DEBUG] VPN_FOLDER_PATH: $env:VPN_FOLDER_PATH"
+
+    # Step 5: Validate Environment Variables
     - name: Validate Environment Variables
       shell: pwsh
       run: |
@@ -72,8 +65,20 @@ jobs:
             Write-Output "[!] VPN_PASSWORD is missing."
             exit 1
         }
-        Write-Output "[✓] All required environment variables are present."
+        if (-not $env:GOOGLE_CREDENTIALS_JSON) {
+            Write-Output "[!] GOOGLE_CREDENTIALS_JSON is missing."
+            exit 1
+        }
+        if (-not $env:GOOGLE_TOKEN_JSON) {
+            Write-Output "[!] GOOGLE_TOKEN_JSON is missing."
+            exit 1
+        }
+        if (-not $env:VPN_FOLDER_PATH) {
+            Write-Output "[!] VPN_FOLDER_PATH is missing."
+            exit 1
+        }
+        Write-Output "[✓] All required environment variables are validated."
 
-    # Step 9: Run CAPTCHA Solving Script
+    # Step 6: Run CAPTCHA Solving Script
     - name: Run CAPTCHA Solving Script
       run: python "Skip Tracing\\truppl_parser.py"
