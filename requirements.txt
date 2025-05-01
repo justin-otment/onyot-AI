@@ -28,7 +28,6 @@ typing_extensions==4.13.2           # Backports for typing in older Python versi
 uritemplate==4.1.1                  # URI templating
 urllib3==2.4.0                      # HTTP library with threading and SSL
 pyaml                               # For YAML parsing (not version-specific)
-logging                             # Logging utilities (included in Python’s standard library)
 python-dotenv                       # Load variables from .env files
 python3-disutils
 
