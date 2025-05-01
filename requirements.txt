@@ -1,32 +1,36 @@
-beautifulsoup4==4.13.4
-cachetools==5.5.2
-certifi==2025.1.31
-charset-normalizer==3.4.1
-google-api-core==2.24.2
-google-api-python-client==2.167.0
-google-auth==2.39.0
-google-auth-httplib2==0.2.0
-google-auth-oauthlib==1.2.1
-googleapis-common-protos==1.70.0
-greenlet==3.2.0
-httplib2==0.22.0
-idna==3.10
-oauthlib==3.2.2
-playwright==1.51.0
-playwright-stealth==1.0.6
-proto-plus==1.26.1
-protobuf==6.30.2
-pyasn1==0.6.1
-pyasn1_modules==0.4.2
-pyee==12.1.1
-pyparsing==3.2.3
-requests==2.32.3
-requests-oauthlib==2.0.0
-rsa==4.9.1
-soupsieve==2.6
-typing_extensions==4.13.2
-uritemplate==4.1.1
-urllib3==2.4.0
-pyaml
-logging
-python-dotenv
+beautifulsoup4==4.13.4              # For HTML parsing
+cachetools==5.5.2                   # Utility functions for caching
+certifi==2025.1.31                  # Ensures SSL certificates are valid
+charset-normalizer==3.4.1           # Encodes and normalizes characters
+google-api-core==2.24.2             # Google API helper functions
+google-api-python-client==2.167.0   # Google Sheets API interaction
+google-auth==2.39.0                 # Authentication for Google APIs
+google-auth-httplib2==0.2.0         # HTTP transport for Google APIs
+google-auth-oauthlib==1.2.1         # OAuth2 flow for Google APIs
+googleapis-common-protos==1.70.0    # Common protobuf definitions for APIs
+greenlet==3.2.0                     # Lightweight threads used by async libraries
+httplib2==0.22.0                    # HTTP client used by Google APIs
+idna==3.10                          # Internationalized domain names support
+oauthlib==3.2.2                     # OAuth implementation
+playwright==1.51.0                  # Browser automation
+playwright-stealth==1.0.6           # Stealth features for Playwright
+proto-plus==1.26.1                  # Protobuf helpers
+protobuf==6.30.2                    # Protocol buffers (serialization)
+pyasn1==0.6.1                       # ASN.1 implementation used in RSA
+pyasn1_modules==0.4.2               # ASN.1 modules for cryptography
+pyee==12.1.1                        # EventEmitter for async applications
+pyparsing==3.2.3                    # Parsing and formatting strings
+requests==2.32.3                    # HTTP requests
+requests-oauthlib==2.0.0            # OAuth2 for HTTP requests
+rsa==4.9.1                          # RSA cryptography used in Google APIs
+soupsieve==2.6                      # CSS selectors for BeautifulSoup
+typing_extensions==4.13.2           # Backports for typing in older Python versions
+uritemplate==4.1.1                  # URI templating
+urllib3==2.4.0                      # HTTP library with threading and SSL
+pyaml                               # For YAML parsing (not version-specific)
+logging                             # Logging utilities (included in Python’s standard library)
+python-dotenv                       # Load variables from .env files
+
+# Custom modules (no need to list):
+# - captcha
+# - nordvpn
