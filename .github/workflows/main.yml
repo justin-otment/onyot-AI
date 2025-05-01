@@ -24,13 +24,7 @@ jobs:
 
     # Step 3: Install Playwright Dependencies
     - name: Install Playwright Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          libgtk-4-1 libgraphene-1.0-0 libwoff1 libvpx-dev libavif-dev \
-          libevent-2.1-7 libopus0 libgstreamer-plugins-base1.0-dev libflite1 \
-          libharfbuzz-dev libsecret-1-dev libhyphen0 libmanette-0.2-0 \
-          libgles2-mesa-dev libx264-dev
+      run: sudo playwright install-deps
 
     # Step 4: Set up Python
     - name: Set up Python
@@ -48,7 +42,7 @@ jobs:
     - name: Install Playwright Browsers
       run: playwright install
 
-    # Step 7: Set environment variables for the script
+    # Step 7: Set Environment Variables
     - name: Set Environment Variables
       env:
         GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
@@ -57,7 +51,7 @@ jobs:
         VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
         VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
         VPN_FOLDER_PATH: ${{ secrets.VPN_FOLDER_PATH }}
-      run: echo "Environment variables set."
+      run: echo "Environment variables have been set successfully."
 
     # Step 8: Run Truppl Parser Script
     - name: Run Truppl Parser Script
