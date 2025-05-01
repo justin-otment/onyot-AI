@@ -3,6 +3,7 @@ import time
 import logging
 import asyncio
 import os
+import dotenv
 
 # === CAPTCHA Configuration ===
 CAPTCHA_CONFIG = {
