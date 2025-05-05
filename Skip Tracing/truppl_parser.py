@@ -48,6 +48,15 @@ else:
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
+# === Config ===
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CREDENTIALS_PATH = os.path.join(BASE_DIR, "google_credentials.json")
+TOKEN_PATH = os.path.join(BASE_DIR, "google_token.json")
+SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
+SHEET_NAME = "CAPE CORAL FINAL"
+SHEET_NAME_2 = "For REI Upload"
+MAX_RETRIES = 1
+
 def authenticate_google_sheets():
     creds = None
     if os.path.exists(TOKEN_PATH):
@@ -66,8 +75,7 @@ def authenticate_google_sheets():
 
     return build('sheets', 'v4', credentials=creds)
 
-# Then call it:
-sheets_service = authenticate_google_sheets()
+sheets_service = authenticate_google_sheets(TOKEN_PATH, CREDENTIALS_PATH)
 
 # Replace with your Google Sheets integration
 def get_sheet_data(sheet_id, range_name):
