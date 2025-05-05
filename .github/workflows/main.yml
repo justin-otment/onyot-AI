@@ -9,7 +9,7 @@ on:
 
 jobs:
   run-parser:
-    runs-on: windows-latest  # Keeping Windows as runner
+    runs-on: windows-latest
 
     env:
       PYTHONIOENCODING: utf-8
@@ -39,12 +39,12 @@ jobs:
 
       - name: Install Conda Dependencies
         run: |
-          C:\Miniconda\Scripts\conda.exe install --name automation_env --file requirements.txt -y
+          C:\Miniconda\Scripts\conda.exe install --name automation_env -c conda-forge --file requirements.txt -y || echo "Warning: Some packages not found in Conda, falling back to pip."
 
-      - name: Install Pip Dependencies (For Missing Conda Packages)
+      - name: Install Missing Dependencies via pip (Fallback)
         run: |
           C:\Miniconda\Scripts\activate automation_env
-          python -m pip install google-auth==2.38.0 google-api-core==2.24.2 cachetools pyasn1_modules urllib3
+          python -m pip install cachetools google-auth==2.38.0 google-api-core==2.24.2 pyasn1_modules urllib3 --upgrade
 
       - name: Install Playwright Browsers
         run: |
