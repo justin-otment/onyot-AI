@@ -22,36 +22,40 @@ import dotenv
 import os
 print("Current Working Directory:", os.getcwd())
 import logging
-
-load_dotenv()
-
-MAX_RETRIES = 5  # Maximum retry attempts for main function
-BACKOFF_FACTOR = 2  # Exponential backoff factor
-
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-creds = Credentials.from_authorized_user_file('C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/Skip Tracing/token.json', SCOPES)
-sheets_service = build('sheets', 'v4', credentials=creds)
-
+# === Set up logging ===
+logging.basicConfig(level=logging.INFO)
 sys.stdout.reconfigure(encoding='utf-8')
 
-# === Config ===
-# Environment variable-based file paths for credentials
-CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_B64")  # Base64-encoded credentials.json
-TOKEN_JSON = os.getenv("GOOGLE_TOKEN_B64")  # Base64-encoded token.json
-SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+# === Load environment variables ===
+load_dotenv()
 
-# Decode credentials and tokens in CI environment
+# === Config ===
+MAX_RETRIES = 5
+BACKOFF_FACTOR = 2
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
+
+
+
+# === Decode credentials ===
 def decode_credentials():
     """Decode credentials and tokens from environment variables."""
-    # Use plain JSON credentials and tokens directly from environment variables
-    if not os.getenv("GOOGLE_CREDENTIALS_JSON") or not os.getenv("GOOGLE_TOKEN_JSON"):
+    credentials_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
+    token_json = os.getenv("GOOGLE_TOKEN_JSON")
+
+    if not credentials_json or not token_json:
         raise ValueError("[!] Missing Google Sheets credentials in environment variables.")
 
-    # Load credentials and tokens directly as JSON
-    credentials = json.loads(os.getenv("GOOGLE_CREDENTIALS_JSON"))
-    token = json.loads(os.getenv("GOOGLE_TOKEN_JSON"))
-    return credentials, token
+    credentials = Credentials.from_authorized_user_info(json.loads(token_json), SCOPES)
+    return credentials
+
+try:
+    creds = decode_credentials()  # Get credentials from decoded secrets
+    sheets_service = build("sheets", "v4", credentials=creds)
+    logging.info("[✓] Google Sheets service initialized.")
+except Exception as e:
+    logging.error("[!] Failed to initialize Google Sheets API: %s", str(e))
+    raise
 
 
 def authenticate_google_sheets():
