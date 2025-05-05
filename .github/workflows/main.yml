@@ -1,7 +1,7 @@
 name: Run Skip Tracing Parser
 
 on:
-  workflow_dispatch:  # Allows manual runs from GitHub UI
+  workflow_dispatch:
   push:
     paths:
       - 'Skip Tracing/**'
@@ -9,12 +9,14 @@ on:
 
 jobs:
   run-parser:
-    runs-on: ubuntu-latest  # Use self-hosted if you plan to tunnel traffic via VPN
+    runs-on: ubuntu-latest  # Or 'self-hosted' if you're using a runner with VPN
 
     env:
       TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
       VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
       VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
+      GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+      GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
 
     steps:
       - name: Checkout code
