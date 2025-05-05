@@ -6,7 +6,7 @@ from nordvpn import handle_rate_limit  # Import rate-limit handling function
 import os
 from dotenv import load_dotenv
 
-load_dotenv()  # Load environment variables from .env file
+dotenv_path = "Skip Tracing/.env"
 
 # === CAPTCHA Configuration ===
 CAPTCHA_CONFIG = {
