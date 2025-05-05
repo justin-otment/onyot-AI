@@ -17,7 +17,6 @@ from nordvpn import handle_rate_limit
 from dotenv import load_dotenv
 from nordvpn import verify_vpn_connection  # VPN functionality from nordvpn.py
 from captcha import get_site_key, solve_turnstile_captcha, inject_token  # CAPTCHA functionalities from captcha.py
-import traceback
 from dotenv import load_dotenv
 import os
 print("Current Working Directory:", os.getcwd())
@@ -25,6 +24,9 @@ import logging
 logging.basicConfig(level=logging.DEBUG, filename="logfile.log", filemode="a",
                     format="%(asctime)s - %(levelname)s - %(message)s")
 logging.info("Script started")
+import traceback
+print("[!] Error launching or processing browser:")
+traceback.print_exc()
 
 # Load environment variables from .env file
 load_dotenv()
