@@ -4,7 +4,6 @@ import string
 import sys
 import random
 import time
-import json
 
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
@@ -18,73 +17,98 @@ from dotenv import load_dotenv
 from nordvpn import verify_vpn_connection  # VPN functionality from nordvpn.py
 from captcha import get_site_key, solve_turnstile_captcha, inject_token  # CAPTCHA functionalities from captcha.py
 import traceback
-import dotenv
+from dotenv import load_dotenv
 import os
 print("Current Working Directory:", os.getcwd())
 import logging
-# === Set up logging ===
-logging.basicConfig(level=logging.INFO)
-sys.stdout.reconfigure(encoding='utf-8')
+logging.basicConfig(level=logging.DEBUG, filename="logfile.log", filemode="a",
+                    format="%(asctime)s - %(levelname)s - %(message)s")
+logging.info("Script started")
 
-# === Load environment variables ===
 load_dotenv()
 
+MAX_RETRIES = 5  # Maximum retry attempts for main function
+BACKOFF_FACTOR = 2  # Exponential backoff factor
+
+vpn_username =   os.getenv("VPN_USERNAME")
+vpn_password = os.getenv("VPN_PASSWORD")
+
+if not vpn_username or not vpn_password:
+    print("[!] Failed to load VPN credentials!")
+else:
+    print("VPN Username:", vpn_username)
+    print("VPN Password: Loaded successfully")
+
+
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+creds = Credentials.from_authorized_user_file('C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/Skip Tracing/token.json', SCOPES)
+sheets_service = build('sheets', 'v4', credentials=creds)
+
+sys.stdout.reconfigure(encoding='utf-8')
+
 # === Config ===
-MAX_RETRIES = 5
-BACKOFF_FACTOR = 2
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+# Define file paths
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON")
+TOKEN_PATH = os.getenv("GOOGLE_TOKEN_JSON")
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
+SHEET_NAME = "CAPE CORAL FINAL"
+SHEET_NAME_2 = "For REI Upload"
+MAX_RETRIES = 1
 
-
-
-# === Decode credentials ===
-def decode_credentials():
-    """Decode credentials and tokens from environment variables."""
-    credentials_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
-    token_json = os.getenv("GOOGLE_TOKEN_JSON")
-
-    if not credentials_json or not token_json:
-        raise ValueError("[!] Missing Google Sheets credentials in environment variables.")
-
-    credentials = Credentials.from_authorized_user_info(json.loads(token_json), SCOPES)
-    return credentials
-
-try:
-    creds = decode_credentials()  # Get credentials from decoded secrets
-    sheets_service = build("sheets", "v4", credentials=creds)
-    logging.info("[✓] Google Sheets service initialized.")
-except Exception as e:
-    logging.error("[!] Failed to initialize Google Sheets API: %s", str(e))
-    raise
-
-
+# === Google Sheets Auth ===
 def authenticate_google_sheets():
     """Authenticate with Google Sheets API."""
     creds = None
 
-    # Decode credentials and tokens directly
-    credentials, token = decode_credentials()
+    if os.path.exists(TOKEN_PATH):
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
 
-    # Load credentials object from JSON token
-    creds = Credentials.from_authorized_user_info(token, SCOPES)
-
-    # Refresh the token if needed
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
                 print("[✓] Token refreshed successfully.")
+                with open(TOKEN_PATH, 'w') as token:
+                    token.write(creds.to_json())
             except Exception as e:
                 print(f"[!] Error refreshing token: {e}")
                 creds = None
 
         if not creds:
-            raise ValueError("[!] Failed to authenticate Google Sheets API credentials.")
+            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
+            creds = flow.run_local_server(port=0)
+            with open(TOKEN_PATH, 'w') as token:
+                token.write(creds.to_json())
+            print("[✓] New credentials obtained and saved.")
 
-    # Return authenticated Sheets API client
-    return build("sheets", "v4", credentials=creds)
+    return build('sheets', 'v4', credentials=creds)
+
+# Replace with your Google Sheets integration
+def get_sheet_data(sheet_id, range_name):
+    """
+    Fetches data from Google Sheets for a given range.
+    Returns list of (row_index, value) tuples for non-empty first-column values.
+    """
+    try:
+        service = authenticate_google_sheets()
+        result = service.spreadsheets().values().get(
+            spreadsheetId=sheet_id,
+            range=range_name
+        ).execute()
+        values = result.get("values", [])
+        base_row = int(re.search(r"(\d+):", range_name).group(1))
+
+        return [
+            (i + base_row, row[0])
+            for i, row in enumerate(values)
+            if row and len(row) > 0 and row[0].strip()
+        ]
+    except Exception as e:
+        logging.error(f"Error fetching data from Google Sheets range '{range_name}': {e}")
+        return []
     
-def append_to_google_sheet(first_name, last_name, phones, emails):
+def append_to_google_sheet(first_name, last_name, phones, emails, site):
     """
     Appends extracted data to the next available row in the 'For REI Upload' sheet.
     """
@@ -97,6 +121,10 @@ def append_to_google_sheet(first_name, last_name, phones, emails):
     ).execute().get("values", [[]])[0]
 
     row_data = [""] * len(header_row)
+
+    # Insert Site value
+    if "Site" in header_row:
+        row_data[header_row.index("Site")] = site
 
     # Insert First Name and Last Name
     if "First Name" in header_row:
@@ -284,6 +312,7 @@ async def fetch_truepeoplesearch_data(row_index, mailing_street, zip_code, brows
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             logging.info(f"[!] Navigating to the page and processing row {row_index} (Attempt {attempt}/{MAX_RETRIES}).")
+            
             await page.goto("https://www.truepeoplesearch.com", wait_until="networkidle", timeout=60000)
 
             # Check for rate limits and block messages
@@ -299,9 +328,17 @@ async def fetch_truepeoplesearch_data(row_index, mailing_street, zip_code, brows
 
             # Fill and submit the form
             await page.wait_for_selector('#id-d-n', state='visible', timeout=60000)
+            await page.click('#id-d-n')  # Focus on the input field
+            await page.press('#id-d-n', 'Control+A')  # Select all text
+            await page.press('#id-d-n', 'Delete')  # Delete selected text
             await page.fill('#id-d-n', mailing_street)
+
             await page.wait_for_selector('#id-d-loc-name', state='visible', timeout=60000)
+            await page.click('#id-d-loc-name')  # Focus on the input field
+            await page.press('#id-d-loc-name', 'Control+A')  # Select all text
+            await page.press('#id-d-loc-name', 'Delete')  # Delete selected text
             await page.fill('#id-d-loc-name', zip_code)
+
             await page.click('#btnSubmit-d-n')
             await page.wait_for_load_state("domcontentloaded", timeout=60000)
 
@@ -420,11 +457,12 @@ async def navigate_to_profile(page, matched_url):
             await new_tab.goto(matched_url, wait_until="networkidle", timeout=60000)
 
             # Check if rate-limited by inspecting the current URL
-            url = new_tab.url
-            if "ratelimited" in url:
+            page = new_tab.url
+            if "ratelimited" in page:
                 print("[!] Rate limit detected. Switching VPN server and retrying...")
-                await handle_rate_limit(page.context)  # Using the page's context for VPN handling
-                await new_tab.close()  # Ensure new tab is closed before retry
+                await handle_rate_limit(page)  # Fixed usage by passing `new_tab`
+                await new_tab.reload(wait_until="networkidle", timeout=60000)
+                await asyncio.sleep(3)  # Allow stabilization
                 continue
 
             # Check for specific keywords ("Death Record" or "Deceased")
@@ -435,7 +473,7 @@ async def navigate_to_profile(page, matched_url):
                 if "Death Record" in element_text or "Deceased" in element_text:
                     print("[!] Profile indicates 'Death Record' or 'Deceased'. Skipping...")
                     await new_tab.close()  # Close the tab before skipping
-                    continue  
+                    return None  
 
             # Human-like interactions
             await new_tab.wait_for_timeout(random.randint(3000, 5000))
@@ -486,7 +524,7 @@ async def navigate_to_profile(page, matched_url):
         
         except Exception as e:
             print(f"[!] Error during attempt {attempt} for {matched_url}: {e}")
-            await handle_rate_limit(page.context)  # Retry after VPN rotation
+            await handle_rate_limit(new_tab)  # Corrected to retry VPN on `new_tab`
             continue
 
     print(f"[!] Skipping {matched_url} due to persistent CAPTCHA or rate-limit issues.")
@@ -526,8 +564,8 @@ def extract_sitekey(response_body):
         return None
 
 async def main():
-    MAILING_STREETS_RANGE = "CAPE CORAL FINAL!P1685:P"
-    ZIPCODE_RANGE = "CAPE CORAL FINAL!Q1685:Q"
+    MAILING_STREETS_RANGE = "CAPE CORAL FINAL!P406:P"
+    ZIPCODE_RANGE = "CAPE CORAL FINAL!Q406:Q"
     SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
     
     BATCH_SIZE = 10  # Process entries in batches to avoid resource exhaustion
@@ -665,12 +703,20 @@ async def main():
                             first_name = name_parts[0] if name_parts else ""
                             last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
 
-                            # Append data to Google Sheet
+                            site_data = get_sheet_data(SHEET_ID, range_name=f"{SHEET_NAME}!B406:B")
+                            site_dict = {idx: value for idx, value in site_data}  # Convert to dictionary
+                            site_value = site_dict.get(row_index, None)  # Fetch site value for current row
+
+                            if site_value is None:
+                                logging.warning(f"[!] No Site value found for row {row_index}. Skipping.")
+                                continue
+
                             append_to_google_sheet(
-                                first_name=first_name,
-                                last_name=last_name,
+                                first_name=matched_name.split()[0],
+                                last_name=" ".join(matched_name.split()[1:]),
                                 phones=phone_data,
-                                emails=emails
+                                emails=emails,
+                                site=site_value  # Now includes "Site"
                             )
 
                     except Exception as e:
