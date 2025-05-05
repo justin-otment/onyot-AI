@@ -32,5 +32,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Install Playwright Browsers
+        run: playwright install --with-deps
+
       - name: Run Skip Tracing Parser
         run: python "Skip Tracing/truppl_parser.py"
