@@ -89,7 +89,7 @@ async def switch_vpn(config_file):
     :return: True if VPN switch succeeded, False otherwise.
     """
     openvpn_executable = r"C:\Program Files\OpenVPN\bin\openvpn.exe"
-    auth_file_path = "C:\\Users\\DELL\\Documents\\Onyot.ai\\Lead_List-Generator\\python tests\\externals\\VPNs\\auth.txt"
+    auth_file_path = "externals/VPNs/auth.txt"
 
     terminate_existing_vpn()  # Terminate any existing VPN processes
     create_auth_file(auth_file_path)  # Create auth.txt file with credentials
