@@ -41,46 +41,30 @@ else:
 
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-sheets_service = build('sheets', 'v4', credentials=creds)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CREDENTIALS_PATH = os.path.join(BASE_DIR, "google_credentials.json")
+TOKEN_PATH = os.path.join(BASE_DIR, "google_token.json")
 
-sys.stdout.reconfigure(encoding='utf-8')
-
-# === Config ===
-# Define file paths
-CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON")
-TOKEN_PATH = os.getenv("GOOGLE_TOKEN_JSON")
-SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
-SHEET_NAME = "CAPE CORAL FINAL"
-SHEET_NAME_2 = "For REI Upload"
-MAX_RETRIES = 1
-
-# === Google Sheets Auth ===
 def authenticate_google_sheets():
-    """Authenticate with Google Sheets API."""
     creds = None
-
     if os.path.exists(TOKEN_PATH):
         creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            try:
-                creds.refresh(Request())
-                print("[✓] Token refreshed successfully.")
-                with open(TOKEN_PATH, 'w') as token:
-                    token.write(creds.to_json())
-            except Exception as e:
-                print(f"[!] Error refreshing token: {e}")
-                creds = None
-
-        if not creds:
+            creds.refresh(Request())
+            with open(TOKEN_PATH, 'w') as token:
+                token.write(creds.to_json())
+        else:
             flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
             creds = flow.run_local_server(port=0)
             with open(TOKEN_PATH, 'w') as token:
                 token.write(creds.to_json())
-            print("[✓] New credentials obtained and saved.")
 
     return build('sheets', 'v4', credentials=creds)
+
+# Then call it:
+sheets_service = authenticate_google_sheets()
 
 # Replace with your Google Sheets integration
 def get_sheet_data(sheet_id, range_name):
