@@ -17,7 +17,7 @@ if not VPN_USERNAME or not VPN_PASSWORD:
     exit(1)
 
 # VPN folder path containing .ovpn files
-vpn_folder_path = "C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/externals/VPNs"
+vpn_folder_path = "externals/VPNs"
 
 def list_vpn_configs(folder_path):
     """
