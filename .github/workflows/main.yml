@@ -9,7 +9,7 @@ on:
 
 jobs:
   run-parser:
-    runs-on: ubuntu-latest  # Or 'self-hosted' if you're using a runner with VPN
+    runs-on: windows-latest  # Change to Windows runner
 
     env:
       TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
@@ -29,8 +29,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Decode Base64 Google credentials
+        run: |
+          echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" | base64 --decode > google_credentials.json
+          echo "${{ secrets.GOOGLE_TOKEN_JSON }}" | base64 --decode > google_token.json
 
       - name: Run Skip Tracing Parser
         run: python "Skip Tracing/truppl_parser.py"
