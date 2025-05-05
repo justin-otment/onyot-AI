@@ -28,9 +28,12 @@ jobs:
           Invoke-WebRequest -Uri "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe" -OutFile "Miniconda.exe"
           Start-Process -FilePath "Miniconda.exe" -ArgumentList "/S /D=C:\Miniconda" -Wait
 
+      - name: Update Conda Before Installing Dependencies
+        run: |
+          C:\Miniconda\Scripts\conda.exe update -n base -c defaults conda -y
+
       - name: Set Up Conda Python 3.11
         run: |
-          C:\Miniconda\Scripts\conda.exe init powershell
           C:\Miniconda\Scripts\conda.exe create --name automation_env python=3.11 -y
           C:\Miniconda\Scripts\activate automation_env
 
