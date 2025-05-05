@@ -52,10 +52,10 @@ jobs:
 
       - name: Verify package.json exists
         run: |
-          if not exist package.json (
+          if (!(Test-Path "package.json")) {
             echo "package.json not found! Initializing..."
             npm init -y
-          )
+          }
 
       - name: Install Node.js Dependencies
         run: |
