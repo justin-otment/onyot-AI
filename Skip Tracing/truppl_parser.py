@@ -42,8 +42,8 @@ else:
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CREDENTIALS_PATH = os.path.join(BASE_DIR, "google_credentials.json")
-TOKEN_PATH = os.path.join(BASE_DIR, "google_token.json")
+CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON")
+TOKEN_PATH = os.getenv("GOOGLE_TOKEN_JSON")
 
 def authenticate_google_sheets():
     creds = None
