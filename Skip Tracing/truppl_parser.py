@@ -25,18 +25,19 @@ logging.basicConfig(level=logging.DEBUG, filename="logfile.log", filemode="a",
                     format="%(asctime)s - %(levelname)s - %(message)s")
 logging.info("Script started")
 
+# Load environment variables from .env file
 load_dotenv()
 
+# Retrieve credentials and token from environment variables
 google_credentials = os.getenv("GOOGLE_CREDENTIALS_JSON")
 google_token = os.getenv("GOOGLE_TOKEN_JSON")
 
+# Verify that credentials and token are available
 print(f"GOOGLE_CREDENTIALS_JSON Exists: {bool(google_credentials)}")
 print(f"GOOGLE_TOKEN_JSON Exists: {bool(google_token)}")
 
-MAX_RETRIES = 5  # Maximum retry attempts for main function
-BACKOFF_FACTOR = 2  # Exponential backoff factor
-
-vpn_username =   os.getenv("VPN_USERNAME")
+# VPN credentials
+vpn_username = os.getenv("VPN_USERNAME")
 vpn_password = os.getenv("VPN_PASSWORD")
 
 if not vpn_username or not vpn_password:
@@ -45,34 +46,42 @@ else:
     print("VPN Username:", vpn_username)
     print("VPN Password: Loaded successfully")
 
-
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 # === Config ===
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CREDENTIALS_PATH = os.path.join(BASE_DIR, "google_credentials.json")
-TOKEN_PATH = os.path.join(BASE_DIR, "google_token.json")
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "CAPE CORAL FINAL"
 SHEET_NAME_2 = "For REI Upload"
 MAX_RETRIES = 1
 
 def authenticate_google_sheets():
+    """Authenticate and return Google Sheets service using credentials from environment variables."""
     creds = None
-    if os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
 
-    if not creds or not creds.valid:
+    # If the credentials are available from environment variables
+    if google_credentials and google_token:
+        credentials_dict = json.loads(google_credentials)
+        token_dict = json.loads(google_token)
+
+        # Create the credentials object from the loaded JSON
+        creds = Credentials.from_authorized_user_info(info=credentials_dict)
+
+        # Check if the token is valid; if expired, refresh it
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
-            with open(TOKEN_PATH, 'w') as token:
-                token.write(creds.to_json())
+            print("[✓] Token refreshed successfully.")
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
+            print("[!] Token expired or invalid, need to reauthenticate.")
+            flow = InstalledAppFlow.from_client_secrets_file(google_credentials, SCOPES)
             creds = flow.run_local_server(port=0)
-            with open(TOKEN_PATH, 'w') as token:
-                token.write(creds.to_json())
+            # Save refreshed credentials to the environment or somewhere if needed (optional)
 
+    if creds:
+        print("[✓] Google Sheets API authentication successful.")
+    else:
+        print("[!] Failed to authenticate with Google Sheets.")
+
+    # Return the Google Sheets API service
     return build('sheets', 'v4', credentials=creds)
 
 # Replace with your Google Sheets integration
