@@ -525,8 +525,6 @@ async def clear_browser_cookies(page):
     except Exception as e:
         print(f"[!] Error clearing browser session: {e}")
 
-import re
-
 def extract_sitekey(response_body):
     """
     Extracts the CAPTCHA sitekey from the network response body.
@@ -548,8 +546,8 @@ def extract_sitekey(response_body):
         return None
 
 async def main():
-    MAILING_STREETS_RANGE = "CAPE CORAL FINAL!P406:P"
-    ZIPCODE_RANGE = "CAPE CORAL FINAL!Q406:Q"
+    MAILING_STREETS_RANGE = "CAPE CORAL FINAL!P571:P"
+    ZIPCODE_RANGE = "CAPE CORAL FINAL!Q571:Q"
     SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
     
     BATCH_SIZE = 10  # Process entries in batches to avoid resource exhaustion
@@ -687,7 +685,7 @@ async def main():
                             first_name = name_parts[0] if name_parts else ""
                             last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
 
-                            site_data = get_sheet_data(SHEET_ID, range_name=f"{SHEET_NAME}!B406:B")
+                            site_data = get_sheet_data(SHEET_ID, range_name=f"{SHEET_NAME}!B571:B")
                             site_dict = {idx: value for idx, value in site_data}  # Convert to dictionary
                             site_value = site_dict.get(row_index, None)  # Fetch site value for current row
 
