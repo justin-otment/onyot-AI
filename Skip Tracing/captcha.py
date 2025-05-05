@@ -2,48 +2,83 @@ import requests
 import time
 import logging
 import asyncio
+from nordvpn import handle_rate_limit  # Import rate-limit handling function
 import os
-import dotenv
+from dotenv import load_dotenv
 
-# === Load Environment Variables ===
-dotenv.load_dotenv()  # Loads variables from a .env file if present
+load_dotenv()  # Load environment variables from .env file
 
 # === CAPTCHA Configuration ===
 CAPTCHA_CONFIG = {
-    "max_retries": 5,
+    "max_retries": 3,
     "wait_time_ms": 7000,  # Delay between retries in milliseconds
     "poll_interval_seconds": 5,  # Interval to poll for CAPTCHA solution
     "captcha_timeout_seconds": 75,  # Maximum waiting time for CAPTCHA solving
 }
 
-# === 2Captcha API Configuration ===
-CAPTCHA_API_URL = "https://2captcha.com"  # 2Captcha API Base URL
-TWO_CAPTCHA_API_KEY = os.getenv("TWO_CAPTCHA_API_KEY")  # API key from environment variables
+# API Key and URL for 2Captcha
+API_KEY = os.getenv("TWO_CAPTCHA_API_KEY")  # Replace with actual 2Captcha API key
+CAPTCHA_API_URL = "http://2captcha.com"
 
-# === Validate API Key ===
-if not TWO_CAPTCHA_API_KEY:
-    logging.error("[!] TWO_CAPTCHA_API_KEY is missing! Ensure it's set in your environment variables.")
-    raise ValueError("[!] TWO_CAPTCHA_API_KEY is missing.")
-else:
-    logging.info("[✓] TWO_CAPTCHA_API_KEY loaded successfully.")
-
-# === Logging Configuration ===
+# Logging configuration
 LOGGING_FORMAT = "[%(asctime)s] %(levelname)s: %(message)s"
 logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
 
+# === Error Handling ===
+async def handle_error(exception, attempt):
+    logging.warning(f"[!] Error during sitekey fetch attempt {attempt + 1}: {exception}")
+    await asyncio.sleep(2)  # Retry delay
 
-# === Utility: Solves CAPTCHA via 2Captcha API ===
+# === CAPTCHA Sitekey Extraction ===
+async def get_site_key(page):
+    logging.info("[*] Searching for CAPTCHA sitekey...")
+
+    for attempt in range(CAPTCHA_CONFIG["max_retries"]):
+        try:
+            await page.wait_for_load_state("networkidle")
+            logging.info(f"[*] Attempt {attempt + 1}: Searching for CAPTCHA sitekey...")
+
+            # Ensure a potential sitekey element is present
+            await page.wait_for_selector('[data-sitekey]', timeout=60000)
+
+            sitekey = await page.evaluate("""() => {
+                const selectors = [
+                    '[data-sitekey]', 'input[name="sitekey"]', '.captcha-sitekey',
+                    'div.h-captcha[data-sitekey]', '#captcha-container[data-sitekey]', '.dynamic-captcha[data-sitekey]'
+                ];
+                
+                for (const selector of selectors) {
+                    const element = document.querySelector(selector);
+                    if (element) {
+                        return element.getAttribute('data-sitekey') || element.value;
+                    }
+                }
+                return null;
+            }""")
+
+            if sitekey:
+                logging.info(f"[✓] Sitekey found: {sitekey}")
+                return sitekey
+
+            logging.warning(f"[!] Sitekey not found on attempt {attempt + 1}. Retrying...")
+            await asyncio.sleep(2)  # Shorter delay
+
+        except Exception as e:
+            await handle_error(e, attempt)
+
+    logging.error("[✗] Sitekey extraction failed after maximum retries.")
+    
+    # Call handle_rate_limit function from nordvpn.py
+    logging.info("[*] Triggering rate-limit handling...")
+    await handle_rate_limit(page)
+
+    return None
+
+# === Solve CAPTCHA via 2Captcha API ===
 def solve_turnstile_captcha(sitekey, url):
-    """
-    Sends CAPTCHA solving request to 2Captcha API.
-    :param sitekey: The CAPTCHA sitekey extracted from the page.
-    :param url: The page URL where the CAPTCHA is located.
-    :return: The solved CAPTCHA token or None if solving fails.
-    """
     try:
-        # Send CAPTCHA solving request
         response = requests.post(f"{CAPTCHA_API_URL}/in.php", data={
-            "key": TWO_CAPTCHA_API_KEY,
+            "key": API_KEY,
             "method": "turnstile",
             "sitekey": sitekey,
             "pageurl": url,
@@ -59,16 +94,10 @@ def solve_turnstile_captcha(sitekey, url):
         captcha_id = request_data["request"]
         logging.info(f"[✓] CAPTCHA solving request sent. ID: {captcha_id}. Waiting for solution...")
 
-        # Poll for CAPTCHA solution
         start_time = time.time()
         while time.time() - start_time < CAPTCHA_CONFIG["captcha_timeout_seconds"]:
             time.sleep(CAPTCHA_CONFIG["poll_interval_seconds"])
-            solved_response = requests.get(f"{CAPTCHA_API_URL}/res.php", params={
-                "key": TWO_CAPTCHA_API_KEY,
-                "action": "get",
-                "id": captcha_id,
-                "json": 1
-            })
+            solved_response = requests.get(f"{CAPTCHA_API_URL}/res.php?key={API_KEY}&action=get&id={captcha_id}&json=1")
             solved_response.raise_for_status()
 
             solved_data = solved_response.json()
@@ -82,57 +111,12 @@ def solve_turnstile_captcha(sitekey, url):
     except requests.exceptions.RequestException as e:
         logging.error(f"[!] Network or HTTP error during CAPTCHA solving: {e}")
         return None
+    except ValueError as e:
+        logging.error(f"[!] JSON decoding error during CAPTCHA solving: {e}")
+        return None
 
-
-# === Utility: Extracts CAPTCHA Sitekey ===
-async def get_site_key(page):
-    logging.info("[*] Searching for CAPTCHA sitekey...")
-    for attempt in range(CAPTCHA_CONFIG["max_retries"]):
-        try:
-            await page.wait_for_load_state("networkidle")
-            logging.info(f"[*] Attempt {attempt + 1}: Searching for CAPTCHA sitekey...")
-            
-            # Adjust selectors for retries
-            sitekey = await page.evaluate("""() => {
-                let selectors = [
-                    document.querySelector('[data-sitekey]'),
-                    document.querySelector('input[name="sitekey"]'),
-                    document.querySelector('.captcha-sitekey'),
-                    document.querySelector('div.h-captcha[data-sitekey]'),
-                    document.querySelector('#captcha-container[data-sitekey]'),
-                    document.querySelector('.dynamic-captcha[data-sitekey]')
-                ];
-                for (let selector of selectors) {
-                    if (selector) {
-                        return selector.getAttribute('data-sitekey') || selector.value;
-                    }
-                }
-                return null;
-            }""")
-            
-            if sitekey:
-                logging.info(f"[✓] Sitekey found: {sitekey}")
-                return sitekey
-            else:
-                logging.warning(f"[!] Sitekey not found on attempt {attempt + 1}. Retrying...")
-                await asyncio.sleep(3)  # Retry delay for dynamic loading
-        except Exception as e:
-            logging.warning(f"[!] Error during sitekey fetch attempt {attempt + 1}: {e}")
-            await asyncio.sleep(3)
-
-    logging.error("[✗] Sitekey extraction failed after maximum retries.")
-    return None
-
-
-# === Utility: Inject CAPTCHA Token ===
+# === Inject CAPTCHA Token ===
 async def inject_token(page, captcha_token, url):
-    """
-    Injects the CAPTCHA token into the page and submits the form for validation.
-    :param page: Playwright page object.
-    :param captcha_token: The solved CAPTCHA token.
-    :param url: The page URL for navigation after injection.
-    :return: True if the injection and navigation succeed, False otherwise.
-    """
     try:
         logging.info("[✓] Attempting CAPTCHA token injection.")
         response = await page.evaluate("""(token) => {
@@ -165,6 +149,7 @@ async def inject_token(page, captcha_token, url):
         logging.info(f"[✓] CAPTCHA solved! Navigating back to URL: {url}")
         await page.goto(url, wait_until="networkidle", timeout=60000)
         return True
+
     except Exception as e:
         logging.error(f"[!] Error injecting CAPTCHA token: {e}")
         return False
