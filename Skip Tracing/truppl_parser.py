@@ -27,6 +27,12 @@ logging.info("Script started")
 
 load_dotenv()
 
+google_credentials = os.getenv("GOOGLE_CREDENTIALS_JSON")
+google_token = os.getenv("GOOGLE_TOKEN_JSON")
+
+print(f"GOOGLE_CREDENTIALS_JSON Exists: {bool(google_credentials)}")
+print(f"GOOGLE_TOKEN_JSON Exists: {bool(google_token)}")
+
 MAX_RETRIES = 5  # Maximum retry attempts for main function
 BACKOFF_FACTOR = 2  # Exponential backoff factor
 
@@ -41,9 +47,6 @@ else:
 
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-creds = os.getenv("GOOGLE_CREDENTIALS_JSON")
-token = os.getenv("GOOGLE_TOKEN_JSON")
 
 def authenticate_google_sheets():
     creds = None
