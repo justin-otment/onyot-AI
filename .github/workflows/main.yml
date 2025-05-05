@@ -9,7 +9,7 @@ on:
 
 jobs:
   run-parser:
-    runs-on: windows-latest  # Change to Windows runner
+    runs-on: windows-latest  # You can change this to 'ubuntu-latest' if preferred
 
     env:
       TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
@@ -32,10 +32,25 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Decode Base64 Google credentials
+      - name: Decode Base64 Google credentials using Python
         run: |
-          echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" | base64 --decode > google_credentials.json
-          echo "${{ secrets.GOOGLE_TOKEN_JSON }}" | base64 --decode > google_token.json
+          python -c "
+import base64
+import os
+
+# Decode the Base64 secrets and save them as JSON files
+google_credentials = os.getenv('GOOGLE_CREDENTIALS_JSON')
+google_token = os.getenv('GOOGLE_TOKEN_JSON')
+
+if not google_credentials or not google_token:
+    raise ValueError('Google credentials or token are missing.')
+
+# Decode and write to files
+with open('google_credentials.json', 'wb') as f:
+    f.write(base64.b64decode(google_credentials))
+with open('google_token.json', 'wb') as f:
+    f.write(base64.b64decode(google_token))
+          "
 
       - name: Run Skip Tracing Parser
         run: python "Skip Tracing/truppl_parser.py"
