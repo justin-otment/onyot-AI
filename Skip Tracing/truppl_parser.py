@@ -545,170 +545,156 @@ def extract_sitekey(response_body):
         logging.error(f"[!] Error extracting sitekey: {e}")
         return None
 
+
+# === Logging Setup ===
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+
+# === Environment Variable Check ===
+required_envs = [
+    "TWO_CAPTCHA_API_KEY", "GOOGLE_CREDENTIALS_JSON", "GOOGLE_TOKEN_JSON",
+    "VPN_USERNAME", "VPN_PASSWORD"
+]
+
+for var in required_envs:
+    if not os.getenv(var):
+        logging.error(f"Missing required environment variable: {var}")
+        sys.exit(1)
+
+# === Constants ===
+SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
+SHEET_NAME = "CAPE CORAL FINAL!"
+MAILING_STREETS_RANGE = f"{SHEET_NAME}P571:P"
+ZIPCODE_RANGE = f"{SHEET_NAME}Q571:Q"
+BATCH_SIZE = 10
+MAX_CAPTCHA_RETRIES = 3
+
+# === Main Function ===
 async def main():
-    MAILING_STREETS_RANGE = "CAPE CORAL FINAL!P571:P"
-    ZIPCODE_RANGE = "CAPE CORAL FINAL!Q571:Q"
-    SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
-    
-    BATCH_SIZE = 10  # Process entries in batches to avoid resource exhaustion
-    MAX_CAPTCHA_RETRIES = 3  # Retry limit for CAPTCHA-solving attempts
-    
     mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE)
     zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE)
 
     if not mailing_streets or not zip_codes:
-        print("[!] Missing data in one or both ranges. Skipping processing...")
+        logging.error("[!] Missing data in one or both ranges. Skipping processing...")
         return
 
-    mailing_streets = [(row_index, value) for row_index, value in mailing_streets if value.strip()]
-    zip_codes = [(row_index, value) for row_index, value in zip_codes if value.strip()]
+    mailing_streets = [(i, val) for i, val in mailing_streets if val.strip()]
+    zip_codes = [(i, val) for i, val in zip_codes if val.strip()]
 
-    street_dict = {row_index: value for row_index, value in mailing_streets}
-    zip_dict = {row_index: value for row_index, value in zip_codes}
+    street_dict = {i: val for i, val in mailing_streets}
+    zip_dict = {i: val for i, val in zip_codes}
 
-    valid_entries = [
-        (index, street_dict[index], zip_dict[index])
-        for index in street_dict.keys() & zip_dict.keys()
-    ]
+    valid_entries = [(i, street_dict[i], zip_dict[i]) for i in street_dict.keys() & zip_dict.keys()]
 
     if not valid_entries:
-        print("[!] No valid entries to process. Exiting...")
+        logging.warning("[!] No valid entries to process. Exiting...")
         return
 
     async with async_playwright() as p:
-        browser = None
-        context = None  # Initialize context for cleanup
+        browser = context = None
         try:
-            # Launch the browser
-            browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
+            browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"])
             context = await browser.new_context(user_agent=random.choice(user_agents))
-            await context.add_init_script(stealth_js)  # Add stealth script for anti-bot measures
-            
-            # === Define and Activate Network Interception ===
+            await context.add_init_script(stealth_js)
+
             async def intercept_sitekey(route):
                 try:
                     url = route.request.url
-                    # Filter irrelevant resource types
                     if url.endswith(('.css', '.js', '.png', '.jpg', '.woff', '.woff2', '.svg')):
-                        await route.continue_()  # Allow these requests to proceed
+                        await route.continue_()
                         return
 
-                    logging.debug(f"[DEBUG] Intercepting route: {url}")
                     response = await route.continue_()
-
-                    # Validate response existence
                     if response and hasattr(response, "body"):
-                        response_body = response.body.decode() if response.body else None
-                        if response_body:
-                            logging.debug(f"[DEBUG] Intercepted response body: {response_body[:500]}")  # Log snippet
-                            sitekey = extract_sitekey(response_body)  # Use helper to extract sitekey
+                        body = response.body.decode() if response.body else None
+                        if body:
+                            sitekey = extract_sitekey(body)
                             if sitekey:
                                 logging.info(f"[✓] Extracted sitekey: {sitekey}")
-                    else:
-                        logging.warning(f"[!] No response body for route: {url}")
                 except Exception as e:
                     logging.error(f"[!] Error intercepting route: {e}")
-                    await route.continue_()  # Continue request on error
+                    await route.continue_()
 
-            await context.route("**/*", intercept_sitekey)  # Route all network requests
-
-            # Open a new page
+            await context.route("**/*", intercept_sitekey)
             page = await context.new_page()
             await stealth_async(page)
 
-            # === Process Entries in Batches ===
             for batch_start in range(0, len(valid_entries), BATCH_SIZE):
                 batch = valid_entries[batch_start:batch_start + BATCH_SIZE]
-                print(f"[→] Processing batch {batch_start // BATCH_SIZE + 1} with {len(batch)} entries...")
+                logging.info(f"[→] Processing batch {batch_start // BATCH_SIZE + 1} with {len(batch)} entries...")
+
                 for row_index, mailing_street, zip_code in batch:
-                    print(f"\n[→] Processing Row {row_index}: Mailing Street '{mailing_street}', ZIP '{zip_code}'")
+                    logging.info(f"[→] Row {row_index}: {mailing_street}, ZIP {zip_code}")
                     try:
-                        # Retry CAPTCHA solving if needed
-                        captcha_retries = 0
+                        retries = 0
                         html_content = None
-                        while captcha_retries < MAX_CAPTCHA_RETRIES:
+                        while retries < MAX_CAPTCHA_RETRIES:
                             html_content = await fetch_truepeoplesearch_data(
                                 row_index, mailing_street, zip_code, browser, context, page
                             )
                             if html_content:
                                 break
-                            captcha_retries += 1
-                            print(f"[!] Retrying CAPTCHA solving for row {row_index} ({captcha_retries}/{MAX_CAPTCHA_RETRIES})...")
-                        
+                            retries += 1
+                            logging.warning(f"[!] Retrying CAPTCHA for row {row_index} ({retries}/{MAX_CAPTCHA_RETRIES})")
+
                         if not html_content:
-                            print("[!] Skipping row due to repeated CAPTCHA failures.")
+                            logging.error(f"[!] Skipping row {row_index} due to CAPTCHA failures.")
                             continue
 
-                        # Extract links
-                        extracted_links = extract_links(html_content)
-
-                        # Check and log extracted links
-                        if extracted_links:
-                            print(f"[DEBUG] Extracted {len(extracted_links)} links:")
-                            for entry in extracted_links:
-                                print(f"    - {entry['text']}")
-                        else:
-                            print("[DEBUG] Extracted 0 links:")
-                            print("[DEBUG] Extracted 0 links:")
-                            
-                            # Trigger rate limit handling if no links are extracted
+                        links = extract_links(html_content)
+                        if not links:
+                            logging.warning("[!] No links extracted. Handling rate limit...")
                             await handle_rate_limit(page)
-                            continue  # Proceed to the next iteration if applicable
+                            continue
 
                         ref_names = extract_reference_names(SHEET_ID, row_index)
-                        matched_results = match_entries(extracted_links, ref_names)
-
-                        if not matched_results:
-                            print(f"[!] No match found in row {row_index}. Skipping second batch extraction.")
+                        matched = match_entries(links, ref_names)
+                        if not matched:
+                            logging.warning(f"[!] No match found for row {row_index}")
                             continue
 
-                        # Navigate to matched profiles and parse information
-                        for matched_entry in matched_results:
-                            matched_url = matched_entry["link"]
-                            matched_name = matched_entry["text"]
-                            print(f"[→] Navigating to matched profile: {matched_url}")
-
-                            matched_html = await navigate_to_profile(page, matched_url)
-                            if not matched_html:
-                                print(f"[!] CAPTCHA blocked access to: {matched_url}")
+                        for entry in matched:
+                            url = entry["link"]
+                            name = entry["text"]
+                            logging.info(f"[→] Navigating to profile: {url}")
+                            profile_html = await navigate_to_profile(page, url)
+                            if not profile_html:
+                                logging.warning(f"[!] CAPTCHA blocked profile at: {url}")
                                 continue
 
-                            phone_numbers, phone_types, emails = parse_contact_info(matched_html)
-                            phone_data = list(zip(phone_numbers, phone_types))
-
-                            if not phone_numbers or not phone_types:
-                                print(f"[!] Skipping row {row_index}: No phone data found.")
+                            phones, types, emails = parse_contact_info(profile_html)
+                            if not phones or not types:
+                                logging.warning(f"[!] No phone data for row {row_index}")
                                 continue
 
-                            # Extract name parts
-                            name_parts = matched_name.strip().split()
-                            first_name = name_parts[0] if name_parts else ""
-                            last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
+                            first_name, *rest = name.strip().split()
+                            last_name = " ".join(rest)
 
-                            site_data = get_sheet_data(SHEET_ID, range_name=f"{SHEET_NAME}!B571:B")
-                            site_dict = {idx: value for idx, value in site_data}  # Convert to dictionary
-                            site_value = site_dict.get(row_index, None)  # Fetch site value for current row
-
-                            if site_value is None:
-                                logging.warning(f"[!] No Site value found for row {row_index}. Skipping.")
+                            site_range = f"{SHEET_NAME}B{row_index}:B{row_index}"
+                            site_data = get_sheet_data(SHEET_ID, site_range)
+                            site = site_data[0][1] if site_data else None
+                            if not site:
+                                logging.warning(f"[!] No Site value for row {row_index}")
                                 continue
 
                             append_to_google_sheet(
-                                first_name=matched_name.split()[0],
-                                last_name=" ".join(matched_name.split()[1:]),
-                                phones=phone_data,
+                                first_name=first_name,
+                                last_name=last_name,
+                                phones=list(zip(phones, types)),
                                 emails=emails,
-                                site=site_value  # Now includes "Site"
+                                site=site
                             )
 
                     except Exception as e:
-                        print(f"[!] Error processing row {row_index}: {e}")
-                        continue
+                        logging.error(f"[!] Exception on row {row_index}: {e}")
 
         except Exception as e:
-            print(f"[!] Error launching or processing browser: {e}")
+            logging.critical(f"[!] Failed during browser setup or global execution: {e}")
+
         finally:
-            # Cleanup browser and context
             if context:
                 await context.close()
             if browser:
