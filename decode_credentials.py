@@ -3,6 +3,10 @@ import os
 
 def decode_base64_to_file(encoded_string, output_file):
     """Decodes a Base64 encoded string and writes it to a file."""
+    # Ensure proper padding for Base64 strings
+    padding = '=' * (4 - len(encoded_string) % 4)  # Add padding if necessary
+    encoded_string += padding  # Add the padding to the string
+    
     with open(output_file, 'wb') as f:
         f.write(base64.b64decode(encoded_string))
 
