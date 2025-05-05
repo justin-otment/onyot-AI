@@ -9,7 +9,7 @@ on:
 
 jobs:
   run-parser:
-    runs-on: windows-latest  # You can change this to 'ubuntu-latest' if preferred
+    runs-on: windows-latest
 
     env:
       TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
@@ -31,9 +31,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
-      - name: Decode Base64 Google credentials using Python
-        run: python decode_credentials.py
 
       - name: Run Skip Tracing Parser
         run: python "Skip Tracing/truppl_parser.py"
