@@ -56,33 +56,13 @@ SHEET_NAME_2 = "For REI Upload"
 MAX_RETRIES = 1
 
 def authenticate_google_sheets():
-    """Authenticate and return Google Sheets service using credentials from environment variables."""
-    creds = None
+    if not google_credentials:
+        raise ValueError("Missing GOOGLE_CREDENTIALS_JSON environment variable")
 
-    # If the credentials are available from environment variables
-    if google_credentials and google_token:
-        credentials_dict = json.loads(google_credentials)
-        token_dict = json.loads(google_token)
-
-        # Create the credentials object from the loaded JSON
-        creds = Credentials.from_authorized_user_info(info=credentials_dict)
-
-        # Check if the token is valid; if expired, refresh it
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            print("[✓] Token refreshed successfully.")
-        else:
-            print("[!] Token expired or invalid, need to reauthenticate.")
-            flow = InstalledAppFlow.from_client_secrets_file(google_credentials, SCOPES)
-            creds = flow.run_local_server(port=0)
-            # Save refreshed credentials to the environment or somewhere if needed (optional)
-
-    if creds:
-        print("[✓] Google Sheets API authentication successful.")
-    else:
-        print("[!] Failed to authenticate with Google Sheets.")
-
-    # Return the Google Sheets API service
+    credentials_dict = json.loads(google_credentials)
+    creds = Credentials.from_service_account_info(credentials_dict, scopes=SCOPES)
+    
+    print("[✓] Google Sheets API service account authentication successful.")
     return build('sheets', 'v4', credentials=creds)
 
 # Replace with your Google Sheets integration
