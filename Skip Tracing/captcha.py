@@ -5,7 +5,6 @@ import asyncio
 from nordvpn import handle_rate_limit  # Import rate-limit handling function
 import os
 from dotenv import load_dotenv
-import json
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -33,31 +32,21 @@ async def handle_error(exception, attempt):
 # === CAPTCHA Sitekey Extraction ===
 async def get_site_key(page):
     logging.info("[*] Searching for CAPTCHA sitekey...")
-    
+
     for attempt in range(CAPTCHA_CONFIG["max_retries"]):
         try:
             await page.wait_for_load_state("networkidle")
             logging.info(f"[*] Attempt {attempt + 1}: Searching for CAPTCHA sitekey...")
 
-            # Check network requests for sitekey exposure
-            async def find_sitekey_from_network(response):
-                if "captcha" in response.url.lower():
-                    text = await response.text()
-                    if "sitekey" in text:
-                        match = re.search(r"sitekey[\"\']: ?[\"']([a-zA-Z0-9_-]+)", text)
-                        if match:
-                            return match.group(1)
-                return None
+            # Ensure a potential sitekey element is present
+            await page.wait_for_selector('[data-sitekey]', timeout=60000)
 
-            page.on("response", find_sitekey_from_network)
-
-            # Extract sitekey from iframe or DOM elements
             sitekey = await page.evaluate("""() => {
                 const selectors = [
                     '[data-sitekey]', 'input[name="sitekey"]', '.captcha-sitekey',
-                    'div.h-captcha[data-sitekey]', '#captcha-container[data-sitekey]',
-                    '.dynamic-captcha[data-sitekey]', 'iframe[src*="turnstile"]'
+                    'div.h-captcha[data-sitekey]', '#captcha-container[data-sitekey]', '.dynamic-captcha[data-sitekey]'
                 ];
+                
                 for (const selector of selectors) {
                     const element = document.querySelector(selector);
                     if (element) {
@@ -67,41 +56,64 @@ async def get_site_key(page):
                 return null;
             }""")
 
-            # Try searching inside iframes
-            if not sitekey:
-                frames = page.frames
-                for frame in frames:
-                    sitekey = await frame.evaluate("""() => {
-                        const element = document.querySelector('[data-sitekey]');
-                        return element ? element.getAttribute('data-sitekey') : null;
-                    }""")
-                    if sitekey:
-                        break
-
             if sitekey:
                 logging.info(f"[✓] Sitekey found: {sitekey}")
                 return sitekey
 
             logging.warning(f"[!] Sitekey not found on attempt {attempt + 1}. Retrying...")
-            await asyncio.sleep(2)
+            await asyncio.sleep(2)  # Shorter delay
 
         except Exception as e:
             await handle_error(e, attempt)
 
-            if attempt == CAPTCHA_CONFIG["max_retries"] - 1:
-                try:
-                    html = await page.content()
-                    with open("captcha_debug.html", "w", encoding="utf-8") as f:
-                        f.write(html)
-                    await page.screenshot(path="captcha_debug.png")
-                    logging.info("[*] Saved debug screenshot and HTML for CAPTCHA failure.")
-                except Exception as debug_e:
-                    logging.warning(f"[!] Failed to save debug files: {debug_e}")
-
     logging.error("[✗] Sitekey extraction failed after maximum retries.")
+    
+    # Call handle_rate_limit function from nordvpn.py
     logging.info("[*] Triggering rate-limit handling...")
     await handle_rate_limit(page)
+
     return None
+
+# === Solve CAPTCHA via 2Captcha API ===
+def solve_turnstile_captcha(sitekey, url):
+    try:
+        response = requests.post(f"{CAPTCHA_API_URL}/in.php", data={
+            "key": API_KEY,
+            "method": "turnstile",
+            "sitekey": sitekey,
+            "pageurl": url,
+            "json": 1
+        })
+        response.raise_for_status()
+
+        request_data = response.json()
+        if request_data.get("status") != 1:
+            logging.error(f"[!] API response error: {request_data}")
+            return None
+
+        captcha_id = request_data["request"]
+        logging.info(f"[✓] CAPTCHA solving request sent. ID: {captcha_id}. Waiting for solution...")
+
+        start_time = time.time()
+        while time.time() - start_time < CAPTCHA_CONFIG["captcha_timeout_seconds"]:
+            time.sleep(CAPTCHA_CONFIG["poll_interval_seconds"])
+            solved_response = requests.get(f"{CAPTCHA_API_URL}/res.php?key={API_KEY}&action=get&id={captcha_id}&json=1")
+            solved_response.raise_for_status()
+
+            solved_data = solved_response.json()
+            if solved_data.get("status") == 1:
+                captcha_token = solved_data["request"]
+                logging.info(f"[✓] CAPTCHA solved successfully: {captcha_token}")
+                return captcha_token
+
+        logging.error("[!] CAPTCHA solving timed out.")
+        return None
+    except requests.exceptions.RequestException as e:
+        logging.error(f"[!] Network or HTTP error during CAPTCHA solving: {e}")
+        return None
+    except ValueError as e:
+        logging.error(f"[!] JSON decoding error during CAPTCHA solving: {e}")
+        return None
 
 # === Inject CAPTCHA Token ===
 async def inject_token(page, captcha_token, url):
