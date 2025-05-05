@@ -75,8 +75,6 @@ def authenticate_google_sheets():
 
     return build('sheets', 'v4', credentials=creds)
 
-sheets_service = authenticate_google_sheets(TOKEN_PATH, CREDENTIALS_PATH)
-
 # Replace with your Google Sheets integration
 def get_sheet_data(sheet_id, range_name):
     """
