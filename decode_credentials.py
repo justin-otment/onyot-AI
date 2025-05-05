@@ -25,17 +25,3 @@ def decode_base64_to_file(encoded_string, output_file):
         raise ValueError(f"Failed to write to file '{output_file}': {e}")
 
     print(f"[✓] Successfully decoded and saved to {output_file}")
-
-def main():
-    google_credentials = os.getenv("GOOGLE_CREDENTIALS_JSON")
-    google_token = os.getenv("GOOGLE_TOKEN_JSON")
-
-    if not google_credentials or not google_token:
-        raise ValueError("Google credentials or token are missing from environment variables.")
-
-    decode_base64_to_file(google_credentials, 'google_credentials.json')
-    decode_base64_to_file(google_token, 'google_token.json')
-    print("[✓] Google credentials and token decoded successfully.")
-
-if __name__ == "__main__":
-    main()
