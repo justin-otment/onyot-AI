@@ -9,7 +9,7 @@ on:
 
 jobs:
   run-parser:
-    runs-on: windows-latest  # Keep Windows as CI runner
+    runs-on: windows-latest  # Keeping Windows as runner
 
     env:
       PYTHONIOENCODING: utf-8
@@ -20,7 +20,7 @@ jobs:
       GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
 
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v3
 
       - name: Install Anaconda (Miniconda)
@@ -28,24 +28,30 @@ jobs:
           Invoke-WebRequest -Uri "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe" -OutFile "Miniconda.exe"
           Start-Process -FilePath "Miniconda.exe" -ArgumentList "/S /D=C:\Miniconda" -Wait
 
-      - name: Set up Conda Python 3.12.8
+      - name: Set Up Conda Python 3.11
         run: |
           C:\Miniconda\Scripts\conda.exe init powershell
-          echo "C:\Miniconda\Scripts\conda.exe activate automation_env" >> $env:GITHUB_PATH
-          C:\Miniconda\Scripts\conda.exe create --name automation_env python=3.12.8 -y
+          C:\Miniconda\Scripts\conda.exe create --name automation_env python=3.11 -y
           C:\Miniconda\Scripts\activate automation_env
 
       - name: Verify Python Version
-        run: python --version
+        run: python --version  # Confirm correct Anaconda Python version
 
-      - name: Install dependencies
+      - name: Install Conda Dependencies
         run: |
           C:\Miniconda\Scripts\conda.exe install --name automation_env --file requirements.txt -y
+
+      - name: Install Pip Dependencies (For Missing Conda Packages)
+        run: |
+          C:\Miniconda\Scripts\activate automation_env
+          python -m pip install google-auth==2.38.0 google-api-core==2.24.2 cachetools pyasn1_modules urllib3
 
       - name: Install Playwright Browsers
         run: |
           npx playwright install --with-deps
-          chmod -R 777 ~/.cache/ms-playwright  # Fix permissions
+          chmod -R 777 ~/.cache/ms-playwright  # Fix permissions for CI
 
       - name: Run Skip Tracing Parser
-        run: python "Skip Tracing/truppl_parser.py"
+        run: |
+          C:\Miniconda\Scripts\activate automation_env
+          python "Skip Tracing/truppl_parser.py"
