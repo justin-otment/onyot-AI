@@ -49,6 +49,7 @@ jobs:
           C:\Miniconda\Scripts\activate automation_env
           python -m pip install --upgrade pip
           python -m pip install -r pip-requirements.txt
+          python -m pip install beautifulsoup4  # Ensure bs4 is installed correctly
 
       - name: Verify package.json exists
         run: |
