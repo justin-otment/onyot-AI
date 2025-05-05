@@ -41,14 +41,12 @@ else:
 
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-creds = Credentials.from_authorized_user_file('C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/Skip Tracing/token.json', SCOPES)
 sheets_service = build('sheets', 'v4', credentials=creds)
 
 sys.stdout.reconfigure(encoding='utf-8')
 
 # === Config ===
 # Define file paths
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON")
 TOKEN_PATH = os.getenv("GOOGLE_TOKEN_JSON")
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
