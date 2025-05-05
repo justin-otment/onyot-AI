@@ -1,82 +1,34 @@
-name: CI Workflow for CAPTCHA Solving Python Script
+name: Run Skip Tracing Parser
 
 on:
+  workflow_dispatch:  # Allows manual runs from GitHub UI
   push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-  workflow_dispatch:
+    paths:
+      - 'Skip Tracing/**'
+      - '.github/workflows/main.yml'
 
 jobs:
-  run-script:
-    runs-on: windows-latest
+  run-parser:
+    runs-on: ubuntu-latest  # Use self-hosted if you plan to tunnel traffic via VPN
+
     env:
       TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
-      GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
-      GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
       VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
       VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
 
     steps:
-    # Step 1: Set up Python 3.12
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: 3.12
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    # Step 2: Check out the repository
-    - name: Checkout Repository Code
-      uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-    # Step 3: Debug Secrets
-    - name: Debug Individual Secrets
-      shell: pwsh
-      run: |
-        Write-Output "[DEBUG] TWO_CAPTCHA_API_KEY: $env:TWO_CAPTCHA_API_KEY"
-        Write-Output "[DEBUG] GOOGLE_CREDENTIALS_JSON: $env:GOOGLE_CREDENTIALS_JSON"
-        Write-Output "[DEBUG] GOOGLE_TOKEN_JSON: $env:GOOGLE_TOKEN_JSON"
-        Write-Output "[DEBUG] VPN_USERNAME: $env:VPN_USERNAME"
-        Write-Output "[DEBUG] VPN_PASSWORD: $env:VPN_PASSWORD"
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
 
-    # Step 4: Validate Environment Variables
-    - name: Validate Environment Variables
-      shell: pwsh
-      run: |
-        Write-Output "[INFO] Validating required environment variables..."
-        if (-not $env:TWO_CAPTCHA_API_KEY) {
-            Write-Output "[!] TWO_CAPTCHA_API_KEY is missing."
-            exit 1
-        }
-        if (-not $env:VPN_USERNAME) {
-            Write-Output "[!] VPN_USERNAME is missing."
-            exit 1
-        }
-        if (-not $env:VPN_PASSWORD) {
-            Write-Output "[!] VPN_PASSWORD is missing."
-            exit 1
-        }
-        if (-not $env:GOOGLE_CREDENTIALS_JSON) {
-            Write-Output "[!] GOOGLE_CREDENTIALS_JSON is missing."
-            exit 1
-        }
-        if (-not $env:GOOGLE_TOKEN_JSON) {
-            Write-Output "[!] GOOGLE_TOKEN_JSON is missing."
-            exit 1
-        }
-        Write-Output "[✓] All required environment variables are validated successfully."
-
-    # Step 5: Install Python Dependencies
-    - name: Install Dependencies
-      run: |
-        python -m pip install --upgrade pip setuptools wheel
-        pip install -r requirements.txt
-
-    # Step 6: Install Playwright Browsers
-    - name: Install Playwright Browsers
-      run: python -m playwright install
-
-    # Step 7: Run CAPTCHA Solving Script
-    - name: Run CAPTCHA Solving Script
-      run: python "Skip Tracing\\truppl_parser.py"
+      - name: Run Skip Tracing Parser
+        run: python "Skip Tracing/truppl_parser.py"
