@@ -60,7 +60,7 @@ def authenticate_google_sheets():
         raise ValueError("Missing GOOGLE_CREDENTIALS_JSON environment variable")
 
     credentials_dict = json.loads(google_credentials)
-    creds = Credentials.from_service_account_info(credentials_dict, scopes=SCOPES)
+    creds = Credentials.from_service_account_info(json.loads(google_credentials), scopes=SCOPES)
     
     print("[✓] Google Sheets API service account authentication successful.")
     return build('sheets', 'v4', credentials=creds)
