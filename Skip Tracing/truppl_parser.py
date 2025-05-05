@@ -545,18 +545,16 @@ def extract_sitekey(response_body):
         logging.error(f"[!] Error extracting sitekey: {e}")
         return None
 
-# CAPTCHA Handling Parameters
-BATCH_SIZE = 10  # Process entries in batches to avoid resource exhaustion
-MAX_CAPTCHA_RETRIES = 3  # Retry limit for CAPTCHA-solving attempts
-BACKOFF_FACTOR = 2  # Exponential backoff multiplier
-
 async def main():
     SHEET_NAME = "CAPE CORAL FINAL"
     MAILING_STREETS_RANGE = f"{SHEET_NAME}!P571:P"
     ZIPCODE_RANGE = f"{SHEET_NAME}!Q571:Q"
     SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 
-    # Retrieve data from Google Sheets
+    BATCH_SIZE = 10
+    MAX_CAPTCHA_RETRIES = 3
+    BACKOFF_FACTOR = 2
+
     mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE)
     zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE)
 
@@ -564,13 +562,11 @@ async def main():
         logging.error("[!] Missing data in one or both ranges. Skipping processing...")
         return
 
-    # Filter out empty values and create dictionaries for lookup
     mailing_streets = [(row_index, value) for row_index, value in mailing_streets if value.strip()]
     zip_codes = [(row_index, value) for row_index, value in zip_codes if value.strip()]
     street_dict = {row_index: value for row_index, value in mailing_streets}
     zip_dict = {row_index: value for row_index, value in zip_codes}
 
-    # Match valid entries
     valid_entries = [
         (index, street_dict[index], zip_dict[index])
         for index in street_dict.keys() & zip_dict.keys()
@@ -582,49 +578,23 @@ async def main():
 
     async with async_playwright() as p:
         browser = None
-        context = None  # Initialize context for cleanup
+        context = None
         try:
             # Launch the browser
             browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
             context = await browser.new_context(user_agent=random.choice(user_agents))
-            await context.add_init_script(stealth_js)  # Apply stealth
 
-            # Define and Activate Network Interception
-            async def intercept_sitekey(route):
-                try:
-                    url = route.request.url
-                    if url.endswith(('.css', '.js', '.png', '.jpg', '.woff', '.woff2', '.svg')):
-                        await route.continue_()
-                        return
-
-                    logging.debug(f"[DEBUG] Intercepting route: {url}")
-                    response = await route.continue_()
-
-                    if response and hasattr(response, "body"):
-                        response_body = response.body.decode() if response.body else None
-                        if response_body:
-                            sitekey = extract_sitekey(response_body)
-                            if sitekey:
-                                logging.info(f"[✓] Extracted sitekey: {sitekey}")
-                    else:
-                        logging.warning(f"[!] No response body for route: {url}")
-                except Exception as e:
-                    logging.error(f"[!] Error intercepting route: {e}")
-                    await route.continue_()
-
-            await context.route("**/*", intercept_sitekey)
-
-            # Open a new page
+            # Open a new page and apply stealth mode
             page = await context.new_page()
             await stealth(page)
 
-            # Process Entries in Batches
             for batch_start in range(0, len(valid_entries), BATCH_SIZE):
                 batch = valid_entries[batch_start:batch_start + BATCH_SIZE]
                 logging.info(f"[→] Processing batch {batch_start // BATCH_SIZE + 1} with {len(batch)} entries...")
+
                 for row_index, mailing_street, zip_code in batch:
-                    logging.info(f"[→] Processing Row {row_index}: Mailing Street '{mailing_street}', ZIP '{zip_code}'")
-                    
+                    logging.info(f"[→] Processing Row {row_index}: '{mailing_street}', ZIP '{zip_code}'")
+
                     captcha_retries = 0
                     html_content = None
                     while captcha_retries < MAX_CAPTCHA_RETRIES:
@@ -640,22 +610,20 @@ async def main():
                         logging.error("[!] Skipping row due to repeated CAPTCHA failures.")
                         continue
 
-                    # Extract links
                     extracted_links = extract_links(html_content)
                     logging.info(f"[DEBUG] Extracted {len(extracted_links)} links.")
 
                     if not extracted_links:
                         await handle_rate_limit(page)
-                        continue  # Proceed to next iteration
+                        continue  
 
                     ref_names = extract_reference_names(SHEET_ID, row_index)
                     matched_results = match_entries(extracted_links, ref_names)
 
                     if not matched_results:
-                        logging.warning(f"[!] No match found for row {row_index}. Skipping second batch extraction.")
+                        logging.warning(f"[!] No match found for row {row_index}. Skipping extraction.")
                         continue
 
-                    # Navigate and Extract Contact Info
                     for matched_entry in matched_results:
                         matched_url = matched_entry["link"]
                         matched_name = matched_entry["text"]
@@ -673,15 +641,13 @@ async def main():
                             logging.warning(f"[!] Skipping row {row_index}: No phone data found.")
                             continue
 
-                        # Extract name parts
                         name_parts = matched_name.strip().split()
                         first_name = name_parts[0] if name_parts else ""
                         last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
 
-                        # Safely retrieve Site value
                         site_data = get_sheet_data(SHEET_ID, range_name=f"{SHEET_NAME}!B571:B")
                         site_dict = {idx: value for idx, value in site_data}
-                        site_value = site_dict.get(row_index, "Unknown Site")  # Default to prevent KeyError
+                        site_value = site_dict.get(row_index, "Unknown Site")
 
                         append_to_google_sheet(
                             first_name=first_name,
