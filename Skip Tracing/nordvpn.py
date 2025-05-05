@@ -7,7 +7,7 @@ import logging
 import time
 
 # Load credentials from .env file
-dotenv_path = "C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/Skip Tracing/.env"
+dotenv_path = "Skip Tracing/.env"
 load_dotenv(dotenv_path)
 VPN_USERNAME = os.getenv("VPN_USERNAME")
 VPN_PASSWORD = os.getenv("VPN_PASSWORD")
