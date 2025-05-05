@@ -50,6 +50,13 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r pip-requirements.txt
 
+      - name: Verify package.json exists
+        run: |
+          if not exist package.json (
+            echo "package.json not found! Initializing..."
+            npm init -y
+          )
+
       - name: Install Node.js Dependencies
         run: |
           npm install
@@ -58,7 +65,8 @@ jobs:
       - name: Install Playwright Browsers
         run: |
           npx playwright install --with-deps
-          chmod -R 777 ~/.cache/ms-playwright  # Fix permissions for CI
+          mkdir -p ~/.cache/ms-playwright || echo "Skipping mkdir"
+          chmod -R 777 ~/.cache/ms-playwright || echo "Skipping chmod (directory not found)"
 
       - name: Run Skip Tracing Parser
         run: |
