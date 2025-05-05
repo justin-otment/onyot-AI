@@ -38,15 +38,15 @@ async def get_site_key(page):
             await page.wait_for_load_state("networkidle")
             logging.info(f"[*] Attempt {attempt + 1}: Searching for CAPTCHA sitekey...")
 
-            # Ensure a potential sitekey element is present
-            await page.wait_for_selector('[data-sitekey]', timeout=60000)
+            await page.wait_for_selector('[data-sitekey], iframe[src*="turnstile"]', timeout=60000)
 
             sitekey = await page.evaluate("""() => {
                 const selectors = [
                     '[data-sitekey]', 'input[name="sitekey"]', '.captcha-sitekey',
-                    'div.h-captcha[data-sitekey]', '#captcha-container[data-sitekey]', '.dynamic-captcha[data-sitekey]'
+                    'div.h-captcha[data-sitekey]', '#captcha-container[data-sitekey]', '.dynamic-captcha[data-sitekey]',
+                    'iframe[src*="turnstile"]'
                 ];
-                
+
                 for (const selector of selectors) {
                     const element = document.querySelector(selector);
                     if (element) {
@@ -61,18 +61,26 @@ async def get_site_key(page):
                 return sitekey
 
             logging.warning(f"[!] Sitekey not found on attempt {attempt + 1}. Retrying...")
-            await asyncio.sleep(2)  # Shorter delay
+            await asyncio.sleep(2)
 
         except Exception as e:
             await handle_error(e, attempt)
 
+            if attempt == CAPTCHA_CONFIG["max_retries"] - 1:
+                try:
+                    html = await page.content()
+                    with open("captcha_debug.html", "w", encoding="utf-8") as f:
+                        f.write(html)
+                    await page.screenshot(path="captcha_debug.png")
+                    logging.info("[*] Saved debug screenshot and HTML for CAPTCHA failure.")
+                except Exception as debug_e:
+                    logging.warning(f"[!] Failed to save debug files: {debug_e}")
+
     logging.error("[✗] Sitekey extraction failed after maximum retries.")
-    
-    # Call handle_rate_limit function from nordvpn.py
     logging.info("[*] Triggering rate-limit handling...")
     await handle_rate_limit(page)
-
     return None
+
 
 # === Solve CAPTCHA via 2Captcha API ===
 def solve_turnstile_captcha(sitekey, url):
