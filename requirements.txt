@@ -1,31 +1,21 @@
-beautifulsoup4==4.12.2              # Compatible version for Python 3.12
-cachetools==5.3.0                   # Ensure compatibility
-certifi==2025.1.31                  # Valid SSL certificates
-charset-normalizer==3.4.1           # Character normalization
-google-api-core==2.24.2             # Google API helpers
-google-api-python-client==2.167.0   # Google Sheets API
-google-auth==2.38.0                 # Downgrade for compatibility
-google-auth-httplib2==0.2.0         # HTTP transport for Google APIs
-google-auth-oauthlib==1.2.1         # OAuth2 for Google APIs
-googleapis-common-protos==1.70.0    # Protobuf definitions
-greenlet==3.2.0                     # Async library helpers
-httplib2==0.22.0                    # HTTP client
-idna==3.10                          # Internationalized domain support
-oauthlib==3.2.2                     # OAuth implementation
-playwright==1.51.0                  # Browser automation
-playwright-stealth==1.0.6           # Stealth features for Playwright
-proto-plus==1.26.1                  # Protobuf helper functions
-protobuf==5.25.0                    # Ensure Google API compatibility
-pyasn1==0.5.0                       # ASN.1 implementation used in RSA
-pyasn1_modules==0.2.8               # ASN.1 modules for cryptography
-pyee==12.1.1                        # Async event emitter
-pyparsing==3.0.9                    # String parsing
-requests==2.32.3                    # HTTP requests
-requests-oauthlib==2.0.0            # OAuth2 for requests
-rsa==4.9.1                          # RSA cryptography
-soupsieve==2.6                      # CSS selectors for BeautifulSoup
-typing_extensions==4.8.0            # Backport typing for Python
-uritemplate==4.1.1                  # URI templating
-urllib3==2.2.1                      # HTTP threading and SSL
-pyaml                               # YAML parsing (no version restriction)
-python-dotenv                       # Load environment variables
+beautifulsoup4==4.12.2
+certifi==2025.1.31
+google-api-core==2.24.2
+google-api-python-client==2.167.0
+google-auth==2.38.0
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.2.1
+greenlet==3.2.0
+httplib2==0.22.0
+playwright==1.51.0
+playwright-stealth==1.0.6
+protobuf==5.25.0
+pyasn1==0.5.0
+pyparsing==3.0.9
+requests==2.32.3
+rsa==4.9.1
+soupsieve==2.6
+typing_extensions==4.8.0
+uritemplate==4.1.1
+urllib3==2.2.1
+python-dotenv
