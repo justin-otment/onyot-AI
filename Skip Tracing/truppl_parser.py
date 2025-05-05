@@ -56,13 +56,14 @@ SHEET_NAME_2 = "For REI Upload"
 MAX_RETRIES = 1
 
 def authenticate_google_sheets():
+    google_credentials = os.getenv("GOOGLE_CREDENTIALS_JSON")
     if not google_credentials:
-        raise ValueError("Missing GOOGLE_CREDENTIALS_JSON environment variable")
+        raise ValueError("Missing GOOGLE_CREDENTIALS_JSON")
 
-    credentials_dict = json.loads(google_credentials)
-    creds = Credentials.from_service_account_info(json.loads(google_credentials), scopes=SCOPES)
-    
-    print("[✓] Google Sheets API service account authentication successful.")
+    creds = Credentials.from_service_account_info(
+        json.loads(google_credentials),
+        scopes=SCOPES
+    )
     return build('sheets', 'v4', credentials=creds)
 
 # Replace with your Google Sheets integration
