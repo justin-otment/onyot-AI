@@ -14,7 +14,7 @@ Onyot is an AI-powered lead generation tool that automates the collection and ve
 1. Clone the repository
 2. Install dependencies from `requirements.txt`
 3. Configure `credentials.json` and `token.json` for Google Sheets
-4. Run the script: `python your_script_name.py`
+4. Run the script: `python truppl_parser.py`
 
 ## Project Structure
 
