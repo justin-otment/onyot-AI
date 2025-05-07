@@ -19,6 +19,7 @@ jobs:
       GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
       GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
       PLAYWRIGHT_BROWSERS_PATH: 0  # Ensures Playwright downloads browsers correctly
+      CONDA_NO_PLUGINS: true  # Disables malfunctioning Conda plugins
 
     steps:
       - name: Checkout Code
@@ -37,24 +38,24 @@ jobs:
         run: |
           C:\Miniconda\Scripts\conda.exe create --name automation_env python=3.11 -y
 
+      - name: Fix Conda Plugin Issue
+        run: |
+          C:\Miniconda\Scripts\conda.exe config --set report_errors false
+          C:\Miniconda\Scripts\conda.exe clean --all
+
       - name: Verify Python Version
         run: |
           C:\Miniconda\Scripts\conda.exe run --name automation_env python --version
 
-      - name: Install Conda Dependencies
+      - name: Install Conda Dependencies (Without Plugins)
         run: |
-          C:\Miniconda\Scripts\conda.exe run --name automation_env conda install -c conda-forge --file requirements.txt -y
+          C:\Miniconda\Scripts\conda.exe run --name automation_env conda --no-plugins install -c conda-forge --file requirements.txt -y
 
       - name: Install Missing Dependencies via pip (Fallback)
         run: |
           C:\Miniconda\Scripts\conda.exe run --name automation_env python -m pip install --upgrade pip
           C:\Miniconda\Scripts\conda.exe run --name automation_env python -m pip install -r pip-requirements.txt
           C:\Miniconda\Scripts\conda.exe run --name automation_env python -m pip install beautifulsoup4 google-api-python-client google-auth-oauthlib python-dotenv
-
-      - name: Fix Conda Plugin Issue
-        run: |
-          C:\Miniconda\Scripts\conda.exe config --set report_errors false
-          C:\Miniconda\Scripts\conda.exe clean --all
 
       - name: Verify package.json exists
         run: |
