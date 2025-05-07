@@ -7,8 +7,7 @@ import logging
 import time
 
 # Load credentials from .env file
-dotenv_path = "Skip Tracing/.env"
-load_dotenv(dotenv_path)
+load_dotenv()
 VPN_USERNAME = os.getenv("VPN_USERNAME")
 VPN_PASSWORD = os.getenv("VPN_PASSWORD")
 
@@ -17,7 +16,7 @@ if not VPN_USERNAME or not VPN_PASSWORD:
     exit(1)
 
 # VPN folder path containing .ovpn files
-vpn_folder_path = "externals/VPNs"
+vpn_folder_path = "externals/VPNs"  # Updated for Docker compatibility
 
 def list_vpn_configs(folder_path):
     """
@@ -82,40 +81,37 @@ async def monitor_vpn_logs_with_timeout(process, timeout=30):
     logging.error("[!] VPN log monitoring timed out.")
     return False
 
+# OpenVPN paths inside Docker container
+OPENVPN_EXECUTABLE = "/usr/sbin/openvpn"
+AUTH_FILE_PATH = "/app/externals/VPNs/auth.txt"
+
 async def switch_vpn(config_file):
     """
-    Switch VPN using the specified configuration file.
+    Switch VPN using the specified configuration file inside a Docker container.
     :param config_file: Path to the .ovpn configuration file.
     :return: True if VPN switch succeeded, False otherwise.
     """
-    openvpn_executable = r"C:\Program Files\OpenVPN\bin\openvpn.exe"
-    auth_file_path = "externals/VPNs/auth.txt"
-
     terminate_existing_vpn()  # Terminate any existing VPN processes
-    create_auth_file(auth_file_path)  # Create auth.txt file with credentials
+    create_auth_file(AUTH_FILE_PATH)  # Ensure auth file exists
+    
     logging.info(f"[→] Switching to VPN with config: {config_file}")
 
     try:
         process = subprocess.Popen(
-            [openvpn_executable, "--config", config_file, "--auth-user-pass", auth_file_path],
+            [OPENVPN_EXECUTABLE, "--config", config_file, "--auth-user-pass", AUTH_FILE_PATH],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
 
-        # Use monitor_vpn_logs_with_timeout for connection confirmation
-        success = await monitor_vpn_logs_with_timeout(process)
-        if success:
-            return True
-        else:
-            logging.error("[!] VPN connection failed or logs did not confirm connection.")
-            return False
+        success = await monitor_vpn_logs_with_timeout(process)  # Check logs for confirmation
+        return success
 
     except FileNotFoundError:
-        logging.error(f"[!] OpenVPN executable not found at {openvpn_executable}. Ensure it is installed.")
+        logging.error(f"[!] OpenVPN executable not found at {OPENVPN_EXECUTABLE}. Ensure it is installed.")
         return False
     except Exception as e:
         logging.error(f"[!] Error during VPN switch: {e}")
         return False
-
+    
 async def verify_vpn_connection():
     """
     Verify if the VPN connection is established by pinging a reliable external host.
@@ -162,7 +158,7 @@ async def handle_rate_limit(page):
                 continue
 
         logging.warning(f"[!] VPN switch failed on attempt {attempt}. Retrying...")
-        backoff = 2 ** attempt  # Exponential backoff
+        backoff = 5 ** attempt  # Exponential backoff
         logging.warning(f"[!] Backing off for {backoff} seconds...")
         await asyncio.sleep(backoff)
 
