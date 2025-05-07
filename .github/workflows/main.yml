@@ -36,21 +36,20 @@ jobs:
       - name: Set Up Conda Python 3.11
         run: |
           C:\Miniconda\Scripts\conda.exe create --name automation_env python=3.11 -y
-          C:\Miniconda\Scripts\activate automation_env
 
       - name: Verify Python Version
-        run: python --version  # Confirm correct Anaconda Python version
+        run: |
+          C:\Miniconda\Scripts\conda.exe run --name automation_env python --version  # Confirm correct Anaconda Python version
 
       - name: Install Conda Dependencies
         run: |
-          C:\Miniconda\Scripts\conda.exe install --name automation_env -c conda-forge --file requirements.txt -y || echo "Warning: Some packages not found in Conda, falling back to pip."
+          C:\Miniconda\Scripts\conda.exe run --name automation_env conda install -c conda-forge --file requirements.txt -y
 
       - name: Install Missing Dependencies via pip (Fallback)
         run: |
-          C:\Miniconda\Scripts\activate automation_env
-          python -m pip install --upgrade pip
-          python -m pip install -r pip-requirements.txt
-          python -m pip install beautifulsoup4 google-api-python-client google-auth-oauthlib python-dotenv  # Ensure bs4, googleapiclient, google-auth-oauthlib, and dotenv are installed correctly
+          C:\Miniconda\Scripts\conda.exe run --name automation_env python -m pip install --upgrade pip
+          C:\Miniconda\Scripts\conda.exe run --name automation_env python -m pip install -r pip-requirements.txt
+          C:\Miniconda\Scripts\conda.exe run --name automation_env python -m pip install beautifulsoup4 google-api-python-client google-auth-oauthlib python-dotenv  # Ensure key packages are installed
 
       - name: Verify package.json exists
         run: |
@@ -67,11 +66,10 @@ jobs:
       - name: Install Playwright Browsers
         run: |
           npx playwright install --with-deps
-          playwright install chromium
+          npx playwright install chromium
           mkdir -p ~/.cache/ms-playwright || echo "Skipping mkdir"
           chmod -R 777 ~/.cache/ms-playwright || echo "Skipping chmod (directory not found)"
 
       - name: Run Skip Tracing Parser
         run: |
-          C:\Miniconda\Scripts\activate automation_env
-          python "Skip Tracing/truppl_parser.py"
+          C:\Miniconda\Scripts\conda.exe run --name automation_env python "Skip Tracing/truppl_parser.py"
