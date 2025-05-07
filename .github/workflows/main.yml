@@ -1,34 +1,27 @@
-name: Run Truppl Parser
+ PackagesNotFoundError: The following packages are not available from current channels:
+  
+    - python=3.1
+  
+  Current channels:
+  
+    - defaults
+  
+  To search for alternate channels that may provide the conda package you're
+  looking for, navigate to
+  
+      https://anaconda.org
+  
+  and use the search bar at the top of the page.
+  
+  
+  
+  PackagesNotFoundError: The following packages are not available from current channels:
+    - python=3.1
+  Current channels:
+    - defaults
+  To search for alternate channels that may provide the conda package you're
+  looking for, navigate to
+      https://anaconda.org
+  and use the search bar at the top of the page.
 
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
-jobs:
-  truppl_parser_job:
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Set up Miniconda environment
-        uses: conda-incubator/setup-miniconda@v2
-        with:
-          python-version: 3.10
-          activate-environment: automation_env
-          auto-update-conda: true
-          use-mamba: false
-
-      - name: Update Conda Environment
-        run: |
-          if exist environment.yml (
-            conda env update --file environment.yml --name automation_env
-          ) else (
-            echo "No environment.yml found, using default environment settings."
-          )
-
-      - name: Run Truppl Parser Script
-        run: conda run --no-plugins --name automation_env python "Skip Tracing/truppl_parser.py"
+Error: The process 'C:\Miniconda\condabin\conda.bat' failed with exit code 1
