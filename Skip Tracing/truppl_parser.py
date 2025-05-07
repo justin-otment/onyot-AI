@@ -577,8 +577,6 @@ async def main():
         return
 
     async with async_playwright() as p:
-        browser = None
-        context = None
         try:
             # Launch the browser
             browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
