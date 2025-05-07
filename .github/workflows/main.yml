@@ -51,6 +51,11 @@ jobs:
           C:\Miniconda\Scripts\conda.exe run --name automation_env python -m pip install -r pip-requirements.txt
           C:\Miniconda\Scripts\conda.exe run --name automation_env python -m pip install beautifulsoup4 google-api-python-client google-auth-oauthlib python-dotenv
 
+      - name: Fix Conda Plugin Issue
+        run: |
+          C:\Miniconda\Scripts\conda.exe config --set report_errors false
+          C:\Miniconda\Scripts\conda.exe clean --all
+
       - name: Verify package.json exists
         run: |
           if (!(Test-Path "package.json")) {
@@ -68,7 +73,6 @@ jobs:
           C:\Miniconda\Scripts\conda.exe run --name automation_env playwright install --with-deps
           C:\Miniconda\Scripts\conda.exe run --name automation_env playwright install chromium
 
-          # Ensure browsers exist and fix missing executables
           if (!(Test-Path "C:\Miniconda\envs\automation_env\Lib\site-packages\playwright\driver\package\.local-browsers\chromium_headless_shell*")) {
             echo "Playwright browsers missing, reinstalling..."
             C:\Miniconda\Scripts\conda.exe run --name automation_env npx playwright install --with-deps
