@@ -32,7 +32,13 @@ jobs:
 
       - name: Update Conda Before Installing Dependencies
         run: |
+          C:\Miniconda\Scripts\conda.exe config --set solver classic
           C:\Miniconda\Scripts\conda.exe update -n base -c defaults conda -y
+
+      - name: Ensure `libmamba` Solver is Installed (Optional)
+        run: |
+          C:\Miniconda\Scripts\conda.exe install -n base conda-libmamba-solver -y
+          C:\Miniconda\Scripts\conda.exe config --set solver libmamba
 
       - name: Set Up Conda Python 3.11
         run: |
