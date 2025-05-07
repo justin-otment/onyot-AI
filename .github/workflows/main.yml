@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'Skip Tracing/**'
-      - '.github/workflows/main.yml'
+      - "Skip Tracing/**"
+      - ".github/workflows/main.yml"
 
 jobs:
   run-parser:
@@ -93,7 +93,7 @@ jobs:
       - name: Debug Playwright Installation
         run: |
           $env:CONDA_NO_PLUGINS = "true"
-          # Write the Playwright test script to a file
+          # Write a debug script to a file to avoid multiline issues.
           @"
           import asyncio
           from playwright.async_api import async_playwright
@@ -106,7 +106,7 @@ jobs:
           
           asyncio.run(test_browser())
           "@ | Out-File -Encoding UTF8 test_browser.py
-          # Execute the test script
+          # Execute the debug script
           C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env python test_browser.py
 
       - name: Install Playwright-Stealth for CAPTCHA Handling
