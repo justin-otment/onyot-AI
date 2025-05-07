@@ -53,12 +53,12 @@ jobs:
           $env:CONDA_NO_PLUGINS = "true"
           C:\Miniconda\Scripts\conda.exe run --name automation_env python --version
 
-      - name: Install Conda Dependencies (Without Plugins)
+      - name: Install Conda Dependencies (Without Playwright & pyasn1_modules)
         run: |
           $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe run --name automation_env conda install -c conda-forge --file requirements.txt -y || echo "Some Conda packages might not exist, skipping..."
+          C:\Miniconda\Scripts\conda.exe run --name automation_env conda install -c conda-forge --file requirements.txt -y || echo "Skipping unavailable Conda packages..."
 
-      - name: Install Missing Packages via pip (Fix Conda Issues)
+      - name: Install Playwright & pyasn1_modules via pip
         run: |
           $env:CONDA_NO_PLUGINS = "true"
           C:\Miniconda\Scripts\conda.exe run --name automation_env python -m pip install --upgrade pip
@@ -69,28 +69,11 @@ jobs:
           $env:CONDA_NO_PLUGINS = "true"
           C:\Miniconda\Scripts\conda.exe run --name automation_env python -c "import playwright; print(playwright.__version__)"
 
-      - name: Verify package.json exists
-        run: |
-          if (!(Test-Path "package.json")) {
-            Write-Output "package.json not found! Initializing..."
-            npm init -y
-          }
-
-      - name: Install Node.js Dependencies
-        run: |
-          npm install
-          npm install @playwright/test
-
-      - name: Install Playwright Browsers & Verify Installation
+      - name: Install Playwright Browsers
         run: |
           $env:CONDA_NO_PLUGINS = "true"
           C:\Miniconda\Scripts\conda.exe run --name automation_env playwright install --with-deps
           C:\Miniconda\Scripts\conda.exe run --name automation_env playwright install chromium
-
-          if (!(Test-Path "C:\Miniconda\envs\automation_env\Lib\site-packages\playwright\driver\package\.local-browsers\chromium_headless_shell*")) {
-            Write-Output "Playwright browsers missing, reinstalling..."
-            C:\Miniconda\Scripts\conda.exe run --name automation_env npx playwright install --with-deps
-          }
 
       - name: Debug Playwright Installation
         run: |
