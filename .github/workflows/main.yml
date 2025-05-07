@@ -30,39 +30,34 @@ jobs:
           Invoke-WebRequest -Uri "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe" -OutFile "Miniconda.exe"
           Start-Process -FilePath "Miniconda.exe" -ArgumentList "/S /D=C:\Miniconda" -Wait
 
-      - name: Update Conda & Fix Solver Issue
+      - name: Update Conda & Set Solver to Classic
         run: |
-          C:\Miniconda\Scripts\conda.exe config --set solver classic
-          C:\Miniconda\Scripts\conda.exe update -n base -c defaults conda -y
-
-      - name: Ensure `libmamba` Solver is Installed (Optional)
-        run: |
-          C:\Miniconda\Scripts\conda.exe install -n base conda-libmamba-solver -y
-          C:\Miniconda\Scripts\conda.exe config --set solver libmamba
+          REM Force Conda to use the classic solver and disable plugins.
+          C:\Miniconda\Scripts\conda.exe --no-plugins config --set solver classic
+          C:\Miniconda\Scripts\conda.exe --no-plugins update -n base -c defaults conda -y
 
       - name: Set Up Conda Python 3.11
         run: |
-          C:\Miniconda\Scripts\conda.exe config --set solver classic
-          C:\Miniconda\Scripts\conda.exe create --name automation_env python=3.11 -y
+          C:\Miniconda\Scripts\conda.exe --no-plugins create --name automation_env python=3.11 -y
 
       - name: Fix Conda Plugin Issue
         run: |
-          C:\Miniconda\Scripts\conda.exe config --set report_errors false
-          C:\Miniconda\Scripts\conda.exe clean --all
+          C:\Miniconda\Scripts\conda.exe --no-plugins config --set report_errors false
+          C:\Miniconda\Scripts\conda.exe --no-plugins clean --all
 
       - name: Verify Python Version
         run: |
-          C:\Miniconda\Scripts\conda.exe run --name automation_env python --version
+          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env python --version
 
       - name: Install Conda Dependencies (Without Plugins)
         run: |
-          C:\Miniconda\Scripts\conda.exe run --name automation_env conda --no-plugins install -c conda-forge --file requirements.txt -y
+          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env conda install -c conda-forge --file requirements.txt -y
 
       - name: Install Missing Dependencies via pip (Fallback)
         run: |
-          C:\Miniconda\Scripts\conda.exe run --name automation_env python -m pip install --upgrade pip
-          C:\Miniconda\Scripts\conda.exe run --name automation_env python -m pip install -r pip-requirements.txt
-          C:\Miniconda\Scripts\conda.exe run --name automation_env python -m pip install beautifulsoup4 google-api-python-client google-auth-oauthlib python-dotenv
+          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env python -m pip install --upgrade pip
+          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env python -m pip install -r pip-requirements.txt
+          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env python -m pip install beautifulsoup4 google-api-python-client google-auth-oauthlib python-dotenv
 
       - name: Verify package.json exists
         run: |
@@ -78,17 +73,17 @@ jobs:
 
       - name: Install Playwright Browsers & Verify Installation
         run: |
-          C:\Miniconda\Scripts\conda.exe run --name automation_env playwright install --with-deps
-          C:\Miniconda\Scripts\conda.exe run --name automation_env playwright install chromium
+          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env playwright install --with-deps
+          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env playwright install chromium
 
           if (!(Test-Path "C:\Miniconda\envs\automation_env\Lib\site-packages\playwright\driver\package\.local-browsers\chromium_headless_shell*")) {
             echo "Playwright browsers missing, reinstalling..."
-            C:\Miniconda\Scripts\conda.exe run --name automation_env npx playwright install --with-deps
+            C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env npx playwright install --with-deps
           }
 
       - name: Debug Playwright Installation
         run: |
-          C:\Miniconda\Scripts\conda.exe run --name automation_env python -c "
+          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env python -c "
           import asyncio
           from playwright.async_api import async_playwright
           async def test_browser():
@@ -101,12 +96,12 @@ jobs:
 
       - name: Install Playwright-Stealth for CAPTCHA Handling
         run: |
-          C:\Miniconda\Scripts\conda.exe run --name automation_env pip install playwright-stealth
+          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env pip install playwright-stealth
 
       - name: Verify Environment Activation
         run: |
-          C:\Miniconda\Scripts\conda.exe run --name automation_env python -m playwright install
+          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env python -m playwright install
 
       - name: Run Skip Tracing Parser
         run: |
-          C:\Miniconda\Scripts\conda.exe run --name automation_env python "Skip Tracing/truppl_parser.py"
+          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env python "Skip Tracing/truppl_parser.py"
