@@ -1,108 +1,58 @@
-name: Run Skip Tracing Parser
+name: Run Python Scraper with CAPTCHA & VPN
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'Skip Tracing/**'
-      - '.github/workflows/main.yml'
 
 jobs:
-  run-parser:
-    runs-on: windows-latest
+  scraper-job:
+    runs-on: windows-latest  # Required for OpenVPN compatibility
 
     env:
-      PYTHONIOENCODING: utf-8
       TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
       VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
       VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
-      GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
-      GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
-      PLAYWRIGHT_BROWSERS_PATH: 0
-      CONDA_NO_PLUGINS: true
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Install Anaconda (Miniconda)
-        run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          Invoke-WebRequest -Uri "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe" -OutFile "Miniconda.exe"
-          Start-Process -FilePath "Miniconda.exe" -ArgumentList "/S /D=C:\Miniconda" -Wait
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-      - name: Update Conda & Set Solver to Classic
+      - name: Install Python Dependencies
         run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe config --set solver classic
-          C:\Miniconda\Scripts\conda.exe update -n base -c defaults conda -y
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          playwright install chromium
 
-      - name: Set Up Conda Python 3.11
+      - name: Install OpenVPN
         run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe create --name automation_env python=3.11 -y
+          choco install openvpn --yes
 
-      - name: Fix Conda Plugin Issue
+      - name: Setup VPN Configurations and Auth File
         run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe config --set report_errors false
-          C:\Miniconda\Scripts\conda.exe clean --all
+          mkdir "C:\Program Files\OpenVPN\config"
+          copy externals\VPNs\*.ovpn "C:\Program Files\OpenVPN\config\"
+          echo $env:VPN_USERNAME > "C:\Program Files\OpenVPN\config\auth.txt"
+          echo $env:VPN_PASSWORD >> "C:\Program Files\OpenVPN\config\auth.txt"
 
-      - name: Verify Python Version
+      - name: Create .env File
         run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe run --name automation_env python --version
+          echo "${{ secrets.ENV_FILE }}" | Out-File -FilePath .env -Encoding utf8 -Force
+          certutil -decode .env .env
 
-      - name: Install Conda Dependencies (Without Playwright & pyasn1_modules)
+      - name: Create Google Credentials & Token
         run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe run --name automation_env conda install -c conda-forge --file requirements.txt -y || echo "Skipping unavailable Conda packages..."
+          echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" | Out-File credentials.json.b64
+          certutil -decode credentials.json.b64 credentials.json
+          echo "${{ secrets.GOOGLE_TOKEN_JSON }}" | Out-File token.json.b64
+          certutil -decode token.json.b64 token.json
 
-      - name: Install Playwright & pyasn1_modules via pip
-        run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe run --name automation_env python -m pip install --upgrade pip
-          C:\Miniconda\Scripts\conda.exe run --name automation_env python -m pip install playwright pyasn1_modules
+      - name: Verify OpenVPN Installation
+        run: openvpn --version
 
-      - name: Verify Playwright Installation
+      - name: Run Main Python Script
         run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe run --name automation_env python -c "import playwright; print(playwright.__version__)"
-
-      - name: Install Playwright Browsers
-        run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe run --name automation_env playwright install --with-deps
-          C:\Miniconda\Scripts\conda.exe run --name automation_env playwright install chromium
-
-      - name: Debug Playwright Installation
-        run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          @"
-          import asyncio
-          from playwright.async_api import async_playwright
-          
-          async def test_browser():
-              async with async_playwright() as p:
-                  browser = await p.chromium.launch(headless=True)
-                  print('Browser launched successfully!')
-                  await browser.close()
-          
-          asyncio.run(test_browser())
-          "@ | Out-File -Encoding UTF8 test_browser.py
-          C:\Miniconda\Scripts\conda.exe run --name automation_env python test_browser.py
-
-      - name: Install Playwright-Stealth for CAPTCHA Handling
-        run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe run --name automation_env pip install playwright-stealth
-
-      - name: Verify Environment Activation
-        run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe run --name automation_env python -m playwright install
-
-      - name: Run Skip Tracing Parser
-        run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe run --name automation_env python "Skip Tracing/truppl_parser.py"
+          python main_script.py
