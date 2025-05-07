@@ -56,13 +56,13 @@ jobs:
       - name: Install Conda Dependencies (Without Plugins)
         run: |
           $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe run --name automation_env conda install -c conda-forge pyasn1_modules -y
+          C:\Miniconda\Scripts\conda.exe run --name automation_env conda install -c conda-forge --file requirements.txt -y || echo "Some Conda packages might not exist, skipping..."
 
-      - name: Install Playwright via pip (Fix Missing Conda Package)
+      - name: Install Missing Packages via pip (Fix Conda Issues)
         run: |
           $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe run --name automation_env pip install --upgrade pip
-          C:\Miniconda\Scripts\conda.exe run --name automation_env pip install playwright
+          C:\Miniconda\Scripts\conda.exe run --name automation_env python -m pip install --upgrade pip
+          C:\Miniconda\Scripts\conda.exe run --name automation_env python -m pip install playwright pyasn1_modules
 
       - name: Verify Playwright Installation
         run: |
