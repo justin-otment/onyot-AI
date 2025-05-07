@@ -18,8 +18,8 @@ jobs:
       VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
       GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
       GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
-      PLAYWRIGHT_BROWSERS_PATH: 0  # Ensures Playwright downloads browsers correctly
-      CONDA_NO_PLUGINS: true  # Disables malfunctioning Conda plugins
+      PLAYWRIGHT_BROWSERS_PATH: 0
+      CONDA_NO_PLUGINS: true
 
     steps:
       - name: Checkout Code
@@ -30,7 +30,7 @@ jobs:
           Invoke-WebRequest -Uri "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe" -OutFile "Miniconda.exe"
           Start-Process -FilePath "Miniconda.exe" -ArgumentList "/S /D=C:\Miniconda" -Wait
 
-      - name: Update Conda Before Installing Dependencies
+      - name: Update Conda & Fix Solver Issue
         run: |
           C:\Miniconda\Scripts\conda.exe config --set solver classic
           C:\Miniconda\Scripts\conda.exe update -n base -c defaults conda -y
