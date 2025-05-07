@@ -2,35 +2,32 @@ import requests
 import time
 import logging
 import asyncio
-from nordvpn import handle_rate_limit  # Import rate-limit handling function
-import os
-from dotenv import load_dotenv
-
-dotenv_path = "Skip Tracing/.env"
+from playwright.async_api import async_playwright
 
 # === CAPTCHA Configuration ===
 CAPTCHA_CONFIG = {
-    "max_retries": 3,
+    "max_retries": 5,  # Maximum retries for CAPTCHA solving
     "wait_time_ms": 7000,  # Delay between retries in milliseconds
     "poll_interval_seconds": 5,  # Interval to poll for CAPTCHA solution
     "captcha_timeout_seconds": 75,  # Maximum waiting time for CAPTCHA solving
 }
 
 # API Key and URL for 2Captcha
-API_KEY = os.getenv("TWO_CAPTCHA_API_KEY")  # Replace with actual 2Captcha API key
+API_KEY = "a01559936e2950720a2c0126309a824e"  # Replace with your actual 2Captcha API key
 CAPTCHA_API_URL = "http://2captcha.com"
 
 # Logging configuration
 LOGGING_FORMAT = "[%(asctime)s] %(levelname)s: %(message)s"
 logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
 
-# === Error Handling ===
-async def handle_error(exception, attempt):
-    logging.warning(f"[!] Error during sitekey fetch attempt {attempt + 1}: {exception}")
-    await asyncio.sleep(2)  # Retry delay
 
-# === CAPTCHA Sitekey Extraction ===
+# === Utility: Extract CAPTCHA Sitekey (HTML + Network Request Handling) ===
 async def get_site_key(page):
+    """
+    Extract CAPTCHA sitekey using Playwright with enhanced debugging.
+    :param page: Playwright page object.
+    :return: The extracted sitekey or None if not found.
+    """
     logging.info("[*] Searching for CAPTCHA sitekey...")
 
     for attempt in range(CAPTCHA_CONFIG["max_retries"]):
@@ -38,45 +35,64 @@ async def get_site_key(page):
             await page.wait_for_load_state("networkidle")
             logging.info(f"[*] Attempt {attempt + 1}: Searching for CAPTCHA sitekey...")
 
-            # Ensure a potential sitekey element is present
-            await page.wait_for_selector('[data-sitekey]', timeout=60000)
+            # Capture network requests looking for site-key dynamically
+            sitekey_candidates = []
+            
+            async def log_network_request(response):
+                text = await response.text()
+                if "sitekey" in text:
+                    logging.info(f"[✓] Potential sitekey found in network response: {response.url}")
+                    sitekey_candidates.append(text)
 
+            page.on("response", log_network_request)
+
+            # Extract sitekey from known HTML elements
             sitekey = await page.evaluate("""() => {
-                const selectors = [
-                    '[data-sitekey]', 'input[name="sitekey"]', '.captcha-sitekey',
-                    'div.h-captcha[data-sitekey]', '#captcha-container[data-sitekey]', '.dynamic-captcha[data-sitekey]'
+                let selectors = [
+                    document.querySelector('[data-sitekey]'),
+                    document.querySelector('input[name="sitekey"]'),
+                    document.querySelector('.captcha-sitekey'),
+                    document.querySelector('div.h-captcha[data-sitekey]'),
+                    document.querySelector('#captcha-container[data-sitekey]'),
+                    document.querySelector('.dynamic-captcha[data-sitekey]')
                 ];
-                
-                for (const selector of selectors) {
-                    const element = document.querySelector(selector);
-                    if (element) {
-                        return element.getAttribute('data-sitekey') || element.value;
+                for (let selector of selectors) {
+                    if (selector) {
+                        return selector.getAttribute('data-sitekey') || selector.value;
                     }
                 }
                 return null;
             }""")
 
+            # If no sitekey found in HTML, check network logs
+            if not sitekey and sitekey_candidates:
+                sitekey = sitekey_candidates[0]  # Using the first extracted instance
+
             if sitekey:
                 logging.info(f"[✓] Sitekey found: {sitekey}")
                 return sitekey
-
-            logging.warning(f"[!] Sitekey not found on attempt {attempt + 1}. Retrying...")
-            await asyncio.sleep(2)  # Shorter delay
+            else:
+                logging.warning(f"[!] Sitekey not found on attempt {attempt + 1}. Retrying...")
+                await asyncio.sleep(3)  # Shorter retry delay for dynamic loading
 
         except Exception as e:
-            await handle_error(e, attempt)
+            logging.warning(f"[!] Error during sitekey fetch attempt {attempt + 1}: {e}")
+            await asyncio.sleep(3)  # Retry delay
 
     logging.error("[✗] Sitekey extraction failed after maximum retries.")
-    
-    # Call handle_rate_limit function from nordvpn.py
-    logging.info("[*] Triggering rate-limit handling...")
-    await handle_rate_limit(page)
-
     return None
 
-# === Solve CAPTCHA via 2Captcha API ===
+
+# === Utility: Solve CAPTCHA via 2Captcha API ===
 def solve_turnstile_captcha(sitekey, url):
+    """
+    Sends CAPTCHA solving request to 2Captcha API.
+    :param sitekey: The CAPTCHA sitekey extracted from the page.
+    :param url: The page URL where the CAPTCHA is located.
+    :return: The solved CAPTCHA token or None if solving fails.
+    """
     try:
+        # Send CAPTCHA solving request to 2Captcha
         response = requests.post(f"{CAPTCHA_API_URL}/in.php", data={
             "key": API_KEY,
             "method": "turnstile",
@@ -94,6 +110,7 @@ def solve_turnstile_captcha(sitekey, url):
         captcha_id = request_data["request"]
         logging.info(f"[✓] CAPTCHA solving request sent. ID: {captcha_id}. Waiting for solution...")
 
+        # Poll for CAPTCHA solution
         start_time = time.time()
         while time.time() - start_time < CAPTCHA_CONFIG["captcha_timeout_seconds"]:
             time.sleep(CAPTCHA_CONFIG["poll_interval_seconds"])
@@ -115,8 +132,16 @@ def solve_turnstile_captcha(sitekey, url):
         logging.error(f"[!] JSON decoding error during CAPTCHA solving: {e}")
         return None
 
-# === Inject CAPTCHA Token ===
+
+# === Utility: Inject CAPTCHA Token ===
 async def inject_token(page, captcha_token, url):
+    """
+    Injects the CAPTCHA token into the page and submits the form for validation.
+    :param page: Playwright page object.
+    :param captcha_token: The solved CAPTCHA token.
+    :param url: The page URL for navigation after injection.
+    :return: True if the injection and navigation succeed, False otherwise.
+    """
     try:
         logging.info("[✓] Attempting CAPTCHA token injection.")
         response = await page.evaluate("""(token) => {
