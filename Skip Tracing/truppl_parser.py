@@ -547,10 +547,10 @@ def extract_sitekey(response_body):
 
 async def main():
     SHEET_NAME = "CAPE CORAL FINAL"
+    SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
     MAILING_STREETS_RANGE = f"{SHEET_NAME}!P571:P"
     ZIPCODE_RANGE = f"{SHEET_NAME}!Q571:Q"
-    SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
-
+    
     BATCH_SIZE = 10
     MAX_CAPTCHA_RETRIES = 3
     BACKOFF_FACTOR = 2
@@ -562,14 +562,12 @@ async def main():
         logging.error("[!] Missing data in one or both ranges. Skipping processing...")
         return
 
-    mailing_streets = [(row_index, value) for row_index, value in mailing_streets if value.strip()]
-    zip_codes = [(row_index, value) for row_index, value in zip_codes if value.strip()]
-    street_dict = {row_index: value for row_index, value in mailing_streets}
-    zip_dict = {row_index: value for row_index, value in zip_codes}
-
+    mailing_streets = {index: value for index, value in mailing_streets if value.strip()}
+    zip_codes = {index: value for index, value in zip_codes if value.strip()}
+    
     valid_entries = [
-        (index, street_dict[index], zip_dict[index])
-        for index in street_dict.keys() & zip_dict.keys()
+        (index, mailing_streets[index], zip_codes[index])
+        for index in mailing_streets.keys() & zip_codes.keys()
     ]
 
     if not valid_entries:
@@ -577,17 +575,15 @@ async def main():
         return
 
     async with async_playwright() as p:
+        browser, context, page = None, None, None
         try:
-            # Launch the browser
             browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
             context = await browser.new_context(user_agent=random.choice(user_agents))
-
-            # Open a new page and apply stealth mode
             page = await context.new_page()
             await stealth(page)
 
             for batch_start in range(0, len(valid_entries), BATCH_SIZE):
-                batch = valid_entries[batch_start:batch_start + BATCH_SIZE]
+                batch = valid_entries[batch_start : batch_start + BATCH_SIZE]
                 logging.info(f"[→] Processing batch {batch_start // BATCH_SIZE + 1} with {len(batch)} entries...")
 
                 for row_index, mailing_street, zip_code in batch:
@@ -660,6 +656,8 @@ async def main():
         except Exception as e:
             logging.error(f"[!] Error launching or processing browser: {e}")
         finally:
+            if page:
+                await page.close()
             if context:
                 await context.close()
             if browser:
