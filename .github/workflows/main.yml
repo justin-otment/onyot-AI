@@ -1,120 +1,34 @@
-name: Run Skip Tracing Parser
+name: Run Truppl Parser
 
 on:
-  workflow_dispatch:
   push:
-    paths:
-      - 'Skip Tracing/**'
-      - '.github/workflows/main.yml'
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  run-parser:
+  truppl_parser_job:
     runs-on: windows-latest
 
-    env:
-      PYTHONIOENCODING: utf-8
-      TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
-      VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
-      VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
-      GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
-      GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
-      PLAYWRIGHT_BROWSERS_PATH: 0
-      CONDA_NO_PLUGINS: true
-
     steps:
-      - name: Checkout Code
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Install Anaconda (Miniconda)
-        run: |
-          # Set CONDA_NO_PLUGINS for this session
-          $env:CONDA_NO_PLUGINS = "true"
-          Invoke-WebRequest -Uri "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe" -OutFile "Miniconda.exe"
-          Start-Process -FilePath "Miniconda.exe" -ArgumentList "/S /D=C:\Miniconda" -Wait
+      - name: Set up Miniconda environment
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          python-version: 3.10
+          activate-environment: automation_env
+          auto-update-conda: true
+          use-mamba: false
 
-      - name: Update Conda & Set Solver to Classic
+      - name: Update Conda Environment
         run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          # Force Conda to use the classic solver and disable plugins.
-          C:\Miniconda\Scripts\conda.exe --no-plugins config --set solver classic
-          C:\Miniconda\Scripts\conda.exe --no-plugins update -n base -c defaults conda -y
+          if exist environment.yml (
+            conda env update --file environment.yml --name automation_env
+          ) else (
+            echo "No environment.yml found, using default environment settings."
+          )
 
-      - name: Set Up Conda Python 3.11
-        run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe --no-plugins create --name automation_env python=3.11 -y
-
-      - name: Fix Conda Plugin Issue
-        run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe --no-plugins config --set report_errors false
-          C:\Miniconda\Scripts\conda.exe --no-plugins clean --all
-
-      - name: Verify Python Version
-        run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env python --version
-
-      - name: Install Conda Dependencies (Without Plugins)
-        run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env conda install -c conda-forge --file requirements.txt -y
-
-      - name: Install Missing Dependencies via pip (Fallback)
-        run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env python -m pip install --upgrade pip
-          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env python -m pip install -r pip-requirements.txt
-          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env python -m pip install beautifulsoup4 google-api-python-client google-auth-oauthlib python-dotenv
-
-      - name: Verify package.json exists
-        run: |
-          if (!(Test-Path "package.json")) {
-            Write-Output "package.json not found! Initializing..."
-            npm init -y
-          }
-
-      - name: Install Node.js Dependencies
-        run: |
-          npm install
-          npm install @playwright/test
-
-      - name: Install Playwright Browsers & Verify Installation
-        run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env playwright install --with-deps
-          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env playwright install chromium
-
-          if (!(Test-Path "C:\Miniconda\envs\automation_env\Lib\site-packages\playwright\driver\package\.local-browsers\chromium_headless_shell*")) {
-            Write-Output "Playwright browsers missing, reinstalling..."
-            C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env npx playwright install --with-deps
-          }
-
-      - name: Debug Playwright Installation
-        run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env python -c "
-          import asyncio
-          from playwright.async_api import async_playwright
-          async def test_browser():
-              async with async_playwright() as p:
-                  browser = await p.chromium.launch(headless=True)
-                  print('Browser launched successfully!')
-                  await browser.close()
-          asyncio.run(test_browser())
-          "
-
-      - name: Install Playwright-Stealth for CAPTCHA Handling
-        run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env pip install playwright-stealth
-
-      - name: Verify Environment Activation
-        run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env python -m playwright install
-
-      - name: Run Skip Tracing Parser
-        run: |
-          $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env python "Skip Tracing/truppl_parser.py"
+      - name: Run Truppl Parser Script
+        run: conda run --no-plugins --name automation_env python "Skip Tracing/truppl_parser.py"
