@@ -42,6 +42,7 @@ jobs:
 
       - name: Set Up Conda Python 3.11
         run: |
+          C:\Miniconda\Scripts\conda.exe config --set solver classic
           C:\Miniconda\Scripts\conda.exe create --name automation_env python=3.11 -y
 
       - name: Fix Conda Plugin Issue
