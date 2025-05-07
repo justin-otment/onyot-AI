@@ -32,7 +32,7 @@ jobs:
 
       - name: Update Conda & Set Solver to Classic
         run: |
-          REM Force Conda to use the classic solver and disable plugins.
+          # Force Conda to use the classic solver and disable plugins.
           C:\Miniconda\Scripts\conda.exe --no-plugins config --set solver classic
           C:\Miniconda\Scripts\conda.exe --no-plugins update -n base -c defaults conda -y
 
@@ -62,7 +62,7 @@ jobs:
       - name: Verify package.json exists
         run: |
           if (!(Test-Path "package.json")) {
-            echo "package.json not found! Initializing..."
+            Write-Output "package.json not found! Initializing..."
             npm init -y
           }
 
@@ -77,7 +77,7 @@ jobs:
           C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env playwright install chromium
 
           if (!(Test-Path "C:\Miniconda\envs\automation_env\Lib\site-packages\playwright\driver\package\.local-browsers\chromium_headless_shell*")) {
-            echo "Playwright browsers missing, reinstalling..."
+            Write-Output "Playwright browsers missing, reinstalling..."
             C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env npx playwright install --with-deps
           }
 
