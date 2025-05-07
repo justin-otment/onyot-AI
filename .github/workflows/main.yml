@@ -63,10 +63,37 @@ jobs:
           npm install
           npm install @playwright/test
 
-      - name: Install Playwright Browsers
+      - name: Install Playwright Browsers & Verify Installation
         run: |
           C:\Miniconda\Scripts\conda.exe run --name automation_env playwright install --with-deps
           C:\Miniconda\Scripts\conda.exe run --name automation_env playwright install chromium
+
+          # Ensure browsers exist and fix missing executables
+          if (!(Test-Path "C:\Miniconda\envs\automation_env\Lib\site-packages\playwright\driver\package\.local-browsers\chromium_headless_shell*")) {
+            echo "Playwright browsers missing, reinstalling..."
+            C:\Miniconda\Scripts\conda.exe run --name automation_env npx playwright install --with-deps
+          }
+
+      - name: Debug Playwright Installation
+        run: |
+          C:\Miniconda\Scripts\conda.exe run --name automation_env python -c "
+          import asyncio
+          from playwright.async_api import async_playwright
+          async def test_browser():
+              async with async_playwright() as p:
+                  browser = await p.chromium.launch(headless=True)
+                  print('Browser launched successfully!')
+                  await browser.close()
+          asyncio.run(test_browser())
+          "
+
+      - name: Install Playwright-Stealth for CAPTCHA Handling
+        run: |
+          C:\Miniconda\Scripts\conda.exe run --name automation_env pip install playwright-stealth
+
+      - name: Verify Environment Activation
+        run: |
+          C:\Miniconda\Scripts\conda.exe run --name automation_env python -m playwright install
 
       - name: Run Skip Tracing Parser
         run: |
