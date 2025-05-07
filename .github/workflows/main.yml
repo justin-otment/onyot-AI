@@ -93,16 +93,21 @@ jobs:
       - name: Debug Playwright Installation
         run: |
           $env:CONDA_NO_PLUGINS = "true"
-          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env python -c "
+          # Write the Playwright test script to a file
+          @"
           import asyncio
           from playwright.async_api import async_playwright
+          
           async def test_browser():
               async with async_playwright() as p:
                   browser = await p.chromium.launch(headless=True)
                   print('Browser launched successfully!')
                   await browser.close()
+          
           asyncio.run(test_browser())
-          "
+          "@ | Out-File -Encoding UTF8 test_browser.py
+          # Execute the test script
+          C:\Miniconda\Scripts\conda.exe --no-plugins run --name automation_env python test_browser.py
 
       - name: Install Playwright-Stealth for CAPTCHA Handling
         run: |
