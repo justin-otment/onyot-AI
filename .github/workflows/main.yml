@@ -1,40 +1,23 @@
-name: Run Automated Python Scraping Tasks with Docker Compose
-
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
-
 jobs:
-  run-scripts:
+  build-and-run:
     runs-on: ubuntu-latest
-    env:
-      TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
-      VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
-      VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
-      GOOGLE_CREDENTIALS_B64: ${{ secrets.GOOGLE_CREDENTIALS_B64 }}
-      GOOGLE_TOKEN_B64: ${{ secrets.GOOGLE_TOKEN_B64 }}
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-      - name: Set up workspace and log file
+      - name: Build Docker Image
         run: |
-          mkdir -p "Skip Tracing"
-          touch "Skip Tracing/logfile.log"
+          docker build -t skip-parser ./Skip\ Tracing
 
-      - name: Decode Google Credentials
+      - name: Run Script Inside Container
+        env:
+          TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
+          VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
+          VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
         run: |
-          echo "${GOOGLE_CREDENTIALS_B64}" | base64 -d > ./Skip_Tracing/credentials.json
-          echo "${GOOGLE_TOKEN_B64}" | base64 -d > ./Skip_Tracing/token.json
-
-      - name: Run with Docker Compose
-        run: docker compose up --build --abort-on-container-exit
-
-      - name: Upload Log File on Failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: logfile
-          path: "Skip Tracing/logfile.log"
+          docker run --rm -e TWO_CAPTCHA_API_KEY -e VPN_USERNAME -e VPN_PASSWORD \
+            -e GOOGLE_CREDENTIALS_JSON -e GOOGLE_TOKEN_JSON \
+            skip-parser python truppl_parser.py
