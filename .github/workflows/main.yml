@@ -1,4 +1,4 @@
-name: Run Automated Python Scraping Tasks with Docker
+name: Run Automated Python Scraping Tasks with Docker Compose
 
 on:
   push:
@@ -19,28 +19,24 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Build Docker Image
-        run: docker build -t python_scraper .
-
       - name: Ensure Log File Exists
         run: |
           mkdir -p "Skip Tracing"
           touch "Skip Tracing/logfile.log"
 
-      - name: Run Script in Docker
+      - name: Decode Google Credentials
         run: |
-          docker run --rm \
-            -e TWO_CAPTCHA_API_KEY="${{ secrets.TWO_CAPTCHA_API_KEY }}" \
-            -e VPN_USERNAME="${{ secrets.VPN_USERNAME }}" \
-            -e VPN_PASSWORD="${{ secrets.VPN_PASSWORD }}" \
-            -e GOOGLE_CREDENTIALS_B64="${{ secrets.GOOGLE_CREDENTIALS_B64 }}" \
-            -e GOOGLE_TOKEN_B64="${{ secrets.GOOGLE_TOKEN_B64 }}" \
-            -v "${{ github.workspace }}/Skip Tracing/logfile.log:/app/Skip Tracing/logfile.log" \
-            python_scraper bash -c "
-              echo \"\$GOOGLE_CREDENTIALS_B64\" | base64 -d > /app/credentials.json &&
-              echo \"\$GOOGLE_TOKEN_B64\" | base64 -d > /app/token.json &&
-              xvfb-run python '/app/Skip Tracing/truppl_parser.py'
-            "
+          echo "${GOOGLE_CREDENTIALS_B64}" | base64 -d > ./credentials.json
+          echo "${GOOGLE_TOKEN_B64}" | base64 -d > ./token.json
+
+      - name: Copy credentials to container context
+        run: |
+          mkdir -p ./Skip_Tracing
+          mv credentials.json ./Skip_Tracing/
+          mv token.json ./Skip_Tracing/
+
+      - name: Run with Docker Compose
+        run: docker-compose up --build --abort-on-container-exit
 
       - name: Upload Log File on Failure
         if: failure()
