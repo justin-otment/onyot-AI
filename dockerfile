@@ -47,17 +47,17 @@ RUN apt-get update --fix-missing && apt-get install -y --no-install-recommends \
     libxshmfence1 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
-    pip install --no-cache-dir -r /app/requirements.txt && \
+    pip install --no-cache-dir -r /requirements.txt && \
     playwright install
 
 # Copy VPN configuration files
 COPY externals/VPNs /app/externals/VPNs
 
 # Copy the Skip Tracing directory into the container
-COPY Skip Tracing /app/Skip Tracing
+COPY Skip Tracing /Skip Tracing
 
 # Set the working directory
-WORKDIR /app
+WORKDIR
 
 # Run the script with xvfb
 CMD ["xvfb-run", "python", "Skip Tracing/truppl_parser.py"]
