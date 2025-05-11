@@ -1,7 +1,7 @@
 # Use slim Python image for smaller footprint
 FROM python:3.11-slim
 
-# Set environment variables to ensure UTF-8 encoding and avoid interactive prompts
+# Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONIOENCODING=utf-8 \
     DEBIAN_FRONTEND=noninteractive
@@ -51,19 +51,19 @@ RUN pip install --upgrade pip && \
     pip install -r /tmp/pip-requirements.txt && \
     pip install beautifulsoup4 google-api-python-client google-auth-oauthlib python-dotenv
 
-# Install Playwright and its browsers
+# Install Playwright and browsers
 RUN npm install -g playwright && \
     playwright install --with-deps && \
     playwright install chromium
 
-# Copy VPN configuration files
+# Copy VPN config files
 COPY externals/VPNs /app/externals/VPNs
 
-# Copy Skip Tracing script directory (handle space in name)
-COPY Skip\ Tracing /app/Skip\ Tracing
+# Correctly copy directory with space in its name
+COPY "Skip Tracing" "/app/Skip Tracing"
 
-# Set working directory to script location
-WORKDIR /app/Skip Tracing
+# Set working directory
+WORKDIR "/app/Skip Tracing"
 
-# Default command to run your script
+# Default command
 CMD ["python", "truppl_parser.py"]
