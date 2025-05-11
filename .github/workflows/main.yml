@@ -1,4 +1,4 @@
-name: Run Automated Python Scraping Tasks via Docker
+name: Run Automated Python Scraping via Docker
 
 on:
   push:
@@ -19,15 +19,20 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Decode and Save Google Credentials
+      - name: Decode Google Credentials
         run: |
           echo "${GOOGLE_CREDENTIALS_B64}" | base64 -d > credentials.json
           echo "${GOOGLE_TOKEN_B64}" | base64 -d > token.json
 
+      - name: Create dummy log file (if missing)
+        run: |
+          mkdir -p "Skip Tracing"
+          touch "Skip Tracing/logfile.log"
+
       - name: Build Docker Image
         run: docker build -t truppl-runner .
 
-      - name: Run Python Script in Docker
+      - name: Run Python Script via Docker
         run: >
           docker run --rm
           -e TWO_CAPTCHA_API_KEY=${{ secrets.TWO_CAPTCHA_API_KEY }}
