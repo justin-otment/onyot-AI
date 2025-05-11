@@ -1,23 +1,39 @@
-# Use a lightweight Python base image
-FROM python:3.12-slim
+# Use slim Python image
+FROM python:3.11-slim
 
-WORKDIR /app
-COPY . /app
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    PLAYWRIGHT_BROWSERS_PATH=0
 
-# Install Conda
-RUN apt-get update && \
-    apt-get install -y wget && \
-    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh && \
-    bash miniconda.sh -b -p /opt/conda && \
-    rm miniconda.sh
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    wget curl unzip gnupg2 software-properties-common \
+    build-essential libnss3 libxss1 libasound2 libatk1.0-0 libatk-bridge2.0-0 libgtk-3-0 \
+    ca-certificates xvfb nodejs npm openvpn && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-ENV PATH="/opt/conda/bin:$PATH"
+# Install pip dependencies
+COPY requirements.txt pip-requirements.txt ./
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt && \
+    pip install -r pip-requirements.txt
 
-# Install dependencies
-RUN conda install -c conda-forge --file requirements.txt -y || echo "Skipping unavailable Conda packages..."
-RUN pip install --no-cache-dir asyncio playwright
+# Install Node and Playwright
+RUN npm install -g npm && \
+    npm install -D @playwright/test && \
+    npx playwright install --with-deps && \
+    playwright install chromium
 
-# Set Working Directory to "Skip Tracing"
+# Copy VPN config
+COPY externals/VPNs /app/externals/VPNs
+
+# Copy Skip Tracing script directory (handle space in name)
+COPY ["Skip Tracing", "/app/Skip Tracing"]
+
+# Set working directory
 WORKDIR "/app/Skip Tracing"
 
-CMD ["python", "truppl_parser.py"]
+# Set entrypoint
+ENTRYPOINT ["python", "truppl_parser.py"]
