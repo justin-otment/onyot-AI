@@ -12,8 +12,8 @@ jobs:
       TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
       VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
       VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
-      GOOGLE_CREDENTIALS_B64: ${{ secrets.GOOGLE_CREDENTIALS_B64 }}
-      GOOGLE_TOKEN_B64: ${{ secrets.GOOGLE_TOKEN_B64 }}
+      GOOGLE_CREDENTIALS_B64: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+      GOOGLE_TOKEN_B64: ${{ secrets.GOOGLE_TOKEN_JSON }}
 
     steps:
       - name: Checkout Repository
@@ -21,12 +21,12 @@ jobs:
 
       - name: Decode Google Credentials
         run: |
-          if [[ -z "$GOOGLE_CREDENTIALS_B64" || -z "$GOOGLE_TOKEN_B64" ]]; then
+          if [[ -z "$GOOGLE_CREDENTIALS_JSON" || -z "$GOOGLE_TOKEN_JSON" ]]; then
             echo "❌ One or both Google secrets are missing."
             exit 1
           fi
-          echo "$GOOGLE_CREDENTIALS_B64" | base64 -d > credentials.json
-          echo "$GOOGLE_TOKEN_B64" | base64 -d > token.json
+          echo "$GOOGLE_CREDENTIALS_JSON" | base64 -d > credentials.json
+          echo "$GOOGLE_TOKEN_JSON" | base64 -d > token.json
 
       - name: Create dummy log file (if missing)
         run: |
