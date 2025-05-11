@@ -45,7 +45,7 @@ jobs:
             -e VPN_PASSWORD="${{ secrets.VPN_PASSWORD }}" \
             -e GOOGLE_CREDENTIALS_JSON="${{ secrets.GOOGLE_CREDENTIALS_JSON }}" \
             -e GOOGLE_TOKEN_JSON="${{ secrets.GOOGLE_TOKEN_JSON }}" \
-            python_scraper python "/Skip Tracing/truppl_parser.py"
+            python_scraper python "/app/Skip Tracing/truppl_parser.py"
 
       - name: Upload Log File on Failure
         if: failure()
