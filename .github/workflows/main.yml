@@ -12,8 +12,8 @@ jobs:
       TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
       VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
       VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
-      GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
-      GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
+      GOOGLE_CREDENTIALS_B64: ${{ secrets.GOOGLE_CREDENTIALS_B64 }}
+      GOOGLE_TOKEN_B64: ${{ secrets.GOOGLE_TOKEN_B64 }}
 
     steps:
       - name: Checkout Repository
@@ -42,16 +42,13 @@ jobs:
           $authPath = "C:\Program Files\OpenVPN\config\auth.txt"
           Set-Content -Path $authPath -Value $authContent -Force
 
-      - name: Prepare Google Credentials
+      - name: Decode Google Credentials
         shell: pwsh
         run: |
-          $credsPath = "credentials.json"
-          $tokenPath = "token.json"
-          "${{ env.GOOGLE_CREDENTIALS_JSON }}" | Out-File -FilePath $credsPath -Encoding utf8 -Force
-          "${{ env.GOOGLE_TOKEN_JSON }}" | Out-File -FilePath $tokenPath -Encoding utf8 -Force
+          [System.IO.File]::WriteAllBytes("credentials.json", [System.Convert]::FromBase64String("${{ env.GOOGLE_CREDENTIALS_B64 }}"))
+          [System.IO.File]::WriteAllBytes("token.json", [System.Convert]::FromBase64String("${{ env.GOOGLE_TOKEN_B64 }}"))
 
       - name: Run Main Python Script
-        working-directory: 
         shell: pwsh
         run: |
           python main.py
