@@ -1,3 +1,4 @@
+# Use a lightweight Python base image
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -14,6 +15,6 @@ ENV PATH="/opt/conda/bin:$PATH"
 
 # Install dependencies
 RUN conda install -c conda-forge --file requirements.txt -y || echo "Skipping unavailable Conda packages..."
-RUN pip install asyncio playwright
+RUN pip install --no-cache-dir asyncio playwright
 
 CMD ["python", "main.py"]
