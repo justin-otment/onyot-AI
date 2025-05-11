@@ -17,7 +17,7 @@ ENV PATH="/opt/conda/bin:$PATH"
 RUN conda install -c conda-forge --file requirements.txt -y || echo "Skipping unavailable Conda packages..."
 RUN pip install --no-cache-dir asyncio playwright
 
-# Set Working Directory to "Skip Tracing" Subfolder
-WORKDIR /app/Skip Tracing
+# Set Working Directory to "Skip Tracing"
+WORKDIR "/app/Skip Tracing"
 
 CMD ["python", "truppl_parser.py"]
