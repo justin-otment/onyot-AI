@@ -45,13 +45,13 @@ jobs:
       - name: Prepare Google Credentials
         shell: pwsh
         run: |
-          $credsPath = "src\credentials.json"
-          $tokenPath = "src\token.json"
+          $credsPath = "credentials.json"
+          $tokenPath = "token.json"
           "${{ env.GOOGLE_CREDENTIALS_JSON }}" | Out-File -FilePath $credsPath -Encoding utf8 -Force
           "${{ env.GOOGLE_TOKEN_JSON }}" | Out-File -FilePath $tokenPath -Encoding utf8 -Force
 
       - name: Run Main Python Script
-        working-directory: src
+        working-directory: 
         shell: pwsh
         run: |
           python main.py
@@ -61,4 +61,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: logfile
-          path: src\logfile.log
+          path: logfile.log
