@@ -1,7 +1,7 @@
 
 # command to build docker = docker build --no-cache -t onyot-ai .
 # docker run -it --rm onyot-ai bash
-# xvfb-run python Skip_Tracing/truppl_parser.py
+# xvfb-run python Skip Tracing/truppl_parser.py
 # docker exec -it onyot-ai-onyot-ai bash
 # echo $TWO_CAPTCHA_API_KEY
 # echo $VPN_USERNAME
@@ -54,10 +54,10 @@ RUN apt-get update --fix-missing && apt-get install -y --no-install-recommends \
 COPY externals/VPNs /app/externals/VPNs
 
 # Copy the Skip_Tracing directory into the container
-COPY Skip_Tracing /app/Skip_Tracing
+COPY Skip Tracing /app/Skip Tracing
 
 # Set the working directory
 WORKDIR /app
 
 # Run the script with xvfb
-CMD ["xvfb-run", "python", "Skip_Tracing/truppl_parser.py"]
+CMD ["xvfb-run", "python", "Skip Tracing/truppl_parser.py"]
