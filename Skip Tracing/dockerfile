@@ -1,63 +1,60 @@
+# Base image
+FROM python:3.11-slim
 
-# command to build docker = docker build --no-cache -t onyot-ai .
-# docker run -it --rm onyot-ai bash
-# xvfb-run python Skip_Tracing/truppl_parser.py
-# docker exec -it onyot-ai-onyot-ai bash
-# echo $TWO_CAPTCHA_API_KEY
-# echo $VPN_USERNAME
-# echo $VPN_PASSWORD
-# run container = docker-compose up --build
-# run container in detached mode = docker-compose up -d
-# docker-compose down
-# docker system prune -a  , to clean docker caches
+# Set environment variables to avoid prompts and ensure UTF-8 encoding
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONIOENCODING=utf-8 \
+    DEBIAN_FRONTEND=noninteractive \
+    PLAYWRIGHT_BROWSERS_PATH=0
 
-
-FROM mcr.microsoft.com/playwright/python:v1.48.0-focal
-
-# Enable universe and multiverse repositories
-RUN apt-get update && apt-get install -y software-properties-common && \
-    add-apt-repository universe && \
-    add-apt-repository multiverse && \
-    apt-get update
-
-# Install dependencies
-COPY requirements.txt /app/requirements.txt
-RUN apt-get update --fix-missing && apt-get install -y --no-install-recommends \
-    xvfb \
-    openvpn \
-    liblzo2-2 \
-    libpkcs11-helper1 \
-    iproute2 \
-    iputils-ping \
+# Install OS-level dependencies
+RUN apt-get update && apt-get install -y \
+    wget \
+    curl \
+    unzip \
+    gnupg \
     libnss3 \
-    libatk1.0-0 \
     libatk-bridge2.0-0 \
-    libcups2 \
-    libxcomposite1 \
-    libxrandr2 \
-    libxdamage1 \
-    libxkbcommon0 \
-    libgbm1 \
-    libpango-1.0-0 \
+    libxss1 \
     libasound2 \
-    libwayland-client0 \
-    libwayland-cursor0 \
-    libwayland-egl1 \
+    libxshmfence1 \
+    libgbm-dev \
+    libgtk-3-0 \
     libx11-xcb1 \
-    libxshmfence1 && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* && \
-    pip install --no-cache-dir -r /app/requirements.txt && \
-    playwright install
+    libxcb-dri3-0 \
+    xvfb \
+    ca-certificates \
+    build-essential \
+    python3-dev \
+    nodejs \
+    npm \
+ && rm -rf /var/lib/apt/lists/*
+
+# Install Playwright and Node.js dependencies
+RUN npm install -g playwright && \
+    npx playwright install --with-deps
+
+# Create app directory
+WORKDIR /app
+
+# Copy Python requirements (if any)
+COPY requirements.txt /app/requirements.txt
+COPY pip-requirements.txt /app/pip-requirements.txt
+
+# Install Python dependencies
+RUN pip install --upgrade pip && \
+    pip install -r /app/pip-requirements.txt && \
+    pip install -r /app/requirements.txt || true && \
+    pip install beautifulsoup4 google-api-python-client google-auth-oauthlib python-dotenv
 
 # Copy VPN configuration files
 COPY externals/VPNs /app/externals/VPNs
 
-# Copy the Skip_Tracing directory into the container
-COPY Skip_Tracing /app/Skip_Tracing
+# Copy script directory
+COPY "Skip Tracing" /app/Skip Tracing
 
-# Set the working directory
-WORKDIR /app
+# Set working directory to script location
+WORKDIR /app/Skip Tracing
 
-# Run the script with xvfb
-CMD ["xvfb-run", "python", "Skip_Tracing/truppl_parser.py"]
+# Set default command to run the parser
+CMD ["python", "truppl_parser.py"]
