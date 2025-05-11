@@ -51,7 +51,7 @@ jobs:
       - name: Run Main Python Script
         shell: pwsh
         run: |
-          python main.py
+          python truppl_parser.py
 
       - name: Upload Log File on Failure
         if: failure()
