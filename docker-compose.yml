@@ -16,4 +16,5 @@ services:
       - ./credentials.json:/app/credentials.json
       - ./token.json:/app/token.json
       - ./Skip Tracing/logfile.log:/app/Skip Tracing/logfile.log
-    command: ["xvfb-run", "python", "Skip Tracing/truppl_parser.py"]
+    CMD ["xvfb-run", "python", "Skip Tracing/truppl_parser.py"]
+
