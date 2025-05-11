@@ -21,8 +21,12 @@ jobs:
 
       - name: Decode Google Credentials
         run: |
-          echo "${GOOGLE_CREDENTIALS_B64}" | base64 -d > credentials.json
-          echo "${GOOGLE_TOKEN_B64}" | base64 -d > token.json
+          if [[ -z "$GOOGLE_CREDENTIALS_B64" || -z "$GOOGLE_TOKEN_B64" ]]; then
+            echo "❌ One or both Google secrets are missing."
+            exit 1
+          fi
+          echo "$GOOGLE_CREDENTIALS_B64" | base64 -d > credentials.json
+          echo "$GOOGLE_TOKEN_B64" | base64 -d > token.json
 
       - name: Create dummy log file (if missing)
         run: |
