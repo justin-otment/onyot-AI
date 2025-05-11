@@ -29,19 +29,19 @@ jobs:
         run: |
           curl -fsSL https://get.docker.com | sh
 
-      - name: Build Docker Image
+      - name: Build Docker Image (Ensure lowercase name)
         run: |
-          docker build -t python-scraper .
+          docker build -t python_scraper .
 
       - name: Run Automation Inside Docker
         run: |
           docker run --rm \
-            -e TWO_CAPTCHA_API_KEY=${{ secrets.TWO_CAPTCHA_API_KEY }} \
-            -e VPN_USERNAME=${{ secrets.VPN_USERNAME }} \
-            -e VPN_PASSWORD=${{ secrets.VPN_PASSWORD }} \
+            -e TWO_CAPTCHA_API_KEY="${{ secrets.TWO_CAPTCHA_API_KEY }}" \
+            -e VPN_USERNAME="${{ secrets.VPN_USERNAME }}" \
+            -e VPN_PASSWORD="${{ secrets.VPN_PASSWORD }}" \
             -e GOOGLE_CREDENTIALS_JSON="${{ secrets.GOOGLE_CREDENTIALS_JSON }}" \
             -e GOOGLE_TOKEN_JSON="${{ secrets.GOOGLE_TOKEN_JSON }}" \
-            python-scraper
+            python_scraper
 
       - name: Upload Log File on Failure
         if: failure()
