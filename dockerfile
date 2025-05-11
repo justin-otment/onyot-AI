@@ -51,10 +51,10 @@ RUN apt-get update --fix-missing && apt-get install -y --no-install-recommends \
     playwright install
 
 # Copy VPN configuration files
-COPY externals/VPNs /app/externals/VPNs
+COPY externals/VPNs
 
 # Copy the Skip Tracing directory into the container
-COPY Skip Tracing /Skip Tracing
+COPY Skip Tracing 
 
 # Set the working directory
 WORKDIR
