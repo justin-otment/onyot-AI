@@ -19,17 +19,17 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Remove Conflicting Packages (Fixes Docker Install Issues)
+      - name: Remove Conflicting Packages
         run: |
           sudo apt-get remove containerd || true
           sudo apt-get autoremove
           sudo apt-get update
 
-      - name: Install Docker (Ensures Proper Setup)
+      - name: Install Docker
         run: |
           curl -fsSL https://get.docker.com | sh
 
-      - name: Build Docker Image (Ensure Lowercase Name)
+      - name: Build Docker Image (Ensure Proper Naming)
         run: |
           docker build -t python_scraper .
 
@@ -37,7 +37,7 @@ jobs:
         run: |
           docker images | grep python_scraper || echo "Docker image not found!"
 
-      - name: Run Automation Inside Docker (Corrected Image and Script Path)
+      - name: Run Automation Inside Docker (Corrected Execution)
         run: |
           docker run --rm \
             -e TWO_CAPTCHA_API_KEY="${{ secrets.TWO_CAPTCHA_API_KEY }}" \
