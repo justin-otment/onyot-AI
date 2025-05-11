@@ -35,9 +35,8 @@ jobs:
           -e VPN_PASSWORD=${{ secrets.VPN_PASSWORD }}
           -v "${{ github.workspace }}/credentials.json:/app/credentials.json"
           -v "${{ github.workspace }}/token.json:/app/token.json"
-          -v "/home/runner/work/onyot-AI/onyot-AI/Skip\ Tracing/logfile.log:/app/Skip\ Tracing/logfile.log"
-
-
+          -v "${{ github.workspace }}/Skip Tracing/logfile.log:/app/Skip Tracing/logfile.log"
+          truppl-runner
 
       - name: Upload Log File on Failure
         if: failure()
