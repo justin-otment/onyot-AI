@@ -19,10 +19,15 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Docker
+      - name: Remove Conflicting Packages
         run: |
+          sudo apt-get remove containerd
+          sudo apt-get autoremove
           sudo apt-get update
-          sudo apt-get install -y docker.io
+
+      - name: Install Docker
+        run: |
+          curl -fsSL https://get.docker.com | sh
 
       - name: Build Docker Image
         run: |
