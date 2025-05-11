@@ -4,6 +4,7 @@ import string
 import sys
 import random
 import time
+import json
 
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
@@ -111,29 +112,16 @@ except Exception as e:
     print(f"[!] Failed to initialize Google Sheets service: {e}")
     sheets_service = None
 
-# Replace with your Google Sheets integration
-def get_sheet_data(sheet_id, range_name):
-    """
-    Fetches data from Google Sheets for a given range.
-    Returns list of (row_index, value) tuples for non-empty first-column values.
-    """
-    try:
-        # Use the global sheets_service object
-        result = sheets_service.spreadsheets().values().get(
-            spreadsheetId=sheet_id,
-            range=range_name
-        ).execute()
-        values = result.get("values", [])
-        base_row = int(re.search(r"(\d+):", range_name).group(1))
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
-        return [
-            (i + base_row, row[0])
-            for i, row in enumerate(values)
-            if row and len(row) > 0 and row[0].strip()
-        ]
+def get_sheets_service():
+    try:
+        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+        service = build('sheets', 'v4', credentials=creds)
+        return service
     except Exception as e:
-        logging.error(f"Error fetching data from Google Sheets range '{range_name}': {e}")
-        return []
+        print(f"[!] Failed to initialize Google Sheets service: {e}")
+        return None
     
 def append_to_google_sheet(first_name, last_name, phones, emails, site):
     """
