@@ -19,24 +19,18 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Ensure Log File Exists
+      - name: Set up workspace and log file
         run: |
           mkdir -p "Skip Tracing"
           touch "Skip Tracing/logfile.log"
 
       - name: Decode Google Credentials
         run: |
-          echo "${GOOGLE_CREDENTIALS_B64}" | base64 -d > ./credentials.json
-          echo "${GOOGLE_TOKEN_B64}" | base64 -d > ./token.json
-
-      - name: Copy credentials to container context
-        run: |
-          mkdir -p ./Skip_Tracing
-          mv credentials.json ./Skip_Tracing/
-          mv token.json ./Skip_Tracing/
+          echo "${GOOGLE_CREDENTIALS_B64}" | base64 -d > ./Skip_Tracing/credentials.json
+          echo "${GOOGLE_TOKEN_B64}" | base64 -d > ./Skip_Tracing/token.json
 
       - name: Run with Docker Compose
-        run: docker-compose up --build --abort-on-container-exit
+        run: docker compose up --build --abort-on-container-exit
 
       - name: Upload Log File on Failure
         if: failure()
