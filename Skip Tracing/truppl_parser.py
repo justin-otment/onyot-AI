@@ -114,7 +114,7 @@ except Exception as e:
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
-def get_sheets_service():
+def get_sheet_data():
     try:
         creds = Credentials.from_authorized_user_file("token.json", SCOPES)
         service = build('sheets', 'v4', credentials=creds)
