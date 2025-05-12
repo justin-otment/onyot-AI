@@ -5,7 +5,7 @@ google-auth-httplib2==0.1.0
 google-api-python-client==2.86.0
 
 # 2Captcha API for CAPTCHA solving
-requests==2.28.2
+requests==2.32.2
 
 # Playwright Python bindings
 playwright==1.32.0
