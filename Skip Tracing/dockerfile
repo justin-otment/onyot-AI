@@ -19,7 +19,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     npx playwright install --with-deps && \
     playwright install chromium
 
-# Copy requirements files
+# Copy Python requirements
 COPY requirements.txt pip-requirements.txt ./
 
 # Install Python packages
@@ -27,14 +27,12 @@ RUN pip install --upgrade pip && \
     pip install -r requirements.txt && \
     pip install -r pip-requirements.txt
 
-# Copy VPN config
+# Copy project files
 COPY externals/VPNs /app/externals/VPNs
-
-# Copy script directory (with space in name)
-COPY "Skip Tracing" "/app/Skip Tracing"
+COPY "Skip Tracing" /app/Skip_Tracing
 
 # Set working directory
-WORKDIR "/app/Skip Tracing"
+WORKDIR /app/Skip_Tracing
 
-# Entrypoint
+# Default command
 ENTRYPOINT ["python", "truppl_parser.py"]
