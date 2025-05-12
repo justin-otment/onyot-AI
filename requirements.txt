@@ -1,25 +1,20 @@
-beautifulsoup4==4.12.2
-certifi==2025.1.31
-google-api-core==2.24.2
-google-api-python-client==2.167.0
-google-auth==2.38.0
-google-auth-httplib2==0.2.0
-google-auth-oauthlib==1.2.1
-greenlet==3.1.1
-httplib2==0.22.0
-proto-plus==1.26.1
-pyasn1>=0.1.3
-pyparsing==3.0.9
-requests==2.32.3
-rsa==4.9.1
-typing_extensions==4.8.0
-uritemplate==4.1.1
-urllib3==2.2.1
-python-dotenv
-playwright==1.48.0
-playwright-stealth==1.0.6
-protobuf==3.20.3
-soupsieve==2.6
-cachetools==5.3.0
-pyasn1_modules==0.2.8
-requests-oauthlib==2.0.0
+# Google Sheets API integration
+google-auth==2.16.0
+google-auth-oauthlib==0.5.2
+google-auth-httplib2==0.1.0
+google-api-python-client==2.86.0
+
+# 2Captcha API for CAPTCHA solving
+requests==2.28.2
+
+# Playwright Python bindings
+playwright==1.32.0
+
+# For handling async tasks in Playwright
+asyncio==3.4.3
+
+# Logging
+loguru==0.6.0
+
+# (Optional) For any extra dependencies you might be using, like Pandas, Requests, etc.
+pandas==2.0.2
