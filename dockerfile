@@ -1,38 +1,36 @@
+# Use Python 3.11 slim image
 FROM python:3.11-slim
 
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    DEBIAN_FRONTEND=noninteractive \
-    PLAYWRIGHT_BROWSERS_PATH=0
+# Set environment variables to avoid interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     wget curl unzip gnupg2 software-properties-common \
     build-essential libnss3 libxss1 libasound2 libatk1.0-0 libatk-bridge2.0-0 libgtk-3-0 \
-    ca-certificates xvfb openvpn && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    ca-certificates xvfb nodejs npm openvpn \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js 20 and Playwright dependencies
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs && \
-    npm install -D @playwright/test && \
-    npx playwright install --with-deps && \
-    playwright install chromium
-
-# Copy requirement files
+# Upgrade pip and install Python requirements
 COPY requirements.txt pip-requirements.txt ./
-
-# Install Python requirements
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt && \
     pip install -r pip-requirements.txt
 
-# Copy script and VPNs
-COPY ["externals/VPNs", "/app/externals/VPNs"]
+# Install Playwright and Chromium with correct Node/NPM setup
+RUN npm install -g npm@10 && \
+    npm install -D @playwright/test && \
+    npx playwright install --with-deps && \
+    playwright install chromium
+
+# Copy VPN configs
+COPY externals/VPNs /app/externals/VPNs
+
+# Copy folder with space in name
 COPY ["Skip Tracing", "/app/Skip Tracing"]
 
 # Set working directory
 WORKDIR /app/Skip Tracing
 
-# Run the script
-ENTRYPOINT ["python", "truppl_parser.py"]
+# Default command to run the main script (adjust as needed)
+CMD ["python", "truepeople_tracer1.py"]
