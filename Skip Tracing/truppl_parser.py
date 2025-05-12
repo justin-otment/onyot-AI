@@ -115,13 +115,27 @@ except Exception as e:
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 def get_sheet_data(sheet_id, range_name):
+    """
+    Fetches data from Google Sheets for a given range.
+    Returns list of (row_index, value) tuples for non-empty first-column values.
+    """
     try:
-        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
-        service = build('sheets', 'v4', credentials=creds)
-        return service
+        service = authenticate_google_sheets()
+        result = service.spreadsheets().values().get(
+            spreadsheetId=sheet_id,
+            range=range_name
+        ).execute()
+        values = result.get("values", [])
+        base_row = int(re.search(r"(\d+):", range_name).group(1))
+
+        return [
+            (i + base_row, row[0])
+            for i, row in enumerate(values)
+            if row and len(row) > 0 and row[0].strip()
+        ]
     except Exception as e:
-        print(f"[!] Failed to initialize Google Sheets service: {e}")
-        return None
+        logging.error(f"Error fetching data from Google Sheets range '{range_name}': {e}")
+        return []
     
 def append_to_google_sheet(first_name, last_name, phones, emails, site):
     """
