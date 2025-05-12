@@ -12,27 +12,27 @@ RUN apt-get update && apt-get install -y \
     ca-certificates xvfb openvpn && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js 20.x and Playwright
+# Install Node.js 20 and Playwright dependencies
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs && \
     npm install -D @playwright/test && \
     npx playwright install --with-deps && \
     playwright install chromium
 
-# Copy Python requirements
+# Copy requirement files
 COPY requirements.txt pip-requirements.txt ./
 
-# Install Python packages
+# Install Python requirements
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt && \
     pip install -r pip-requirements.txt
 
-# Copy project files
-COPY externals/VPNs /app/externals/VPNs
-COPY "Skip Tracing" /app/Skip_Tracing
+# Copy script and VPNs
+COPY ["externals/VPNs", "/app/externals/VPNs"]
+COPY ["Skip Tracing", "/app/Skip Tracing"]
 
 # Set working directory
-WORKDIR /app/Skip_Tracing
+WORKDIR /app/Skip Tracing
 
-# Default command
+# Run the script
 ENTRYPOINT ["python", "truppl_parser.py"]
