@@ -33,4 +33,4 @@ COPY ["Skip Tracing", "/app/Skip Tracing"]
 WORKDIR /app/Skip Tracing
 
 # Default command to run the main script (adjust as needed)
-CMD ["python", "truepeople_tracer1.py"]
+CMD ["python", "truppl_parser.py"]
