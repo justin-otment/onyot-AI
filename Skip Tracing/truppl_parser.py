@@ -66,31 +66,25 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 # === Google Sheets Auth ===
 def authenticate_google_sheets():
-    """Authenticate with Google Sheets API in headless mode using pre-generated token."""
     creds = None
 
-    # Try to load from environment variable first
-    token_json = os.environ.get("GOOGLE_TOKEN_JSON")
-    if token_json:
-        try:
-            creds = Credentials.from_authorized_user_info(json.loads(token_json), SCOPES)
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-                print("[✓] Token loaded from env and refreshed.")
-        except Exception as e:
-            print(f"[!] Failed to load creds from GOOGLE_TOKEN_JSON: {e}")
+    try:
+        token_str = os.getenv("GOOGLE_TOKEN_JSON")
+        if not token_str:
+            raise ValueError("Missing GOOGLE_TOKEN_JSON")
 
-    # Fallback to local token.json if exists (for local dev)
-    elif os.path.exists(TOKEN_PATH):
-        try:
-            creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            print("[✓] Token loaded from file and refreshed.")
-        except Exception as e:
-            print(f"[!] Failed to load token from file: {e}")
+        token_data = json.loads(token_str)
 
-    # Raise if no valid creds
+        creds = Credentials.from_authorized_user_info(token_data, SCOPES)
+
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            print("[✓] Token refreshed successfully.")
+
+    except Exception as e:
+        print(f"[!] Failed to load creds from GOOGLE_TOKEN_JSON: {e}")
+        creds = None
+
     if not creds or not creds.valid:
         raise RuntimeError("No valid Google Sheets credentials found.")
 
