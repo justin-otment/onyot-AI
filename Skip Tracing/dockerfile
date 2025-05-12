@@ -1,11 +1,11 @@
-# Base image with Python
+# Base image
 FROM python:3.11-slim
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+ENV PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies
+# Install required OS packages
 RUN apt-get update && apt-get install -y \
     curl \
     unzip \
@@ -30,31 +30,28 @@ RUN apt-get update && apt-get install -y \
     xvfb \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js (needed for Playwright)
+# Install Node.js (Playwright requires it)
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get update && apt-get install -y nodejs && \
     npm install -g npm@10
 
-# Install pip dependencies
+# Copy and install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright and Chromium
+# Install Playwright + Chromium
 RUN npm install -D @playwright/test && \
     npx playwright install --with-deps && \
     playwright install chromium
 
-# Copy script folder with escaped space
-COPY Skip\ Tracing /app/Skip\ Tracing
+# Copy the "Skip Tracing" folder
+COPY ["Skip Tracing", "/app/Skip Tracing"]
 
-# Copy VPN configs (if any)
+# Copy VPN config files (if any)
 COPY externals/VPNs /app/externals/VPNs
-
-# Copy credential files or config files if needed
-COPY pip-requirements.txt /app/pip-requirements.txt
 
 # Set working directory
 WORKDIR /app/Skip Tracing
 
-# Set entrypoint
+# Set default command to run the parser
 CMD ["python", "truppl_parser.py"]
