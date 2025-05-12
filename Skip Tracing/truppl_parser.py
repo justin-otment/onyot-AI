@@ -603,6 +603,7 @@ async def main():
         print("[!] No valid entries to process. Exiting...")
         return
 
+
     async with async_playwright() as p:
         browser = None
         context = None  # Initialize context for cleanup
