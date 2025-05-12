@@ -66,53 +66,35 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 # === Google Sheets Auth ===
 def authenticate_google_sheets():
-    """Authenticate with Google Sheets API."""
+    """Authenticate with Google Sheets API in headless mode using pre-generated token."""
     creds = None
 
-    # Load credentials from token file if it exists
-    if os.path.exists(TOKEN_PATH):
+    # Try to load from environment variable first
+    token_json = os.environ.get("GOOGLE_TOKEN_JSON")
+    if token_json:
+        try:
+            creds = Credentials.from_authorized_user_info(json.loads(token_json), SCOPES)
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+                print("[✓] Token loaded from env and refreshed.")
+        except Exception as e:
+            print(f"[!] Failed to load creds from GOOGLE_TOKEN_JSON: {e}")
+
+    # Fallback to local token.json if exists (for local dev)
+    elif os.path.exists(TOKEN_PATH):
         try:
             creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-        except Exception as e:
-            print(f"[!] Failed to load credentials from token file: {e}")
-            creds = None
-
-    # Refresh or obtain new credentials if necessary
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            try:
+            if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
-                print("[✓] Token refreshed successfully.")
-                with open(TOKEN_PATH, 'w') as token:
-                    token.write(creds.to_json())
-            except Exception as e:
-                print(f"[!] Error refreshing token: {e}")
-                creds = None
+            print("[✓] Token loaded from file and refreshed.")
+        except Exception as e:
+            print(f"[!] Failed to load token from file: {e}")
 
-        if not creds:
-            try:
-                flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
-                creds = flow.run_local_server(port=0)
-                with open(TOKEN_PATH, 'w') as token:
-                    token.write(creds.to_json())
-                print("[✓] New credentials obtained and saved.")
-            except Exception as e:
-                print(f"[!] Error obtaining new credentials: {e}")
-                raise
+    # Raise if no valid creds
+    if not creds or not creds.valid:
+        raise RuntimeError("No valid Google Sheets credentials found.")
 
     return creds
-
-# Initialize Google Sheets service
-try:
-    creds = authenticate_google_sheets()
-    sheets_service = build('sheets', 'v4', credentials=creds)
-    sys.stdout.reconfigure(encoding='utf-8')
-    print("[✓] Google Sheets service initialized successfully.")
-except Exception as e:
-    print(f"[!] Failed to initialize Google Sheets service: {e}")
-    sheets_service = None
-
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 def get_sheet_data(sheet_id, range_name):
     """
