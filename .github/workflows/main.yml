@@ -25,6 +25,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Set Dockerfile-safe name for folder with spaces
+        run: |
+          echo 'WORKAROUND: no need, COPY handles "Skip Tracing" in Dockerfile.'
+
       - name: Build Docker container from root context
         run: docker build -t skip-tracing-parser .
 
