@@ -25,19 +25,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set Dockerfile-safe name for folder with spaces
+      - name: Build Docker container
         run: |
-          echo 'WORKAROUND: no need, COPY handles "Skip Tracing" in Dockerfile.'
-
-      - name: Build Docker container from root context
-        run: docker build -t skip-tracing-parser .
+          docker build -t skip-tracing-parser .
 
       - name: Run Skip Tracing container
         run: |
           docker run --rm \
-            -e TWO_CAPTCHA_API_KEY \
-            -e VPN_USERNAME \
-            -e VPN_PASSWORD \
-            -e GOOGLE_CREDENTIALS_JSON \
-            -e GOOGLE_TOKEN_JSON \
+            -e TWO_CAPTCHA_API_KEY="$TWO_CAPTCHA_API_KEY" \
+            -e VPN_USERNAME="$VPN_USERNAME" \
+            -e VPN_PASSWORD="$VPN_PASSWORD" \
+            -e GOOGLE_CREDENTIALS_JSON="$GOOGLE_CREDENTIALS_JSON" \
+            -e GOOGLE_TOKEN_JSON="$GOOGLE_TOKEN_JSON" \
             skip-tracing-parser
