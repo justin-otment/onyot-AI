@@ -35,7 +35,7 @@ SHEET_NAME = "CAPE CORAL FINAL"
 SHEET_NAME_2 = "For REI Upload"
 MAX_RETRIES = 1
 
-CREDS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON") or "credentials.json"
+CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON") or "credentials.json"
 TOKEN_PATH = os.getenv("GOOGLE_TOKEN_JSON") or "token.json"
 
 if not os.path.exists(CREDENTIALS_PATH):
@@ -58,7 +58,7 @@ def authenticate_google_sheets():
             print(f"Error loading token.json: {e}")
     
     # Fallback to login flow (only works locally, not in GitHub Actions)
-    flow = InstalledAppFlow.from_client_secrets_file(CREDS_PATH, SCOPES)
+    flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
     creds = flow.run_local_server(port=0)
     with open(TOKEN_PATH, "w") as token:
         token.write(creds.to_json())
