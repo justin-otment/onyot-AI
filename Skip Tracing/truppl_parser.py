@@ -26,7 +26,31 @@ logging.basicConfig(level=logging.DEBUG, filename="logfile.log", filemode="a",
                     format="%(asctime)s - %(levelname)s - %(message)s")
 logging.info("Script started")
 
-load_dotenv()
+load_dotenv("C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/Skip Tracing/.env")
+
+# === Global Configurations ===
+CAPTCHA_CONFIG = {
+    "max_retries": 5,
+    "wait_time_ms": 7000,
+    "poll_interval_seconds": 5,
+    "captcha_timeout_seconds": 75,
+}
+API_KEY = os.getenv("TWO_CAPTCHA_API_KEY")
+CAPTCHA_API_URL = "http://2captcha.com"
+LOGGING_FORMAT = "[%(asctime)s] %(levelname)s: %(message)s"
+logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
+
+MAX_RETRIES = 5  # Maximum retry attempts for main function
+BACKOFF_FACTOR = 5  # Exponential backoff factor
+
+vpn_username =   os.getenv("VPN_USERNAME")
+vpn_password = os.getenv("VPN_PASSWORD")
+
+if not vpn_username or not vpn_password:
+    print("[!] Failed to load VPN credentials!")
+else:
+    print("VPN Username:", vpn_username)
+    print("VPN Password: Loaded successfully")
 
 # === Config ===
 # Define file paths
