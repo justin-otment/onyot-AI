@@ -564,6 +564,8 @@ def extract_sitekey(response_body):
         return None
 
 async def main():
+    import logging
+
     SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
     SHEET_NAME = "CAPE CORAL FINAL"
     START_ROW = 2612
@@ -580,7 +582,7 @@ async def main():
         print("[!] Missing data in one or both ranges. Skipping processing...")
         return
 
-    # Add row offset so we can correctly calculate actual row index
+    # Offset row indices based on START_ROW
     mailing_streets = [
         (START_ROW + idx, val.strip())
         for idx, val in mailing_streets_raw
@@ -592,11 +594,11 @@ async def main():
         if val and val.strip()
     ]
 
-    # Create dictionaries for quick lookup by row
+    # Map by row index
     street_dict = {row: value for row, value in mailing_streets}
     zip_dict = {row: value for row, value in zip_codes}
 
-    # Get only rows that exist in both datasets
+    # Find rows that exist in both
     valid_entries = [
         (row, street_dict[row], zip_dict[row])
         for row in sorted(set(street_dict) & set(zip_dict))
@@ -608,55 +610,50 @@ async def main():
 
     async with async_playwright() as p:
         browser = None
-        context = None  # Initialize context for cleanup
+        context = None
         try:
-            # Launch the browser
             browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
             context = await browser.new_context(user_agent=random.choice(user_agents))
-            await context.add_init_script(stealth_js)  # Add stealth script for anti-bot measures
-            
-            # === Define and Activate Network Interception ===
+            await context.add_init_script(stealth_js)
+
             async def intercept_sitekey(route):
                 try:
                     url = route.request.url
-                    # Filter irrelevant resource types
                     if url.endswith(('.css', '.js', '.png', '.jpg', '.woff', '.woff2', '.svg')):
-                        await route.continue_()  # Allow these requests to proceed
+                        await route.continue_()
                         return
 
                     logging.debug(f"[DEBUG] Intercepting route: {url}")
                     response = await route.continue_()
 
-                    # Validate response existence
                     if response and hasattr(response, "body"):
                         response_body = response.body.decode() if response.body else None
                         if response_body:
-                            logging.debug(f"[DEBUG] Intercepted response body: {response_body[:500]}")  # Log snippet
-                            sitekey = extract_sitekey(response_body)  # Use helper to extract sitekey
+                            logging.debug(f"[DEBUG] Intercepted response body: {response_body[:500]}")
+                            sitekey = extract_sitekey(response_body)
                             if sitekey:
                                 logging.info(f"[✓] Extracted sitekey: {sitekey}")
                     else:
                         logging.warning(f"[!] No response body for route: {url}")
                 except Exception as e:
                     logging.error(f"[!] Error intercepting route: {e}")
-                    await route.continue_()  # Continue request on error
+                    await route.continue_()
 
-            await context.route("**/*", intercept_sitekey)  # Route all network requests
+            await context.route("**/*", intercept_sitekey)
 
-            # Open a new page
             page = await context.new_page()
             await stealth_async(page)
 
-            # === Process Entries in Batches ===
             for batch_start in range(0, len(valid_entries), BATCH_SIZE):
                 batch = valid_entries[batch_start:batch_start + BATCH_SIZE]
                 print(f"[→] Processing batch {batch_start // BATCH_SIZE + 1} with {len(batch)} entries...")
+
                 for row_index, mailing_street, zip_code in batch:
                     print(f"\n[→] Processing Row {row_index}: Mailing Street '{mailing_street}', ZIP '{zip_code}'")
                     try:
-                        # Retry CAPTCHA solving if needed
                         captcha_retries = 0
                         html_content = None
+
                         while captcha_retries < MAX_CAPTCHA_RETRIES:
                             html_content = await fetch_truepeoplesearch_data(
                                 row_index, mailing_street, zip_code, browser, context, page
@@ -665,26 +662,21 @@ async def main():
                                 break
                             captcha_retries += 1
                             print(f"[!] Retrying CAPTCHA solving for row {row_index} ({captcha_retries}/{MAX_CAPTCHA_RETRIES})...")
-                        
+
                         if not html_content:
                             print("[!] Skipping row due to repeated CAPTCHA failures.")
                             continue
 
-                        # Extract links
                         extracted_links = extract_links(html_content)
 
-                        # Check and log extracted links
                         if extracted_links:
                             print(f"[DEBUG] Extracted {len(extracted_links)} links:")
                             for entry in extracted_links:
                                 print(f"    - {entry['text']}")
                         else:
-                            print("[DEBUG] Extracted 0 links:")
-                            print("[DEBUG] Extracted 0 links:")
-                            
-                            # Trigger rate limit handling if no links are extracted
+                            print("[DEBUG] Extracted 0 links.")
                             await handle_rate_limit(page)
-                            continue  # Proceed to the next iteration if applicable
+                            continue
 
                         ref_names = extract_reference_names(SHEET_ID, row_index)
                         matched_results = match_entries(extracted_links, ref_names)
@@ -693,7 +685,6 @@ async def main():
                             print(f"[!] No match found in row {row_index}. Skipping second batch extraction.")
                             continue
 
-                        # Navigate to matched profiles and parse information
                         for matched_entry in matched_results:
                             matched_url = matched_entry["link"]
                             matched_name = matched_entry["text"]
@@ -711,25 +702,24 @@ async def main():
                                 print(f"[!] Skipping row {row_index}: No phone data found.")
                                 continue
 
-                            # Extract name parts
                             name_parts = matched_name.strip().split()
                             first_name = name_parts[0] if name_parts else ""
                             last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
 
-                            site_data = get_sheet_data(SHEET_ID, range_name=f"{SHEET_NAME}!B2612:B")
-                            site_dict = {idx: value for idx, value in site_data}  # Convert to dictionary
-                            site_value = site_dict.get(row_index, None)  # Fetch site value for current row
+                            site_data = get_sheet_data(SHEET_ID, range_name=f"{SHEET_NAME}!B{START_ROW}:B")
+                            site_dict = {START_ROW + i: val for i, val in site_data}
+                            site_value = site_dict.get(row_index)
 
                             if site_value is None:
                                 logging.warning(f"[!] No Site value found for row {row_index}. Skipping.")
                                 continue
 
                             append_to_google_sheet(
-                                first_name=matched_name.split()[0],
-                                last_name=" ".join(matched_name.split()[1:]),
+                                first_name=first_name,
+                                last_name=last_name,
                                 phones=phone_data,
                                 emails=emails,
-                                site=site_value  # Now includes "Site"
+                                site=site_value
                             )
 
                     except Exception as e:
@@ -739,11 +729,12 @@ async def main():
         except Exception as e:
             print(f"[!] Error launching or processing browser: {e}")
         finally:
-            # Cleanup browser and context
             if context:
                 await context.close()
             if browser:
                 await browser.close()
 
+
 if __name__ == "__main__":
     asyncio.run(main())
+
