@@ -4,7 +4,6 @@ import string
 import sys
 import random
 import time
-import json
 
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
@@ -19,10 +18,9 @@ from nordvpn import verify_vpn_connection  # VPN functionality from nordvpn.py
 from captcha import get_site_key, solve_turnstile_captcha, inject_token  # CAPTCHA functionalities from captcha.py
 import traceback
 from dotenv import load_dotenv
-import logging
 import os
-import base64
 print("Current Working Directory:", os.getcwd())
+import logging
 logging.basicConfig(level=logging.DEBUG, filename="logfile.log", filemode="a",
                     format="%(asctime)s - %(levelname)s - %(message)s")
 logging.info("Script started")
@@ -42,7 +40,7 @@ LOGGING_FORMAT = "[%(asctime)s] %(levelname)s: %(message)s"
 logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
 
 MAX_RETRIES = 5  # Maximum retry attempts for main function
-BACKOFF_FACTOR = 5  # Exponential backoff factor
+BACKOFF_FACTOR = 2  # Exponential backoff factor
 
 vpn_username =   os.getenv("VPN_USERNAME")
 vpn_password = os.getenv("VPN_PASSWORD")
@@ -53,10 +51,12 @@ else:
     print("VPN Username:", vpn_username)
     print("VPN Password: Loaded successfully")
 
+
 # === Config ===
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON")
-TOKEN_PATH = os.getenv("GOOGLE_TOKEN_JSON")
+CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
+TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
+
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "CAPE CORAL FINAL"
 SHEET_NAME_2 = "For REI Upload"
@@ -65,11 +65,8 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 BATCH_SIZE = 10
 MAX_CAPTCHA_RETRIES = 3
 
-# === Google Sheets Auth ===
 def authenticate_google_sheets():
-    """Authenticate with Google Sheets API."""
     creds = None
-
     if os.path.exists(TOKEN_PATH):
         creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
 
@@ -168,21 +165,28 @@ def append_to_google_sheet(first_name, last_name, phones, emails, site):
 
     print(f"[✓] Data appended to '{SHEET_NAME_2}'")
 
-# User agents for browser context
 user_agents = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    # Add more user agents as needed
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.74 Mobile Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 11_2_3) AppleWebKit/537.36 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15",
+    "Mozilla/5.0 (Linux; Android 10; Mi 9T Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Mobile Safari/537.36",
+    "Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.141 Safari/537.36",
 ]
 
 stealth_js = """
 Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
 Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+Object.defineProperty(navigator, 'plugins', { get: () => [1,2,3,4,5] });
 Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
-Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' });
 window.chrome = { runtime: {} };
+window.navigator.chrome = { runtime: {} };
 """
+
 def extract_links(html):
     soup = BeautifulSoup(html, 'html.parser')
     entries = []
