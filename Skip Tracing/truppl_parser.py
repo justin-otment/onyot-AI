@@ -32,8 +32,17 @@ SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "CAPE CORAL FINAL"
 SHEET_NAME_2 = "For REI Upload"
 MAX_RETRIES = 1
-TOKEN_PATH = os.getenv("GOOGLE_TOKEN_JSON")
-CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON")
+
+CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON") or "credentials.json"
+TOKEN_PATH = os.getenv("GOOGLE_TOKEN_JSON") or "token.json"
+
+if not os.path.exists(CREDENTIALS_PATH):
+    print(f"[!] credentials.json not found at path: {CREDENTIALS_PATH}", file=sys.stderr)
+    sys.exit(1)
+
+if not os.path.exists(TOKEN_PATH):
+    print(f"[!] token.json not found at path: {TOKEN_PATH}", file=sys.stderr)
+    sys.exit(1)
 
 # === Google Sheets Auth ===
 def authenticate_google_sheets():
