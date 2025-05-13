@@ -1,184 +1,132 @@
 import os
-import time
 import re
+import time
+import json
 import logging
-import asyncio
 import requests
-from playwright.async_api import async_playwright
+from urllib.parse import urlparse, parse_qs
+from bs4 import BeautifulSoup
 
-# === CAPTCHA Configuration ===
-CAPTCHA_CONFIG = {
-    "max_retries": 5,
-    "wait_time_ms": 7000,
-    "poll_interval_seconds": 5,
-    "captcha_timeout_seconds": 75,
+# Constants
+API_KEY = os.getenv("TWO_CAPTCHA_API_KEY")  # Loaded from environment
+CAPTCHA_SOLVE_TIMEOUT = 180  # seconds
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 }
 
-API_KEY = os.getenv("CAPTCHA_API_KEY")
-CAPTCHA_API_URL = "http://2captcha.com"
 
-# Logging config
-LOGGING_FORMAT = "[%(asctime)s] %(levelname)s: %(message)s"
-logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
-
-
-# === Utility: Extract CAPTCHA Sitekey ===
 async def get_site_key(page):
-    logging.info("[*] Searching for CAPTCHA sitekey...")
+    """
+    Extracts Turnstile sitekey from page HTML, iframes, or data attributes.
+    """
+    try:
+        html = await page.content()
+        soup = BeautifulSoup(html, "html.parser")
 
-    sitekey_candidates = []
+        # Look in iframe src
+        for iframe in soup.find_all("iframe"):
+            src = iframe.get("src", "")
+            if "challenges.cloudflare.com/turnstile" in src:
+                parsed = urlparse(src)
+                qs = parse_qs(parsed.query)
+                sitekey = qs.get("k", [None])[0]
+                if sitekey:
+                    logging.info(f"[✓] Found sitekey in iframe: {sitekey}")
+                    return sitekey
 
-    async def log_network_response(response):
-        try:
-            text = await response.text()
-            if "sitekey" in text:
-                match = re.search(r'sitekey["\']?\s*[:=]\s*["\']([^"\']+)', text)
-                if match:
-                    sitekey = match.group(1)
-                    sitekey_candidates.append(sitekey)
-                    logging.info(f"[✓] Sitekey found in network response: {sitekey}")
-        except:
-            pass
+        # Look for divs with data-sitekey
+        div = soup.find("div", {"data-sitekey": True})
+        if div:
+            logging.info(f"[✓] Found sitekey in div: {div['data-sitekey']}")
+            return div["data-sitekey"]
 
-    page.on("response", log_network_response)
+        # Regex fallback
+        match = re.search(r'data-sitekey=["\']([\w-]+)["\']', html)
+        if match:
+            logging.info(f"[✓] Found sitekey via regex: {match.group(1)}")
+            return match.group(1)
 
-    for attempt in range(CAPTCHA_CONFIG["max_retries"]):
-        try:
-            await page.wait_for_load_state("networkidle")
-            logging.info(f"[*] Attempt {attempt + 1}: Searching for CAPTCHA sitekey...")
+        logging.warning("[!] No sitekey found in the HTML.")
+        return None
 
-            # Try common selectors
-            sitekey = await page.evaluate("""() => {
-                const selectors = [
-                    '[data-sitekey]',
-                    'input[name="sitekey"]',
-                    '.captcha-sitekey',
-                    'div.h-captcha[data-sitekey]',
-                    '#captcha-container[data-sitekey]',
-                    '.dynamic-captcha[data-sitekey]'
-                ];
-                for (let sel of selectors) {
-                    const el = document.querySelector(sel);
-                    if (el) return el.getAttribute('data-sitekey') || el.value;
-                }
-                return null;
-            }""")
-
-            # Try iframe scanning if no success
-            if not sitekey:
-                logging.info("[*] Trying iframe scanning for sitekey...")
-                frames = page.frames
-                for f in frames:
-                    try:
-                        frame_sitekey = await f.evaluate("""() => {
-                            const el = document.querySelector('[data-sitekey]');
-                            return el ? el.getAttribute('data-sitekey') : null;
-                        }""")
-                        if frame_sitekey:
-                            sitekey = frame_sitekey
-                            break
-                    except:
-                        continue
-
-            if not sitekey and sitekey_candidates:
-                sitekey = sitekey_candidates[0]
-
-            if sitekey:
-                logging.info(f"[✓] Sitekey found: {sitekey}")
-                return sitekey
-            else:
-                logging.warning(f"[!] Sitekey not found on attempt {attempt + 1}. Retrying...")
-                await asyncio.sleep(3)
-
-        except Exception as e:
-            logging.warning(f"[!] Error during sitekey fetch: {e}")
-            await asyncio.sleep(3)
-
-    logging.error("[✗] Sitekey extraction failed after max retries.")
-    return None
+    except Exception as e:
+        logging.error(f"[!] Error extracting sitekey: {e}")
+        return None
 
 
-# === Utility: Solve CAPTCHA with 2Captcha ===
-def solve_turnstile_captcha(sitekey, url):
+def solve_turnstile_captcha(sitekey, page_url):
+    """
+    Sends CAPTCHA solving request to 2Captcha and polls for result.
+    """
     if not API_KEY:
-        logging.error("[✗] CAPTCHA_API_KEY is not set in environment.")
+        logging.error("[!] TWO_CAPTCHA_API_KEY not set in environment.")
         return None
 
     try:
-        # Submit CAPTCHA
-        logging.info("[*] Submitting CAPTCHA to 2Captcha...")
-        submit_resp = requests.post(f"{CAPTCHA_API_URL}/in.php", data={
+        logging.info(f"[✓] Submitting CAPTCHA solve request for sitekey {sitekey}")
+        payload = {
             "key": API_KEY,
             "method": "turnstile",
             "sitekey": sitekey,
-            "pageurl": url,
+            "pageurl": page_url,
             "json": 1
-        }, timeout=30)
-        result = submit_resp.json()
+        }
+        response = requests.post("http://2captcha.com/in.php", data=payload, headers=HEADERS)
+        result = response.json()
 
         if result.get("status") != 1:
-            logging.error(f"[!] 2Captcha error: {result}")
+            logging.error(f"[!] 2Captcha submission error: {result.get('request')}")
             return None
 
-        captcha_id = result["request"]
-        logging.info(f"[✓] CAPTCHA sent for solving. ID: {captcha_id}")
+        request_id = result["request"]
+        logging.info(f"[✓] CAPTCHA request submitted. Request ID: {request_id}")
+        poll_url = f"http://2captcha.com/res.php?key={API_KEY}&action=get&id={request_id}&json=1"
 
-        # Poll for result
-        start = time.time()
-        while time.time() - start < CAPTCHA_CONFIG["captcha_timeout_seconds"]:
-            time.sleep(CAPTCHA_CONFIG["poll_interval_seconds"])
-            poll_resp = requests.get(f"{CAPTCHA_API_URL}/res.php", params={
-                "key": API_KEY,
-                "action": "get",
-                "id": captcha_id,
-                "json": 1
-            }, timeout=15)
-            poll_result = poll_resp.json()
+        start_time = time.time()
+        while True:
+            if time.time() - start_time > CAPTCHA_SOLVE_TIMEOUT:
+                logging.error("[!] CAPTCHA solve timed out.")
+                return None
 
-            if poll_result.get("status") == 1:
-                token = poll_result["request"]
-                logging.info(f"[✓] CAPTCHA solved: {token}")
-                return token
-
-        logging.error("[✗] CAPTCHA solving timed out.")
-        return None
-
-    except requests.RequestException as e:
-        logging.error(f"[✗] HTTP error during CAPTCHA solving: {e}")
-        return None
-
-
-# === Utility: Inject CAPTCHA Token ===
-async def inject_token(page, captcha_token, url):
-    try:
-        logging.info("[*] Injecting CAPTCHA token into page.")
-        response = await page.evaluate("""(token) => {
-            return fetch("/internalcaptcha/captchasubmit", {
-                method: "POST",
-                body: new URLSearchParams({ 'captchaToken': token }),
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            }).then(res => res.json())
-              .then(data => {
-                  if (data.RedirectUrl) {
-                      document.location.href = data.RedirectUrl;
-                      return true;
-                  }
-                  return false;
-              }).catch(() => false);
-        }""", captcha_token)
-
-        if not response:
-            logging.warning("[!] CAPTCHA submission failed. Reloading page...")
-            await page.reload(wait_until="networkidle")
-            return False
-
-        logging.info(f"[✓] CAPTCHA bypass successful. Navigating to: {url}")
-        await page.goto(url, wait_until="networkidle", timeout=60000)
-        return True
+            time.sleep(5)
+            poll_response = requests.get(poll_url, headers=HEADERS).json()
+            if poll_response.get("status") == 1:
+                logging.info("[✓] CAPTCHA solved successfully.")
+                return poll_response["request"]
+            elif poll_response.get("request") == "CAPCHA_NOT_READY":
+                logging.debug("[…] CAPTCHA not ready yet, polling again...")
+                continue
+            else:
+                logging.error(f"[!] CAPTCHA solve failed: {poll_response.get('request')}")
+                return None
 
     except Exception as e:
-        logging.error(f"[✗] Error during CAPTCHA token injection: {e}")
+        logging.error(f"[!] Exception during CAPTCHA solving: {e}")
+        return None
+
+
+async def inject_token(page, token, page_url):
+    """
+    Injects CAPTCHA token into a hidden form input and submits the page.
+    """
+    try:
+        logging.info("[!] Injecting CAPTCHA token into page.")
+        script = f"""
+        () => {{
+            const form = document.querySelector('form');
+            if (!form) return false;
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'cf-turnstile-response';
+            input.value = '{token}';
+            form.appendChild(input);
+            form.submit();
+            return true;
+        }}
+        """
+        result = await page.evaluate(script)
+        await page.wait_for_load_state("networkidle", timeout=60000)
+        return result
+    except Exception as e:
+        logging.error(f"[!] Error injecting CAPTCHA token: {e}")
         return False
