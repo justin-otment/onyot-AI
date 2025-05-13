@@ -19,9 +19,10 @@ from nordvpn import verify_vpn_connection  # VPN functionality from nordvpn.py
 from captcha import get_site_key, solve_turnstile_captcha, inject_token  # CAPTCHA functionalities from captcha.py
 import traceback
 from dotenv import load_dotenv
-import os
-print("Current Working Directory:", os.getcwd())
 import logging
+import os
+import base64
+print("Current Working Directory:", os.getcwd())
 logging.basicConfig(level=logging.DEBUG, filename="logfile.log", filemode="a",
                     format="%(asctime)s - %(levelname)s - %(message)s")
 logging.info("Script started")
@@ -64,26 +65,18 @@ MAX_RETRIES = 1
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
-# === Google Sheets Auth ===
 def authenticate_google_sheets():
     creds = None
+    token_path = "token.json"
 
-    try:
-        token_str = os.getenv("GOOGLE_TOKEN_JSON")
-        if not token_str:
-            raise ValueError("Missing GOOGLE_TOKEN_JSON")
+    if not os.path.exists(token_path):
+        raise FileNotFoundError("token.json not found. Make sure GOOGLE_TOKEN_JSON is mounted correctly.")
 
-        token_data = json.loads(token_str)
+    creds = Credentials.from_authorized_user_file(token_path, SCOPES)
 
-        creds = Credentials.from_authorized_user_info(token_data, SCOPES)
-
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            print("[✓] Token refreshed successfully.")
-
-    except Exception as e:
-        print(f"[!] Failed to load creds from GOOGLE_TOKEN_JSON: {e}")
-        creds = None
+    if creds and creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+        print("[✓] Token refreshed successfully.")
 
     if not creds or not creds.valid:
         raise RuntimeError("No valid Google Sheets credentials found.")
