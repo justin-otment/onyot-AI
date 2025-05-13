@@ -94,27 +94,20 @@ def authenticate_google_sheets():
 
     return creds
 
-def get_sheet_data(sheet_id, range_name):
-    """
-    Fetches data from Google Sheets for a given range.
-    Returns list of (row_index, value) tuples for non-empty first-column values.
-    """
+def get_sheet_data(sheet_id, data_range):
     try:
-        service = authenticate_google_sheets()
-        result = service.spreadsheets().values().get(
-            spreadsheetId=sheet_id,
-            range=range_name
-        ).execute()
-        values = result.get("values", [])
-        base_row = int(re.search(r"(\d+):", range_name).group(1))
+        creds = authenticate_google_sheets()
+        service = build('sheets', 'v4', credentials=creds)
 
-        return [
-            (i + base_row, row[0])
-            for i, row in enumerate(values)
-            if row and len(row) > 0 and row[0].strip()
-        ]
+        sheet = service.spreadsheets()
+        result = sheet.values().get(spreadsheetId=sheet_id, range=data_range).execute()
+        values = result.get("values", [])
+
+        # Return values with row index info if needed
+        return [(i + 1, row[0]) for i, row in enumerate(values) if row]
+
     except Exception as e:
-        logging.error(f"Error fetching data from Google Sheets range '{range_name}': {e}")
+        print(f"[ERROR] Error fetching data from Google Sheets range '{data_range}': {e}")
         return []
     
 def append_to_google_sheet(first_name, last_name, phones, emails, site):
