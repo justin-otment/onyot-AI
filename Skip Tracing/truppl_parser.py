@@ -27,7 +27,7 @@ logging.basicConfig(level=logging.DEBUG, filename="logfile.log", filemode="a",
                     format="%(asctime)s - %(levelname)s - %(message)s")
 logging.info("Script started")
 
-load_dotenv("C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/Skip Tracing/.env")
+load_dotenv()
 
 # === Global Configurations ===
 CAPTCHA_CONFIG = {
@@ -554,8 +554,8 @@ def extract_sitekey(response_body):
         return None
 
 async def main():
-    MAILING_STREETS_RANGE = "CAPE CORAL FINAL!P912:P"
-    ZIPCODE_RANGE = "CAPE CORAL FINAL!Q912:Q"
+    MAILING_STREETS_RANGE = "CAPE CORAL FINAL!P2612:P"
+    ZIPCODE_RANGE = "CAPE CORAL FINAL!Q2612:Q"
     SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
     
     BATCH_SIZE = 10  # Process entries in batches to avoid resource exhaustion
@@ -563,9 +563,6 @@ async def main():
     
     mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE)
     zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE)
-
-    print(f"[DEBUG] Mailing Streets: {mailing_streets}")
-    print(f"[DEBUG] Zip Codes: {zip_codes}")
 
     if not mailing_streets or not zip_codes:
         print("[!] Missing data in one or both ranges. Skipping processing...")
@@ -585,7 +582,6 @@ async def main():
     if not valid_entries:
         print("[!] No valid entries to process. Exiting...")
         return
-
 
     async with async_playwright() as p:
         browser = None
@@ -697,7 +693,7 @@ async def main():
                             first_name = name_parts[0] if name_parts else ""
                             last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
 
-                            site_data = get_sheet_data(SHEET_ID, range_name=f"{SHEET_NAME}!B912:B")
+                            site_data = get_sheet_data(SHEET_ID, range_name=f"{SHEET_NAME}!B2612:B")
                             site_dict = {idx: value for idx, value in site_data}  # Convert to dictionary
                             site_value = site_dict.get(row_index, None)  # Fetch site value for current row
 
