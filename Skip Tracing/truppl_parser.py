@@ -62,40 +62,19 @@ SHEET_NAME = "CAPE CORAL FINAL"
 SHEET_NAME_2 = "For REI Upload"
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
-BATCH_SIZE = 10
-MAX_CAPTCHA_RETRIES = 3
 
 def authenticate_google_sheets():
+    """Authenticate with Google Sheets API."""
     creds = None
     if os.path.exists(TOKEN_PATH):
         creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-
     if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            try:
-                creds.refresh(Request())
-                print("[✓] Token refreshed successfully.")
-                with open(TOKEN_PATH, 'w') as token:
-                    token.write(creds.to_json())
-            except Exception as e:
-                print(f"[!] Error refreshing token: {e}")
-                creds = None
-
-        if not creds:
-            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
-            creds = flow.run_local_server(port=0)
-            with open(TOKEN_PATH, 'w') as token:
-                token.write(creds.to_json())
-            print("[✓] New credentials obtained and saved.")
-
+        return None
     return build('sheets', 'v4', credentials=creds)
 
-# Replace with your Google Sheets integration
+
 def get_sheet_data(sheet_id, range_name):
-    """
-    Fetches data from Google Sheets for a given range.
-    Returns list of (row_index, value) tuples for non-empty first-column values.
-    """
+    """Fetches data from Google Sheets for a given range."""
     try:
         service = authenticate_google_sheets()
         result = service.spreadsheets().values().get(
@@ -104,7 +83,6 @@ def get_sheet_data(sheet_id, range_name):
         ).execute()
         values = result.get("values", [])
         base_row = int(re.search(r"(\d+):", range_name).group(1))
-
         return [
             (i + base_row, row[0])
             for i, row in enumerate(values)
