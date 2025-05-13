@@ -602,29 +602,39 @@ async def main():
             
             # === Define and Activate Network Interception ===
             async def intercept_sitekey(route):
-                try:
-                    url = route.request.url
-                    # Filter irrelevant resource types
-                    if url.endswith(('.css', '.js', '.png', '.jpg', '.woff', '.woff2', '.svg')):
-                        await route.continue_()  # Allow these requests to proceed
-                        return
-
-                    logging.debug(f"[DEBUG] Intercepting route: {url}")
-                    response = await route.continue_()
-
-                    # Validate response existence
-                    if response and hasattr(response, "body"):
-                        response_body = response.body.decode() if response.body else None
-                        if response_body:
-                            logging.debug(f"[DEBUG] Intercepted response body: {response_body[:500]}")  # Log snippet
-                            sitekey = extract_sitekey(response_body)  # Use helper to extract sitekey
-                            if sitekey:
-                                logging.info(f"[✓] Extracted sitekey: {sitekey}")
-                    else:
-                        logging.warning(f"[!] No response body for route: {url}")
-                except Exception as e:
-                    logging.error(f"[!] Error intercepting route: {e}")
-                    await route.continue_()  # Continue request on error
+              try:
+                  url = route.request.url
+                  # Allow irrelevant asset types through
+                  if url.endswith(('.css', '.js', '.png', '.jpg', '.woff', '.woff2', '.svg')):
+                      await route.continue_()
+                      return
+          
+                  logging.debug(f"[DEBUG] Intercepting route: {url}")
+                  response = await route.continue_()
+          
+                  if not response:
+                      logging.warning(f"[!] No response received for {url}")
+                      return
+          
+                  # Safely get the content type
+                  content_type = response.headers.get("content-type", "").lower()
+          
+                  # Only decode textual responses
+                  if "text" in content_type or "json" in content_type or "html" in content_type:
+                      try:
+                          body = await response.text()
+                          logging.debug(f"[DEBUG] Intercepted response body snippet: {body[:500]}")
+                          sitekey = extract_sitekey(body)
+                          if sitekey:
+                              logging.info(f"[✓] Extracted sitekey: {sitekey}")
+                      except Exception as e:
+                          logging.warning(f"[!] Error decoding text from {url}: {e}")
+                  else:
+                      logging.debug(f"[→] Skipped binary or non-text response from {url} (type: {content_type})")
+          
+              except Exception as e:
+                  logging.error(f"[!] Error in intercept_sitekey: {e}")
+                  await route.continue_()
 
             await context.route("**/*", intercept_sitekey)  # Route all network requests
 
