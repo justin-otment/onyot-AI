@@ -22,5 +22,5 @@ RUN pip install --no-cache-dir -r requirements.txt && \
 COPY ["Skip Tracing", "/app/Skip Tracing"]
 COPY ["externals/VPNs", "/app/externals/VPNs"]
 
-# Write secrets to files and run script
-CMD ["sh", "-c", "echo \"$GOOGLE_CREDENTIALS_JSON\" > credentials.json && echo \"$GOOGLE_TOKEN_JSON\" > token.json && xvfb-run -a python '/app/Skip Tracing/truppl_parser.py'"]
+# Run the main script
+CMD ["sh", "-c", "xvfb-run -a python '/app/Skip Tracing/truppl_parser.py'"]
