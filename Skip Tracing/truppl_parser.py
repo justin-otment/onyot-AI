@@ -8,12 +8,10 @@ import time
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
 from playwright_stealth import stealth_async
-from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
-from google_auth_oauthlib.flow import InstalledAppFlow
 from nordvpn import handle_rate_limit
-from dotenv import load_dotenv
 from nordvpn import verify_vpn_connection  # VPN functionality from nordvpn.py
 from captcha import get_site_key, solve_turnstile_captcha, inject_token  # CAPTCHA functionalities from captcha.py
 import traceback
@@ -27,46 +25,36 @@ logging.info("Script started")
 
 load_dotenv()
 
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-sheets_service = build('sheets', 'v4', credentials=creds)
-
-sys.stdout.reconfigure(encoding='utf-8')
-
 # === Config ===
-# Define file paths
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CREDENTIALS_PATH = os.getenv("GOOGLE_TOKEN_JSON")
-TOKEN_PATH = os.getenv("GOOGLE_TOKEN_JSON")
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "CAPE CORAL FINAL"
 SHEET_NAME_2 = "For REI Upload"
 MAX_RETRIES = 1
 
-# === Google Sheets Auth ===
+# === Load credentials directly from mounted JSON files ===
 def authenticate_google_sheets():
-    creds = None
-    if os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+    try:
+        with open("credentials.json", "r") as f:
+            credentials_info = json.load(f)
 
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            try:
+        with open("token.json", "r") as f:
+            token_info = json.load(f)
+
+        creds = Credentials.from_authorized_user_info(info=token_info, token_uri=credentials_info.get("token_uri"))
+
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
-                print("[✓] Token refreshed successfully.")
-                with open(TOKEN_PATH, 'w') as token:
-                    token.write(creds.to_json())
-            except Exception as e:
-                print(f"[!] Error refreshing token: {e}")
-                creds = None
+                with open("token.json", "w") as token_file:
+                    token_file.write(creds.to_json())
+                print("[✓] Token refreshed and saved.")
 
-        if not creds:
-            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
-            creds = flow.run_local_server(port=0)
-            with open(TOKEN_PATH, 'w') as token:
-                token.write(creds.to_json())
-            print("[✓] New credentials obtained and saved.")
-
-    return build('sheets', 'v4', credentials=creds)
+        return build('sheets', 'v4', credentials=creds)
+    except Exception as e:
+        logging.error(f"[!] Failed to authenticate Google Sheets: {e}")
+        raise
 
 
 def get_sheet_data(sheet_id, range_name):
@@ -90,46 +78,50 @@ def get_sheet_data(sheet_id, range_name):
         logging.error(f"[!] Error fetching data from range '{range_name}': {e}")
         return []
 
+
 def append_to_google_sheet(first_name, last_name, phones, emails, site):
-    service = authenticate_google_sheets()
+    try:
+        service = authenticate_google_sheets()
 
-    header_row = service.spreadsheets().values().get(
-        spreadsheetId=SHEET_ID,
-        range=f"{SHEET_NAME_2}!1:1"
-    ).execute().get("values", [[]])[0]
+        header_row = service.spreadsheets().values().get(
+            spreadsheetId=SHEET_ID,
+            range=f"{SHEET_NAME_2}!1:1"
+        ).execute().get("values", [[]])[0]
 
-    row_data = [""] * len(header_row)
+        row_data = [""] * len(header_row)
 
-    if "Site" in header_row:
-        row_data[header_row.index("Site")] = site
-    if "First Name" in header_row:
-        row_data[header_row.index("First Name")] = first_name
-    if "Last Name" in header_row:
-        row_data[header_row.index("Last Name")] = last_name
+        if "Site" in header_row:
+            row_data[header_row.index("Site")] = site
+        if "First Name" in header_row:
+            row_data[header_row.index("First Name")] = first_name
+        if "Last Name" in header_row:
+            row_data[header_row.index("Last Name")] = last_name
 
-    for i, (phone, phone_type) in enumerate(phones[:5]):
-        try:
-            phone_col = header_row.index("Phone Number") + (i * 2)
-            type_col = header_row.index("Phone Type") + (i * 2)
-            row_data[phone_col] = phone
-            row_data[type_col] = phone_type
-        except ValueError:
-            print(f"[!] Missing columns for phone pair #{i+1}")
+        for i, (phone, phone_type) in enumerate(phones[:5]):
+            try:
+                phone_col = header_row.index("Phone Number") + (i * 2)
+                type_col = header_row.index("Phone Type") + (i * 2)
+                row_data[phone_col] = phone
+                row_data[type_col] = phone_type
+            except ValueError:
+                print(f"[!] Missing columns for phone pair #{i+1}")
 
-    for i, email in enumerate(emails[:3]):
-        email_header = f"Email {i + 1}"
-        if email_header in header_row:
-            row_data[header_row.index(email_header)] = email
+        for i, email in enumerate(emails[:3]):
+            email_header = f"Email {i + 1}"
+            if email_header in header_row:
+                row_data[header_row.index(email_header)] = email
 
-    service.spreadsheets().values().append(
-        spreadsheetId=SHEET_ID,
-        range=f"{SHEET_NAME_2}!A1",
-        valueInputOption="RAW",
-        insertDataOption="INSERT_ROWS",
-        body={"values": [row_data]}
-    ).execute()
+        service.spreadsheets().values().append(
+            spreadsheetId=SHEET_ID,
+            range=f"{SHEET_NAME_2}!A1",
+            valueInputOption="RAW",
+            insertDataOption="INSERT_ROWS",
+            body={"values": [row_data]}
+        ).execute()
 
-    print(f"[✓] Data appended for {first_name} {last_name}")
+        print(f"[✓] Data appended for {first_name} {last_name}")
+    except Exception as e:
+        logging.error(f"[!] Failed to append to Google Sheet: {e}")
 
 user_agents = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
