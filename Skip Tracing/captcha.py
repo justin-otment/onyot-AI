@@ -3,7 +3,7 @@ import time
 import re
 import logging
 import asyncio
-import httpx
+import requests
 from playwright.async_api import async_playwright
 
 # === CAPTCHA Configuration ===
@@ -14,13 +14,12 @@ CAPTCHA_CONFIG = {
     "captcha_timeout_seconds": 75,
 }
 
-# API key from environment
-API_KEY = os.getenv("CAPTCHA_API_KEY")  # Make sure this is set in your environment
+API_KEY = os.getenv("CAPTCHA_API_KEY")  # Make sure this is set
 CAPTCHA_API_URL = "http://2captcha.com"
 
-# Logging config
 LOGGING_FORMAT = "[%(asctime)s] %(levelname)s: %(message)s"
 logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
+
 
 # === Utility: Extract CAPTCHA Sitekey ===
 async def get_site_key(page):
@@ -47,7 +46,6 @@ async def get_site_key(page):
             await page.wait_for_load_state("networkidle")
             logging.info(f"[*] Attempt {attempt + 1}: Searching for CAPTCHA sitekey...")
 
-            # Try known HTML locations
             sitekey = await page.evaluate("""() => {
                 let selectors = [
                     document.querySelector('[data-sitekey]'),
@@ -80,56 +78,57 @@ async def get_site_key(page):
     logging.error("[✗] Sitekey extraction failed after max retries.")
     return None
 
+
 # === Utility: Solve CAPTCHA with 2Captcha ===
 async def solve_turnstile_captcha(sitekey, url):
     if not API_KEY:
         logging.error("[✗] CAPTCHA_API_KEY is not set in environment.")
         return None
 
-    async with httpx.AsyncClient() as client:
-        try:
-            # Submit CAPTCHA
-            submit_resp = await client.post(f"{CAPTCHA_API_URL}/in.php", data={
+    try:
+        # Submit CAPTCHA
+        submit_resp = requests.post(f"{CAPTCHA_API_URL}/in.php", data={
+            "key": API_KEY,
+            "method": "turnstile",
+            "sitekey": sitekey,
+            "pageurl": url,
+            "json": 1
+        })
+        submit_resp.raise_for_status()
+        result = submit_resp.json()
+
+        if result.get("status") != 1:
+            logging.error(f"[!] 2Captcha error: {result}")
+            return None
+
+        captcha_id = result["request"]
+        logging.info(f"[✓] CAPTCHA sent for solving. ID: {captcha_id}")
+
+        # Poll for result
+        start = time.time()
+        while time.time() - start < CAPTCHA_CONFIG["captcha_timeout_seconds"]:
+            await asyncio.sleep(CAPTCHA_CONFIG["poll_interval_seconds"])
+            poll_resp = requests.get(f"{CAPTCHA_API_URL}/res.php", params={
                 "key": API_KEY,
-                "method": "turnstile",
-                "sitekey": sitekey,
-                "pageurl": url,
+                "action": "get",
+                "id": captcha_id,
                 "json": 1
             })
-            submit_resp.raise_for_status()
-            result = submit_resp.json()
+            poll_resp.raise_for_status()
+            poll_result = poll_resp.json()
 
-            if result.get("status") != 1:
-                logging.error(f"[!] 2Captcha error: {result}")
-                return None
+            if poll_result.get("status") == 1:
+                token = poll_result["request"]
+                logging.info(f"[✓] CAPTCHA solved: {token}")
+                return token
 
-            captcha_id = result["request"]
-            logging.info(f"[✓] CAPTCHA sent for solving. ID: {captcha_id}")
+        logging.error("[✗] CAPTCHA solving timed out.")
+        return None
 
-            # Poll for result
-            start = time.time()
-            while time.time() - start < CAPTCHA_CONFIG["captcha_timeout_seconds"]:
-                await asyncio.sleep(CAPTCHA_CONFIG["poll_interval_seconds"])
-                poll_resp = await client.get(f"{CAPTCHA_API_URL}/res.php", params={
-                    "key": API_KEY,
-                    "action": "get",
-                    "id": captcha_id,
-                    "json": 1
-                })
-                poll_resp.raise_for_status()
-                poll_result = poll_resp.json()
+    except requests.RequestException as e:
+        logging.error(f"[✗] HTTP error during CAPTCHA solving: {e}")
+        return None
 
-                if poll_result.get("status") == 1:
-                    token = poll_result["request"]
-                    logging.info(f"[✓] CAPTCHA solved: {token}")
-                    return token
-
-            logging.error("[✗] CAPTCHA solving timed out.")
-            return None
-
-        except httpx.HTTPError as e:
-            logging.error(f"[✗] HTTP error during CAPTCHA solving: {e}")
-            return None
 
 # === Utility: Inject CAPTCHA Token ===
 async def inject_token(page, captcha_token, url):
