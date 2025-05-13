@@ -565,9 +565,8 @@ def extract_sitekey(response_body):
         return None
 
 async def main():
-    MAILING_STREETS_RANGE = f"{SHEET_NAME}!P2:P10"
-    ZIPCODE_RANGE = f"{SHEET_NAME}!Q2:Q10"
-
+    MAILING_STREETS_RANGE = "CAPE CORAL FINAL!P2612:P"
+    ZIPCODE_RANGE = "CAPE CORAL FINAL!Q2612:Q"
     SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
     
     BATCH_SIZE = 10  # Process entries in batches to avoid resource exhaustion
@@ -575,9 +574,6 @@ async def main():
     
     mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE)
     zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE)
-    print(f"[DEBUG] Mailing streets (P2612:P): {mailing_streets}")
-    print(f"[DEBUG] ZIP codes (Q2612:Q): {zip_codes}")
-
 
     if not mailing_streets or not zip_codes:
         print("[!] Missing data in one or both ranges. Skipping processing...")
@@ -739,4 +735,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
