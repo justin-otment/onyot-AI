@@ -25,7 +25,7 @@ logging.basicConfig(level=logging.DEBUG, filename="logfile.log", filemode="a",
                     format="%(asctime)s - %(levelname)s - %(message)s")
 logging.info("Script started")
 
-load_dotenv()
+load_dotenv("C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/Skip Tracing/.env")
 
 # === Global Configurations ===
 CAPTCHA_CONFIG = {
@@ -52,29 +52,56 @@ else:
     print("VPN Password: Loaded successfully")
 
 
-# === Config ===
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON")
-TOKEN_PATH = os.getenv("GOOGLE_TOKEN_JSON")
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+creds = Credentials.from_authorized_user_file('C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/Skip Tracing/token.json', SCOPES)
+sheets_service = build('sheets', 'v4', credentials=creds)
 
+sys.stdout.reconfigure(encoding='utf-8')
+
+# === Config ===
+# Define file paths
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
+TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "CAPE CORAL FINAL"
 SHEET_NAME_2 = "For REI Upload"
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+MAX_RETRIES = 1
 
-
+# === Google Sheets Auth ===
 def authenticate_google_sheets():
     """Authenticate with Google Sheets API."""
     creds = None
+
     if os.path.exists(TOKEN_PATH):
         creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+
     if not creds or not creds.valid:
-        return None
+        if creds and creds.expired and creds.refresh_token:
+            try:
+                creds.refresh(Request())
+                print("[✓] Token refreshed successfully.")
+                with open(TOKEN_PATH, 'w') as token:
+                    token.write(creds.to_json())
+            except Exception as e:
+                print(f"[!] Error refreshing token: {e}")
+                creds = None
+
+        if not creds:
+            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
+            creds = flow.run_local_server(port=0)
+            with open(TOKEN_PATH, 'w') as token:
+                token.write(creds.to_json())
+            print("[✓] New credentials obtained and saved.")
+
     return build('sheets', 'v4', credentials=creds)
 
-
+# Replace with your Google Sheets integration
 def get_sheet_data(sheet_id, range_name):
-    """Fetches data from Google Sheets for a given range."""
+    """
+    Fetches data from Google Sheets for a given range.
+    Returns list of (row_index, value) tuples for non-empty first-column values.
+    """
     try:
         service = authenticate_google_sheets()
         result = service.spreadsheets().values().get(
@@ -83,6 +110,7 @@ def get_sheet_data(sheet_id, range_name):
         ).execute()
         values = result.get("values", [])
         base_row = int(re.search(r"(\d+):", range_name).group(1))
+
         return [
             (i + base_row, row[0])
             for i, row in enumerate(values)
