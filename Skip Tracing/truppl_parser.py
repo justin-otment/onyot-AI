@@ -26,31 +26,7 @@ logging.basicConfig(level=logging.DEBUG, filename="logfile.log", filemode="a",
                     format="%(asctime)s - %(levelname)s - %(message)s")
 logging.info("Script started")
 
-load_dotenv("C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/Skip Tracing/.env")
-
-# === Global Configurations ===
-CAPTCHA_CONFIG = {
-    "max_retries": 5,
-    "wait_time_ms": 7000,
-    "poll_interval_seconds": 5,
-    "captcha_timeout_seconds": 75,
-}
-API_KEY = os.getenv("TWO_CAPTCHA_API_KEY")
-CAPTCHA_API_URL = "http://2captcha.com"
-LOGGING_FORMAT = "[%(asctime)s] %(levelname)s: %(message)s"
-logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
-
-MAX_RETRIES = 5  # Maximum retry attempts for main function
-BACKOFF_FACTOR = 5  # Exponential backoff factor
-
-vpn_username =   os.getenv("VPN_USERNAME")
-vpn_password = os.getenv("VPN_PASSWORD")
-
-if not vpn_username or not vpn_password:
-    print("[!] Failed to load VPN credentials!")
-else:
-    print("VPN Username:", vpn_username)
-    print("VPN Password: Loaded successfully")
+load_dotenv()
 
 # === Config ===
 # Define file paths
@@ -66,62 +42,52 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 # === Google Sheets Auth ===
 def authenticate_google_sheets():
-    """Authenticate with Google Sheets API."""
     creds = None
 
-    # Load credentials from token file if it exists
-    if os.path.exists(TOKEN_PATH):
-        try:
-            creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-        except Exception as e:
-            print(f"[!] Failed to load credentials from token file: {e}")
-            creds = None
+    try:
+        token_str = os.getenv("GOOGLE_TOKEN_JSON")
+        if not token_str:
+            raise ValueError("Missing GOOGLE_TOKEN_JSON")
 
-    # Refresh or obtain new credentials if necessary
-    if not creds or not creds.valid:
+        token_data = json.loads(token_str)
+
+        creds = Credentials.from_authorized_user_info(token_data, SCOPES)
+
         if creds and creds.expired and creds.refresh_token:
-            try:
-                creds.refresh(Request())
-                print("[✓] Token refreshed successfully.")
-                with open(TOKEN_PATH, 'w') as token:
-                    token.write(creds.to_json())
-            except Exception as e:
-                print(f"[!] Error refreshing token: {e}")
-                creds = None
+            creds.refresh(Request())
+            print("[✓] Token refreshed successfully.")
 
-        if not creds:
-            try:
-                flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
-                creds = flow.run_local_server(port=0)
-                with open(TOKEN_PATH, 'w') as token:
-                    token.write(creds.to_json())
-                print("[✓] New credentials obtained and saved.")
-            except Exception as e:
-                print(f"[!] Error obtaining new credentials: {e}")
-                raise
+    except Exception as e:
+        print(f"[!] Failed to load creds from GOOGLE_TOKEN_JSON: {e}")
+        creds = None
+
+    if not creds or not creds.valid:
+        raise RuntimeError("No valid Google Sheets credentials found.")
 
     return creds
 
-# Initialize Google Sheets service
-try:
-    creds = authenticate_google_sheets()
-    sheets_service = build('sheets', 'v4', credentials=creds)
-    sys.stdout.reconfigure(encoding='utf-8')
-    print("[✓] Google Sheets service initialized successfully.")
-except Exception as e:
-    print(f"[!] Failed to initialize Google Sheets service: {e}")
-    sheets_service = None
-
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-
 def get_sheet_data(sheet_id, range_name):
+    """
+    Fetches data from Google Sheets for a given range.
+    Returns list of (row_index, value) tuples for non-empty first-column values.
+    """
     try:
-        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
-        service = build('sheets', 'v4', credentials=creds)
-        return service
+        service = authenticate_google_sheets()
+        result = service.spreadsheets().values().get(
+            spreadsheetId=sheet_id,
+            range=range_name
+        ).execute()
+        values = result.get("values", [])
+        base_row = int(re.search(r"(\d+):", range_name).group(1))
+
+        return [
+            (i + base_row, row[0])
+            for i, row in enumerate(values)
+            if row and len(row) > 0 and row[0].strip()
+        ]
     except Exception as e:
-        print(f"[!] Failed to initialize Google Sheets service: {e}")
-        return None
+        logging.error(f"Error fetching data from Google Sheets range '{range_name}': {e}")
+        return []
     
 def append_to_google_sheet(first_name, last_name, phones, emails, site):
     """
