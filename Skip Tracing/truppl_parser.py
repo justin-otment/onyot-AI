@@ -536,27 +536,6 @@ async def clear_browser_cookies(page):
     except Exception as e:
         print(f"[!] Error clearing browser session: {e}")
 
-
-def extract_sitekey(response_body):
-    """
-    Extracts the CAPTCHA sitekey from the network response body.
-    :param response_body: The raw response content as a string.
-    :return: The extracted sitekey or None if not found.
-    """
-    try:
-        # Use regex to search for "data-sitekey" in the response
-        match = re.search(r'data-sitekey="([a-zA-Z0-9_\-]+)"', response_body)
-        if match:
-            sitekey = match.group(1)
-            logging.info(f"[✓] Sitekey extracted: {sitekey}")
-            return sitekey
-        else:
-            logging.warning("[!] Sitekey not found in the response body.")
-            return None
-    except Exception as e:
-        logging.error(f"[!] Error extracting sitekey: {e}")
-        return None
-
 async def main():
     MAILING_STREETS_RANGE = "CAPE CORAL FINAL!P912:P"
     ZIPCODE_RANGE = "CAPE CORAL FINAL!Q912:Q"
@@ -624,7 +603,7 @@ async def main():
                       try:
                           body = await response.text()
                           logging.debug(f"[DEBUG] Intercepted response body snippet: {body[:500]}")
-                          sitekey = extract_sitekey(body)
+                          sitekey = await extract_sitekey(body)
                           if sitekey:
                               logging.info(f"[✓] Extracted sitekey: {sitekey}")
                       except Exception as e:
