@@ -63,18 +63,31 @@ SHEET_NAME_2 = "For REI Upload"
 MAX_RETRIES = 1
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+TOKEN_SAVE_PATH = "refreshed_token.json"  # Optional save location
 
-# === Google Sheets Auth ===
 def authenticate_google_sheets():
     creds = None
 
     try:
-        creds = authenticate_google_sheets()
-    sheets_service = build('sheets', 'v4', credentials=creds)
-    print("[✓] Google Sheets service initialized successfully.")
-except Exception as e:
-    print(f"[!] Failed to initialize Google Sheets service: {e}")
-    sheets_service = None
+        token_str = os.getenv("GOOGLE_TOKEN_JSON")
+        if not token_str:
+            raise ValueError("Missing GOOGLE_TOKEN_JSON")
+
+        token_data = json.loads(token_str)
+        creds = Credentials.from_authorized_user_info(token_data, SCOPES)
+
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            print("[✓] Token refreshed successfully.")
+
+            # Save refreshed token to file (optional)
+            with open(TOKEN_SAVE_PATH, "w") as f:
+                f.write(creds.to_json())
+            print(f"[✓] Refreshed token saved to {TOKEN_SAVE_PATH}")
+
+    except Exception as e:
+        print(f"[!] Failed to load creds from GOOGLE_TOKEN_JSON: {e}")
+        creds = None
 
     if not creds or not creds.valid:
         raise RuntimeError("No valid Google Sheets credentials found.")
