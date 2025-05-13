@@ -25,32 +25,7 @@ logging.basicConfig(level=logging.DEBUG, filename="logfile.log", filemode="a",
                     format="%(asctime)s - %(levelname)s - %(message)s")
 logging.info("Script started")
 
-load_dotenv("C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/Skip Tracing/.env")
-
-# === Global Configurations ===
-CAPTCHA_CONFIG = {
-    "max_retries": 5,
-    "wait_time_ms": 7000,
-    "poll_interval_seconds": 5,
-    "captcha_timeout_seconds": 75,
-}
-API_KEY = os.getenv("TWO_CAPTCHA_API_KEY")
-CAPTCHA_API_URL = "http://2captcha.com"
-LOGGING_FORMAT = "[%(asctime)s] %(levelname)s: %(message)s"
-logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
-
-MAX_RETRIES = 5  # Maximum retry attempts for main function
-BACKOFF_FACTOR = 2  # Exponential backoff factor
-
-vpn_username =   os.getenv("VPN_USERNAME")
-vpn_password = os.getenv("VPN_PASSWORD")
-
-if not vpn_username or not vpn_password:
-    print("[!] Failed to load VPN credentials!")
-else:
-    print("VPN Username:", vpn_username)
-    print("VPN Password: Loaded successfully")
-
+load_dotenv()
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 creds = Credentials.from_authorized_user_file('C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/Skip Tracing/token.json', SCOPES)
@@ -70,9 +45,7 @@ MAX_RETRIES = 1
 
 # === Google Sheets Auth ===
 def authenticate_google_sheets():
-    """Authenticate with Google Sheets API."""
     creds = None
-
     if os.path.exists(TOKEN_PATH):
         creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
 
@@ -96,12 +69,8 @@ def authenticate_google_sheets():
 
     return build('sheets', 'v4', credentials=creds)
 
-# Replace with your Google Sheets integration
+
 def get_sheet_data(sheet_id, range_name):
-    """
-    Fetches data from Google Sheets for a given range.
-    Returns list of (row_index, value) tuples for non-empty first-column values.
-    """
     try:
         service = authenticate_google_sheets()
         result = service.spreadsheets().values().get(
@@ -109,6 +78,8 @@ def get_sheet_data(sheet_id, range_name):
             range=range_name
         ).execute()
         values = result.get("values", [])
+        print(f"[DEBUG] Raw data for {range_name}: {values}")
+
         base_row = int(re.search(r"(\d+):", range_name).group(1))
 
         return [
@@ -117,16 +88,12 @@ def get_sheet_data(sheet_id, range_name):
             if row and len(row) > 0 and row[0].strip()
         ]
     except Exception as e:
-        logging.error(f"Error fetching data from Google Sheets range '{range_name}': {e}")
+        logging.error(f"[!] Error fetching data from range '{range_name}': {e}")
         return []
-    
+
 def append_to_google_sheet(first_name, last_name, phones, emails, site):
-    """
-    Appends extracted data to the next available row in the 'For REI Upload' sheet.
-    """
     service = authenticate_google_sheets()
 
-    # Fetch header row to determine column layout
     header_row = service.spreadsheets().values().get(
         spreadsheetId=SHEET_ID,
         range=f"{SHEET_NAME_2}!1:1"
@@ -134,17 +101,13 @@ def append_to_google_sheet(first_name, last_name, phones, emails, site):
 
     row_data = [""] * len(header_row)
 
-    # Insert Site value
     if "Site" in header_row:
         row_data[header_row.index("Site")] = site
-
-    # Insert First Name and Last Name
     if "First Name" in header_row:
         row_data[header_row.index("First Name")] = first_name
     if "Last Name" in header_row:
         row_data[header_row.index("Last Name")] = last_name
 
-    # Insert up to 5 phone number/type pairs
     for i, (phone, phone_type) in enumerate(phones[:5]):
         try:
             phone_col = header_row.index("Phone Number") + (i * 2)
@@ -152,15 +115,13 @@ def append_to_google_sheet(first_name, last_name, phones, emails, site):
             row_data[phone_col] = phone
             row_data[type_col] = phone_type
         except ValueError:
-            print(f"[!] Phone columns missing or misaligned for pair #{i + 1}")
+            print(f"[!] Missing columns for phone pair #{i+1}")
 
-    # Insert up to 3 emails
     for i, email in enumerate(emails[:3]):
         email_header = f"Email {i + 1}"
         if email_header in header_row:
             row_data[header_row.index(email_header)] = email
 
-    # Append the data to the next available row
     service.spreadsheets().values().append(
         spreadsheetId=SHEET_ID,
         range=f"{SHEET_NAME_2}!A1",
@@ -169,7 +130,7 @@ def append_to_google_sheet(first_name, last_name, phones, emails, site):
         body={"values": [row_data]}
     ).execute()
 
-    print(f"[✓] Data appended to '{SHEET_NAME_2}'")
+    print(f"[✓] Data appended for {first_name} {last_name}")
 
 user_agents = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
