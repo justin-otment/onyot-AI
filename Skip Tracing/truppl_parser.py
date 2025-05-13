@@ -32,6 +32,8 @@ SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "CAPE CORAL FINAL"
 SHEET_NAME_2 = "For REI Upload"
 MAX_RETRIES = 1
+TOKEN_PATH = os.getenv("GOOGLE_TOKEN_JSON")
+CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON")
 
 # === Google Sheets Auth ===
 def authenticate_google_sheets():
