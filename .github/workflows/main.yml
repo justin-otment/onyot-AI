@@ -18,10 +18,23 @@ jobs:
         run: |
           docker build -t skip-tracing-parser .
 
-      - name: 🔐 Write Google credentials
+      - name: 🔐 Write Google credentials (credentials.json)
         run: |
-          echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" > credentials.json
-          echo "${{ secrets.GOOGLE_TOKEN_JSON }}" > token.json
+          cat <<EOF > credentials.json
+          ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          EOF
+
+      - name: 🔐 Write Google token (token.json)
+        run: |
+          cat <<EOF > token.json
+          ${{ secrets.GOOGLE_TOKEN_JSON }}
+          EOF
+
+      # Optional: Debug the contents of token.json (REMOVE after confirming!)
+      # - name: 🧪 Debug token file
+      #   run: |
+      #     echo "Contents of token.json:"
+      #     cat token.json
 
       - name: 🚀 Run Skip Tracing Parser
         run: |
@@ -33,7 +46,6 @@ jobs:
             -v "${{ github.workspace }}/token.json:/app/token.json" \
             skip-tracing-parser
 
-      # Optional: Cleanup credentials
       - name: 🧹 Clean up credential files
         if: always()
         run: |
