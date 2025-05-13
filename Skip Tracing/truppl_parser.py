@@ -12,6 +12,7 @@ from playwright_stealth import stealth_async
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import InstalledAppFlow
 from nordvpn import handle_rate_limit
 from nordvpn import verify_vpn_connection  # VPN functionality from nordvpn.py
 from captcha import get_site_key, solve_turnstile_captcha, inject_token  # CAPTCHA functionalities from captcha.py
@@ -45,16 +46,22 @@ if not os.path.exists(TOKEN_PATH):
     print(f"[!] token.json not found at path: {TOKEN_PATH}", file=sys.stderr)
     sys.exit(1)
 
-# === Google Sheets Auth ===
 def authenticate_google_sheets():
-    creds = None
     if os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            raise RuntimeError("[!] No valid Google credentials found.")
+        try:
+            with open(TOKEN_PATH, 'r') as f:
+                if not f.read().strip():  # Check if file is empty
+                    raise ValueError("Empty token.json")
+            creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+            return build("sheets", "v4", credentials=creds)
+        except Exception as e:
+            print(f"Error loading token.json: {e}")
+    
+    # Fallback to login flow (only works locally, not in GitHub Actions)
+    flow = InstalledAppFlow.from_client_secrets_file(CREDS_PATH, SCOPES)
+    creds = flow.run_local_server(port=0)
+    with open(TOKEN_PATH, "w") as token:
+        token.write(creds.to_json())
     return build("sheets", "v4", credentials=creds)
 
 def get_sheet_data(sheet_id, range_name):
