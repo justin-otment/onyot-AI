@@ -14,9 +14,10 @@ CAPTCHA_CONFIG = {
     "captcha_timeout_seconds": 75,
 }
 
-API_KEY = os.getenv("CAPTCHA_API_KEY")  # Make sure this is set
+API_KEY = os.getenv("CAPTCHA_API_KEY")
 CAPTCHA_API_URL = "http://2captcha.com"
 
+# Logging config
 LOGGING_FORMAT = "[%(asctime)s] %(levelname)s: %(message)s"
 logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
 
@@ -46,20 +47,38 @@ async def get_site_key(page):
             await page.wait_for_load_state("networkidle")
             logging.info(f"[*] Attempt {attempt + 1}: Searching for CAPTCHA sitekey...")
 
+            # Try common selectors
             sitekey = await page.evaluate("""() => {
-                let selectors = [
-                    document.querySelector('[data-sitekey]'),
-                    document.querySelector('input[name="sitekey"]'),
-                    document.querySelector('.captcha-sitekey'),
-                    document.querySelector('div.h-captcha[data-sitekey]'),
-                    document.querySelector('#captcha-container[data-sitekey]'),
-                    document.querySelector('.dynamic-captcha[data-sitekey]')
+                const selectors = [
+                    '[data-sitekey]',
+                    'input[name="sitekey"]',
+                    '.captcha-sitekey',
+                    'div.h-captcha[data-sitekey]',
+                    '#captcha-container[data-sitekey]',
+                    '.dynamic-captcha[data-sitekey]'
                 ];
-                for (let el of selectors) {
+                for (let sel of selectors) {
+                    const el = document.querySelector(sel);
                     if (el) return el.getAttribute('data-sitekey') || el.value;
                 }
                 return null;
             }""")
+
+            # Try iframe scanning if no success
+            if not sitekey:
+                logging.info("[*] Trying iframe scanning for sitekey...")
+                frames = page.frames
+                for f in frames:
+                    try:
+                        frame_sitekey = await f.evaluate("""() => {
+                            const el = document.querySelector('[data-sitekey]');
+                            return el ? el.getAttribute('data-sitekey') : null;
+                        }""")
+                        if frame_sitekey:
+                            sitekey = frame_sitekey
+                            break
+                    except:
+                        continue
 
             if not sitekey and sitekey_candidates:
                 sitekey = sitekey_candidates[0]
@@ -80,21 +99,21 @@ async def get_site_key(page):
 
 
 # === Utility: Solve CAPTCHA with 2Captcha ===
-async def solve_turnstile_captcha(sitekey, url):
+def solve_turnstile_captcha(sitekey, url):
     if not API_KEY:
         logging.error("[✗] CAPTCHA_API_KEY is not set in environment.")
         return None
 
     try:
         # Submit CAPTCHA
+        logging.info("[*] Submitting CAPTCHA to 2Captcha...")
         submit_resp = requests.post(f"{CAPTCHA_API_URL}/in.php", data={
             "key": API_KEY,
             "method": "turnstile",
             "sitekey": sitekey,
             "pageurl": url,
             "json": 1
-        })
-        submit_resp.raise_for_status()
+        }, timeout=30)
         result = submit_resp.json()
 
         if result.get("status") != 1:
@@ -107,14 +126,13 @@ async def solve_turnstile_captcha(sitekey, url):
         # Poll for result
         start = time.time()
         while time.time() - start < CAPTCHA_CONFIG["captcha_timeout_seconds"]:
-            await asyncio.sleep(CAPTCHA_CONFIG["poll_interval_seconds"])
+            time.sleep(CAPTCHA_CONFIG["poll_interval_seconds"])
             poll_resp = requests.get(f"{CAPTCHA_API_URL}/res.php", params={
                 "key": API_KEY,
                 "action": "get",
                 "id": captcha_id,
                 "json": 1
-            })
-            poll_resp.raise_for_status()
+            }, timeout=15)
             poll_result = poll_resp.json()
 
             if poll_result.get("status") == 1:
