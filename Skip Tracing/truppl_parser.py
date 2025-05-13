@@ -28,7 +28,6 @@ logging.info("Script started")
 load_dotenv()
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-creds = Credentials.from_authorized_user_file('TOKEN_PATH', SCOPES)
 sheets_service = build('sheets', 'v4', credentials=creds)
 
 sys.stdout.reconfigure(encoding='utf-8')
