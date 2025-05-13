@@ -66,22 +66,31 @@ MAX_RETRIES = 1
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 def authenticate_google_sheets():
+    """Authenticate with Google Sheets API."""
     creds = None
-    token_path = "token.json"
 
-    if not os.path.exists(token_path):
-        raise FileNotFoundError("token.json not found. Make sure GOOGLE_TOKEN_JSON is mounted correctly.")
-
-    creds = Credentials.from_authorized_user_file(token_path, SCOPES)
-
-    if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-        print("[✓] Token refreshed successfully.")
+    if os.path.exists(TOKEN_PATH):
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
 
     if not creds or not creds.valid:
-        raise RuntimeError("No valid Google Sheets credentials found.")
+        if creds and creds.expired and creds.refresh_token:
+            try:
+                creds.refresh(Request())
+                print("[✓] Token refreshed successfully.")
+                with open(TOKEN_PATH, 'w') as token:
+                    token.write(creds.to_json())
+            except Exception as e:
+                print(f"[!] Error refreshing token: {e}")
+                creds = None
 
-    return creds
+        if not creds:
+            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
+            creds = flow.run_local_server(port=0)
+            with open(TOKEN_PATH, 'w') as token:
+                token.write(creds.to_json())
+            print("[✓] New credentials obtained and saved.")
+
+    return build('sheets', 'v4', credentials=creds)
 
 # Replace with your Google Sheets integration
 def get_sheet_data(sheet_id, range_name):
