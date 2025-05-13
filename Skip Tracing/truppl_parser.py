@@ -28,7 +28,7 @@ logging.info("Script started")
 load_dotenv()
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-creds = Credentials.from_authorized_user_file('C:/Users/DELL/Documents/Onyot.ai/Lead_List-Generator/python tests/Skip Tracing/token.json', SCOPES)
+creds = Credentials.from_authorized_user_file('TOKEN_PATH', SCOPES)
 sheets_service = build('sheets', 'v4', credentials=creds)
 
 sys.stdout.reconfigure(encoding='utf-8')
@@ -36,8 +36,8 @@ sys.stdout.reconfigure(encoding='utf-8')
 # === Config ===
 # Define file paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
-TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
+CREDENTIALS_PATH = os.getenv("GOOGLE_TOKEN_JSON")
+TOKEN_PATH = os.getenv("GOOGLE_TOKEN_JSON")
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "CAPE CORAL FINAL"
 SHEET_NAME_2 = "For REI Upload"
@@ -536,29 +536,42 @@ def extract_sitekey(response_body):
         return None
 
 async def main():
-    MAILING_STREETS_RANGE = "CAPE CORAL FINAL!P2612:P"
-    ZIPCODE_RANGE = "CAPE CORAL FINAL!Q2612:Q"
     SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
-    
-    BATCH_SIZE = 10  # Process entries in batches to avoid resource exhaustion
-    MAX_CAPTCHA_RETRIES = 3  # Retry limit for CAPTCHA-solving attempts
-    
-    mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE)
-    zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE)
+    SHEET_NAME = "CAPE CORAL FINAL"
+    START_ROW = 2612
+    BATCH_SIZE = 10
+    MAX_CAPTCHA_RETRIES = 3
 
-    if not mailing_streets or not zip_codes:
+    mailing_streets_range = f"{SHEET_NAME}!P{START_ROW}:P"
+    zip_codes_range = f"{SHEET_NAME}!Q{START_ROW}:Q"
+
+    mailing_streets_raw = get_sheet_data(SHEET_ID, mailing_streets_range)
+    zip_codes_raw = get_sheet_data(SHEET_ID, zip_codes_range)
+
+    if not mailing_streets_raw or not zip_codes_raw:
         print("[!] Missing data in one or both ranges. Skipping processing...")
         return
 
-    mailing_streets = [(row_index, value) for row_index, value in mailing_streets if value.strip()]
-    zip_codes = [(row_index, value) for row_index, value in zip_codes if value.strip()]
+    # Add row offset so we can correctly calculate actual row index
+    mailing_streets = [
+        (START_ROW + idx, val.strip())
+        for idx, val in mailing_streets_raw
+        if val and val.strip()
+    ]
+    zip_codes = [
+        (START_ROW + idx, val.strip())
+        for idx, val in zip_codes_raw
+        if val and val.strip()
+    ]
 
-    street_dict = {row_index: value for row_index, value in mailing_streets}
-    zip_dict = {row_index: value for row_index, value in zip_codes}
+    # Create dictionaries for quick lookup by row
+    street_dict = {row: value for row, value in mailing_streets}
+    zip_dict = {row: value for row, value in zip_codes}
 
+    # Get only rows that exist in both datasets
     valid_entries = [
-        (index, street_dict[index], zip_dict[index])
-        for index in street_dict.keys() & zip_dict.keys()
+        (row, street_dict[row], zip_dict[row])
+        for row in sorted(set(street_dict) & set(zip_dict))
     ]
 
     if not valid_entries:
