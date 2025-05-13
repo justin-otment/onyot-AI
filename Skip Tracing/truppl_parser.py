@@ -35,7 +35,7 @@ SHEET_NAME = "CAPE CORAL FINAL"
 SHEET_NAME_2 = "For REI Upload"
 MAX_RETRIES = 1
 
-CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON") or "credentials.json"
+CREDS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON") or "credentials.json"
 TOKEN_PATH = os.getenv("GOOGLE_TOKEN_JSON") or "token.json"
 
 if not os.path.exists(CREDENTIALS_PATH):
