@@ -20,8 +20,13 @@ jobs:
 
       - name: 🔐 Write Google credentials
         run: |
-          echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" > credentials.json
-          echo "${{ secrets.GOOGLE_TOKEN_JSON }}" > token.json
+          cat <<EOF > credentials.json
+${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+EOF
+
+          cat <<EOF > token.json
+${{ secrets.GOOGLE_TOKEN_JSON }}
+EOF
 
       - name: 🚀 Run Skip Tracing Parser
         run: |
@@ -33,7 +38,6 @@ jobs:
             -v "${{ github.workspace }}/token.json:/app/token.json" \
             skip-tracing-parser
 
-      # Optional: Cleanup credentials
       - name: 🧹 Clean up credential files
         if: always()
         run: |
