@@ -63,65 +63,52 @@ SHEET_NAME_2 = "For REI Upload"
 MAX_RETRIES = 1
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+TOKEN_SAVE_PATH = "refreshed_token.json"  # Optional save location
 
-# === Google Sheets Auth ===
 def authenticate_google_sheets():
-    """Authenticate with Google Sheets API."""
     creds = None
 
-    # Load credentials from token file if it exists
-    if os.path.exists(TOKEN_PATH):
-        try:
-            creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-        except Exception as e:
-            print(f"[!] Failed to load credentials from token file: {e}")
-            creds = None
+    try:
+        token_str = os.getenv("GOOGLE_TOKEN_JSON")
+        if not token_str:
+            raise ValueError("Missing GOOGLE_TOKEN_JSON")
 
-    # Refresh or obtain new credentials if necessary
-    if not creds or not creds.valid:
+        token_data = json.loads(token_str)
+        creds = Credentials.from_authorized_user_info(token_data, SCOPES)
+
         if creds and creds.expired and creds.refresh_token:
-            try:
-                creds.refresh(Request())
-                print("[✓] Token refreshed successfully.")
-                with open(TOKEN_PATH, 'w') as token:
-                    token.write(creds.to_json())
-            except Exception as e:
-                print(f"[!] Error refreshing token: {e}")
-                creds = None
+            creds.refresh(Request())
+            print("[✓] Token refreshed successfully.")
 
-        if not creds:
-            try:
-                flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
-                creds = flow.run_local_server(port=0)
-                with open(TOKEN_PATH, 'w') as token:
-                    token.write(creds.to_json())
-                print("[✓] New credentials obtained and saved.")
-            except Exception as e:
-                print(f"[!] Error obtaining new credentials: {e}")
-                raise
+            # Save refreshed token to file (optional)
+            with open(TOKEN_SAVE_PATH, "w") as f:
+                f.write(creds.to_json())
+            print(f"[✓] Refreshed token saved to {TOKEN_SAVE_PATH}")
+
+    except Exception as e:
+        print(f"[!] Failed to load creds from GOOGLE_TOKEN_JSON: {e}")
+        creds = None
+
+    if not creds or not creds.valid:
+        raise RuntimeError("No valid Google Sheets credentials found.")
 
     return creds
 
-# Initialize Google Sheets service
-try:
-    creds = authenticate_google_sheets()
-    sheets_service = build('sheets', 'v4', credentials=creds)
-    sys.stdout.reconfigure(encoding='utf-8')
-    print("[✓] Google Sheets service initialized successfully.")
-except Exception as e:
-    print(f"[!] Failed to initialize Google Sheets service: {e}")
-    sheets_service = None
-
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-
-def get_sheets_service():
+def get_sheet_data(sheet_id, data_range):
     try:
-        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+        creds = authenticate_google_sheets()
         service = build('sheets', 'v4', credentials=creds)
-        return service
+
+        sheet = service.spreadsheets()
+        result = sheet.values().get(spreadsheetId=sheet_id, range=data_range).execute()
+        values = result.get("values", [])
+
+        # Return values with row index info if needed
+        return [(i + 1, row[0]) for i, row in enumerate(values) if row]
+
     except Exception as e:
-        print(f"[!] Failed to initialize Google Sheets service: {e}")
-        return None
+        print(f"[ERROR] Error fetching data from Google Sheets range '{data_range}': {e}")
+        return []
     
 def append_to_google_sheet(first_name, last_name, phones, emails, site):
     """
@@ -581,6 +568,9 @@ async def main():
     mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE)
     zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE)
 
+    print(f"[DEBUG] Mailing Streets: {mailing_streets}")
+    print(f"[DEBUG] Zip Codes: {zip_codes}")
+
     if not mailing_streets or not zip_codes:
         print("[!] Missing data in one or both ranges. Skipping processing...")
         return
@@ -600,6 +590,7 @@ async def main():
         print("[!] No valid entries to process. Exiting...")
         return
 
+
     async with async_playwright() as p:
         browser = None
         context = None  # Initialize context for cleanup
@@ -611,29 +602,39 @@ async def main():
             
             # === Define and Activate Network Interception ===
             async def intercept_sitekey(route):
-                try:
-                    url = route.request.url
-                    # Filter irrelevant resource types
-                    if url.endswith(('.css', '.js', '.png', '.jpg', '.woff', '.woff2', '.svg')):
-                        await route.continue_()  # Allow these requests to proceed
-                        return
-
-                    logging.debug(f"[DEBUG] Intercepting route: {url}")
-                    response = await route.continue_()
-
-                    # Validate response existence
-                    if response and hasattr(response, "body"):
-                        response_body = response.body.decode() if response.body else None
-                        if response_body:
-                            logging.debug(f"[DEBUG] Intercepted response body: {response_body[:500]}")  # Log snippet
-                            sitekey = extract_sitekey(response_body)  # Use helper to extract sitekey
-                            if sitekey:
-                                logging.info(f"[✓] Extracted sitekey: {sitekey}")
-                    else:
-                        logging.warning(f"[!] No response body for route: {url}")
-                except Exception as e:
-                    logging.error(f"[!] Error intercepting route: {e}")
-                    await route.continue_()  # Continue request on error
+              try:
+                  url = route.request.url
+                  # Allow irrelevant asset types through
+                  if url.endswith(('.css', '.js', '.png', '.jpg', '.woff', '.woff2', '.svg')):
+                      await route.continue_()
+                      return
+          
+                  logging.debug(f"[DEBUG] Intercepting route: {url}")
+                  response = await route.continue_()
+          
+                  if not response:
+                      logging.warning(f"[!] No response received for {url}")
+                      return
+          
+                  # Safely get the content type
+                  content_type = response.headers.get("content-type", "").lower()
+          
+                  # Only decode textual responses
+                  if "text" in content_type or "json" in content_type or "html" in content_type:
+                      try:
+                          body = await response.text()
+                          logging.debug(f"[DEBUG] Intercepted response body snippet: {body[:500]}")
+                          sitekey = extract_sitekey(body)
+                          if sitekey:
+                              logging.info(f"[✓] Extracted sitekey: {sitekey}")
+                      except Exception as e:
+                          logging.warning(f"[!] Error decoding text from {url}: {e}")
+                  else:
+                      logging.debug(f"[→] Skipped binary or non-text response from {url} (type: {content_type})")
+          
+              except Exception as e:
+                  logging.error(f"[!] Error in intercept_sitekey: {e}")
+                  await route.continue_()
 
             await context.route("**/*", intercept_sitekey)  # Route all network requests
 
