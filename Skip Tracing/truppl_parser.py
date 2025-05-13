@@ -69,21 +69,12 @@ def authenticate_google_sheets():
     creds = None
 
     try:
-        token_str = os.getenv("GOOGLE_TOKEN_JSON")
-        if not token_str:
-            raise ValueError("Missing GOOGLE_TOKEN_JSON")
-
-        token_data = json.loads(token_str)
-
-        creds = Credentials.from_authorized_user_info(token_data, SCOPES)
-
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            print("[✓] Token refreshed successfully.")
-
-    except Exception as e:
-        print(f"[!] Failed to load creds from GOOGLE_TOKEN_JSON: {e}")
-        creds = None
+        creds = authenticate_google_sheets()
+    sheets_service = build('sheets', 'v4', credentials=creds)
+    print("[✓] Google Sheets service initialized successfully.")
+except Exception as e:
+    print(f"[!] Failed to initialize Google Sheets service: {e}")
+    sheets_service = None
 
     if not creds or not creds.valid:
         raise RuntimeError("No valid Google Sheets credentials found.")
