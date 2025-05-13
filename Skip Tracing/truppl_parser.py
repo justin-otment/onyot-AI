@@ -4,6 +4,7 @@ import string
 import sys
 import random
 import time
+import json
 
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
