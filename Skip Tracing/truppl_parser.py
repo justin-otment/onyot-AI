@@ -575,6 +575,9 @@ async def main():
     
     mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE)
     zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE)
+    print(f"[DEBUG] Mailing streets (P2612:P): {mailing_streets}")
+    print(f"[DEBUG] ZIP codes (Q2612:Q): {zip_codes}")
+
 
     if not mailing_streets or not zip_codes:
         print("[!] Missing data in one or both ranges. Skipping processing...")
