@@ -516,12 +516,15 @@ def extract_sitekey(response_body):
 
 # === Main Async Function ===
 async def main():
+    print("🚀 Script started")
     START_ROW = 2612
     BATCH_SIZE = 10
     MAX_CAPTCHA_RETRIES = 3
 
+    print("📄 Preparing to fetch mailing streets and ZIP codes...")
     mailing_streets_range = f"{SHEET_NAME}!P{START_ROW}:P"
     zip_codes_range = f"{SHEET_NAME}!Q{START_ROW}:Q"
+    
     mailing_streets_raw = get_sheet_data(SHEET_ID, mailing_streets_range)
     zip_codes_raw = get_sheet_data(SHEET_ID, zip_codes_range)
 
@@ -529,6 +532,7 @@ async def main():
         print("[!] Missing data in one or both ranges. Skipping processing...")
         return
 
+    print("✅ Raw data retrieved, cleaning and preparing valid entries...")
     mailing_streets = [(row, val.strip()) for row, val in mailing_streets_raw if val.strip()]
     zip_codes = [(row, val.strip()) for row, val in zip_codes_raw if val.strip()]
     street_dict = dict(mailing_streets)
@@ -539,50 +543,64 @@ async def main():
         print("[!] No valid entries to process. Exiting...")
         return
 
+    print(f"🧮 Found {len(valid_entries)} valid entries to process.")
+
     async with async_playwright() as p:
+        print("🎭 Launching headless Chromium...")
         browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
         context = await browser.new_context(user_agent=random.choice(user_agents))
         await context.add_init_script(stealth_js)
         await context.route("**/*", lambda route: route.continue_())
         page = await context.new_page()
         await stealth_async(page)
+        print("🧠 Browser ready with stealth.")
 
         for batch_start in range(0, len(valid_entries), BATCH_SIZE):
             batch = valid_entries[batch_start:batch_start + BATCH_SIZE]
+            print(f"📦 Processing batch {batch_start} to {batch_start + len(batch)}...")
             for row_index, mailing_street, zip_code in batch:
+                print(f"🔍 Processing row {row_index} | Address: {mailing_street}, ZIP: {zip_code}")
                 try:
                     captcha_retries = 0
                     html_content = None
                     while captcha_retries < MAX_CAPTCHA_RETRIES:
+                        print(f"🔐 Attempt {captcha_retries+1} solving CAPTCHA/search...")
                         html_content = await fetch_truepeoplesearch_data(
                             row_index, mailing_street, zip_code, browser, context, page
                         )
                         if html_content:
+                            print("✅ Data fetched.")
                             break
                         captcha_retries += 1
 
                     if not html_content:
+                        print("[!] Failed to fetch HTML after retries. Skipping...")
                         continue
 
                     extracted_links = extract_links(html_content)
                     if not extracted_links:
+                        print("[!] No links extracted. Possible CAPTCHA block or rate limit.")
                         await handle_rate_limit(page)
                         continue
 
                     ref_names = extract_reference_names(SHEET_ID, row_index)
                     matched_results = match_entries(extracted_links, ref_names)
                     if not matched_results:
+                        print("[!] No matching results found.")
                         continue
 
                     for matched_entry in matched_results:
                         matched_url = matched_entry["link"]
                         matched_name = matched_entry["text"]
+                        print(f"➡️ Visiting matched profile: {matched_name} | {matched_url}")
                         matched_html = await navigate_to_profile(page, matched_url)
                         if not matched_html:
+                            print("[!] Failed to fetch matched profile HTML.")
                             continue
 
                         phone_numbers, phone_types, emails = parse_contact_info(matched_html)
                         if not phone_numbers:
+                            print("[!] No phone numbers found.")
                             continue
 
                         name_parts = matched_name.split()
@@ -593,6 +611,7 @@ async def main():
                         site_data = get_sheet_data(SHEET_ID, site_range)
                         site_value = site_data[0][1] if site_data else "N/A"
 
+                        print(f"📝 Writing data to Google Sheet for {first_name} {last_name}")
                         append_to_google_sheet(
                             first_name=first_name,
                             last_name=last_name,
@@ -606,6 +625,8 @@ async def main():
 
         await context.close()
         await browser.close()
+        print("🎉 All done. Browser closed and context cleaned up.")
 
 if __name__ == "__main__":
+    print("👋 Starting script via __main__")
     asyncio.run(main())
