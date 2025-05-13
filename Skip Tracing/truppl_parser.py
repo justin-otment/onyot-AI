@@ -35,6 +35,8 @@ SHEET_NAME = "CAPE CORAL FINAL"
 SHEET_NAME_2 = "For REI Upload"
 MAX_RETRIES = 1
 
+sys.stdout.reconfigure(encoding='utf-8')
+
 CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON") or "credentials.json"
 TOKEN_PATH = os.getenv("GOOGLE_TOKEN_JSON") or "token.json"
 
@@ -46,49 +48,83 @@ if not os.path.exists(TOKEN_PATH):
     print(f"[!] token.json not found at path: {TOKEN_PATH}", file=sys.stderr)
     sys.exit(1)
 
+# === Google Sheets Auth ===
 def authenticate_google_sheets():
+    """Authenticate with Google Sheets API."""
+    creds = None
+
     if os.path.exists(TOKEN_PATH):
-        try:
-            with open(TOKEN_PATH, 'r') as f:
-                if not f.read().strip():  # Check if file is empty
-                    raise ValueError("Empty token.json")
-            creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-            return build("sheets", "v4", credentials=creds)
-        except Exception as e:
-            print(f"Error loading token.json: {e}")
-    
-    # Fallback to login flow (only works locally, not in GitHub Actions)
-    flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
-    creds = flow.run_local_server(port=0)
-    with open(TOKEN_PATH, "w") as token:
-        token.write(creds.to_json())
-    return build("sheets", "v4", credentials=creds)
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
 
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            try:
+                creds.refresh(Request())
+                print("[✓] Token refreshed successfully.")
+                with open(TOKEN_PATH, 'w') as token:
+                    token.write(creds.to_json())
+            except Exception as e:
+                print(f"[!] Error refreshing token: {e}")
+                creds = None
+
+        if not creds:
+            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
+            creds = flow.run_local_server(port=0)
+            with open(TOKEN_PATH, 'w') as token:
+                token.write(creds.to_json())
+            print("[✓] New credentials obtained and saved.")
+
+    return build('sheets', 'v4', credentials=creds)
+
+# Replace with your Google Sheets integration
 def get_sheet_data(sheet_id, range_name):
-    service = authenticate_google_sheets()
-    result = service.spreadsheets().values().get(
-        spreadsheetId=sheet_id,
-        range=range_name
-    ).execute()
-    values = result.get("values", [])
-    base_row = int(re.search(r"(\d+):", range_name).group(1))
-    return [(i + base_row, row[0]) for i, row in enumerate(values) if row and row[0].strip()]
+    """
+    Fetches data from Google Sheets for a given range.
+    Returns list of (row_index, value) tuples for non-empty first-column values.
+    """
+    try:
+        service = authenticate_google_sheets()
+        result = service.spreadsheets().values().get(
+            spreadsheetId=sheet_id,
+            range=range_name
+        ).execute()
+        values = result.get("values", [])
+        base_row = int(re.search(r"(\d+):", range_name).group(1))
 
+        return [
+            (i + base_row, row[0])
+            for i, row in enumerate(values)
+            if row and len(row) > 0 and row[0].strip()
+        ]
+    except Exception as e:
+        logging.error(f"Error fetching data from Google Sheets range '{range_name}': {e}")
+        return []
+    
 def append_to_google_sheet(first_name, last_name, phones, emails, site):
+    """
+    Appends extracted data to the next available row in the 'For REI Upload' sheet.
+    """
     service = authenticate_google_sheets()
+
+    # Fetch header row to determine column layout
     header_row = service.spreadsheets().values().get(
         spreadsheetId=SHEET_ID,
         range=f"{SHEET_NAME_2}!1:1"
     ).execute().get("values", [[]])[0]
 
     row_data = [""] * len(header_row)
+
+    # Insert Site value
     if "Site" in header_row:
         row_data[header_row.index("Site")] = site
+
+    # Insert First Name and Last Name
     if "First Name" in header_row:
         row_data[header_row.index("First Name")] = first_name
     if "Last Name" in header_row:
         row_data[header_row.index("Last Name")] = last_name
 
+    # Insert up to 5 phone number/type pairs
     for i, (phone, phone_type) in enumerate(phones[:5]):
         try:
             phone_col = header_row.index("Phone Number") + (i * 2)
@@ -96,13 +132,15 @@ def append_to_google_sheet(first_name, last_name, phones, emails, site):
             row_data[phone_col] = phone
             row_data[type_col] = phone_type
         except ValueError:
-            continue
+            print(f"[!] Phone columns missing or misaligned for pair #{i + 1}")
 
+    # Insert up to 3 emails
     for i, email in enumerate(emails[:3]):
         email_header = f"Email {i + 1}"
         if email_header in header_row:
             row_data[header_row.index(email_header)] = email
 
+    # Append the data to the next available row
     service.spreadsheets().values().append(
         spreadsheetId=SHEET_ID,
         range=f"{SHEET_NAME_2}!A1",
@@ -110,6 +148,8 @@ def append_to_google_sheet(first_name, last_name, phones, emails, site):
         insertDataOption="INSERT_ROWS",
         body={"values": [row_data]}
     ).execute()
+
+    print(f"[✓] Data appended to '{SHEET_NAME_2}'")
 
 user_agents = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
@@ -516,117 +556,173 @@ def extract_sitekey(response_body):
 
 # === Main Async Function ===
 async def main():
-    print("🚀 Script started")
-    START_ROW = 2612
-    BATCH_SIZE = 10
-    MAX_CAPTCHA_RETRIES = 3
-
-    print("📄 Preparing to fetch mailing streets and ZIP codes...")
-    mailing_streets_range = f"{SHEET_NAME}!P{START_ROW}:P"
-    zip_codes_range = f"{SHEET_NAME}!Q{START_ROW}:Q"
+    MAILING_STREETS_RANGE = "CAPE CORAL FINAL!P2612:P"
+    ZIPCODE_RANGE = "CAPE CORAL FINAL!Q2612:Q"
+    SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
     
-    mailing_streets_raw = get_sheet_data(SHEET_ID, mailing_streets_range)
-    zip_codes_raw = get_sheet_data(SHEET_ID, zip_codes_range)
+    BATCH_SIZE = 10  # Process entries in batches to avoid resource exhaustion
+    MAX_CAPTCHA_RETRIES = 3  # Retry limit for CAPTCHA-solving attempts
+    
+    mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE)
+    zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE)
 
-    if not mailing_streets_raw or not zip_codes_raw:
+    if not mailing_streets or not zip_codes:
         print("[!] Missing data in one or both ranges. Skipping processing...")
         return
 
-    print("✅ Raw data retrieved, cleaning and preparing valid entries...")
-    mailing_streets = [(row, val.strip()) for row, val in mailing_streets_raw if val.strip()]
-    zip_codes = [(row, val.strip()) for row, val in zip_codes_raw if val.strip()]
-    street_dict = dict(mailing_streets)
-    zip_dict = dict(zip_codes)
-    valid_entries = [(row, street_dict[row], zip_dict[row]) for row in sorted(set(street_dict) & set(zip_dict))]
+    mailing_streets = [(row_index, value) for row_index, value in mailing_streets if value.strip()]
+    zip_codes = [(row_index, value) for row_index, value in zip_codes if value.strip()]
+
+    street_dict = {row_index: value for row_index, value in mailing_streets}
+    zip_dict = {row_index: value for row_index, value in zip_codes}
+
+    valid_entries = [
+        (index, street_dict[index], zip_dict[index])
+        for index in street_dict.keys() & zip_dict.keys()
+    ]
 
     if not valid_entries:
         print("[!] No valid entries to process. Exiting...")
         return
 
-    print(f"🧮 Found {len(valid_entries)} valid entries to process.")
-
     async with async_playwright() as p:
-        print("🎭 Launching headless Chromium...")
-        browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
-        context = await browser.new_context(user_agent=random.choice(user_agents))
-        await context.add_init_script(stealth_js)
-        await context.route("**/*", lambda route: route.continue_())
-        page = await context.new_page()
-        await stealth_async(page)
-        print("🧠 Browser ready with stealth.")
-
-        for batch_start in range(0, len(valid_entries), BATCH_SIZE):
-            batch = valid_entries[batch_start:batch_start + BATCH_SIZE]
-            print(f"📦 Processing batch {batch_start} to {batch_start + len(batch)}...")
-            for row_index, mailing_street, zip_code in batch:
-                print(f"🔍 Processing row {row_index} | Address: {mailing_street}, ZIP: {zip_code}")
+        browser = None
+        context = None  # Initialize context for cleanup
+        try:
+            # Launch the browser
+            browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
+            context = await browser.new_context(user_agent=random.choice(user_agents))
+            await context.add_init_script(stealth_js)  # Add stealth script for anti-bot measures
+            
+            # === Define and Activate Network Interception ===
+            async def intercept_sitekey(route):
                 try:
-                    captcha_retries = 0
-                    html_content = None
-                    while captcha_retries < MAX_CAPTCHA_RETRIES:
-                        print(f"🔐 Attempt {captcha_retries+1} solving CAPTCHA/search...")
-                        html_content = await fetch_truepeoplesearch_data(
-                            row_index, mailing_street, zip_code, browser, context, page
-                        )
-                        if html_content:
-                            print("✅ Data fetched.")
-                            break
-                        captcha_retries += 1
+                    url = route.request.url
+                    # Filter irrelevant resource types
+                    if url.endswith(('.css', '.js', '.png', '.jpg', '.woff', '.woff2', '.svg')):
+                        await route.continue_()  # Allow these requests to proceed
+                        return
 
-                    if not html_content:
-                        print("[!] Failed to fetch HTML after retries. Skipping...")
-                        continue
+                    logging.debug(f"[DEBUG] Intercepting route: {url}")
+                    response = await route.continue_()
 
-                    extracted_links = extract_links(html_content)
-                    if not extracted_links:
-                        print("[!] No links extracted. Possible CAPTCHA block or rate limit.")
-                        await handle_rate_limit(page)
-                        continue
-
-                    ref_names = extract_reference_names(SHEET_ID, row_index)
-                    matched_results = match_entries(extracted_links, ref_names)
-                    if not matched_results:
-                        print("[!] No matching results found.")
-                        continue
-
-                    for matched_entry in matched_results:
-                        matched_url = matched_entry["link"]
-                        matched_name = matched_entry["text"]
-                        print(f"➡️ Visiting matched profile: {matched_name} | {matched_url}")
-                        matched_html = await navigate_to_profile(page, matched_url)
-                        if not matched_html:
-                            print("[!] Failed to fetch matched profile HTML.")
-                            continue
-
-                        phone_numbers, phone_types, emails = parse_contact_info(matched_html)
-                        if not phone_numbers:
-                            print("[!] No phone numbers found.")
-                            continue
-
-                        name_parts = matched_name.split()
-                        first_name = name_parts[0]
-                        last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
-
-                        site_range = f"{SHEET_NAME}!B{row_index}:B{row_index}"
-                        site_data = get_sheet_data(SHEET_ID, site_range)
-                        site_value = site_data[0][1] if site_data else "N/A"
-
-                        print(f"📝 Writing data to Google Sheet for {first_name} {last_name}")
-                        append_to_google_sheet(
-                            first_name=first_name,
-                            last_name=last_name,
-                            phones=list(zip(phone_numbers, phone_types)),
-                            emails=emails,
-                            site=site_value
-                        )
+                    # Validate response existence
+                    if response and hasattr(response, "body"):
+                        response_body = response.body.decode() if response.body else None
+                        if response_body:
+                            logging.debug(f"[DEBUG] Intercepted response body: {response_body[:500]}")  # Log snippet
+                            sitekey = extract_sitekey(response_body)  # Use helper to extract sitekey
+                            if sitekey:
+                                logging.info(f"[✓] Extracted sitekey: {sitekey}")
+                    else:
+                        logging.warning(f"[!] No response body for route: {url}")
                 except Exception as e:
-                    print(f"[!] Error on row {row_index}: {e}")
-                    continue
+                    logging.error(f"[!] Error intercepting route: {e}")
+                    await route.continue_()  # Continue request on error
 
-        await context.close()
-        await browser.close()
-        print("🎉 All done. Browser closed and context cleaned up.")
+            await context.route("**/*", intercept_sitekey)  # Route all network requests
+
+            # Open a new page
+            page = await context.new_page()
+            await stealth_async(page)
+
+            # === Process Entries in Batches ===
+            for batch_start in range(0, len(valid_entries), BATCH_SIZE):
+                batch = valid_entries[batch_start:batch_start + BATCH_SIZE]
+                print(f"[→] Processing batch {batch_start // BATCH_SIZE + 1} with {len(batch)} entries...")
+                for row_index, mailing_street, zip_code in batch:
+                    print(f"\n[→] Processing Row {row_index}: Mailing Street '{mailing_street}', ZIP '{zip_code}'")
+                    try:
+                        # Retry CAPTCHA solving if needed
+                        captcha_retries = 0
+                        html_content = None
+                        while captcha_retries < MAX_CAPTCHA_RETRIES:
+                            html_content = await fetch_truepeoplesearch_data(
+                                row_index, mailing_street, zip_code, browser, context, page
+                            )
+                            if html_content:
+                                break
+                            captcha_retries += 1
+                            print(f"[!] Retrying CAPTCHA solving for row {row_index} ({captcha_retries}/{MAX_CAPTCHA_RETRIES})...")
+                        
+                        if not html_content:
+                            print("[!] Skipping row due to repeated CAPTCHA failures.")
+                            continue
+
+                        # Extract links
+                        extracted_links = extract_links(html_content)
+
+                        # Check and log extracted links
+                        if extracted_links:
+                            print(f"[DEBUG] Extracted {len(extracted_links)} links:")
+                            for entry in extracted_links:
+                                print(f"    - {entry['text']}")
+                        else:
+                            print("[DEBUG] Extracted 0 links:")
+                            print("[DEBUG] Extracted 0 links:")
+                            
+                            # Trigger rate limit handling if no links are extracted
+                            await handle_rate_limit(page)
+                            continue  # Proceed to the next iteration if applicable
+
+                        ref_names = extract_reference_names(SHEET_ID, row_index)
+                        matched_results = match_entries(extracted_links, ref_names)
+
+                        if not matched_results:
+                            print(f"[!] No match found in row {row_index}. Skipping second batch extraction.")
+                            continue
+
+                        # Navigate to matched profiles and parse information
+                        for matched_entry in matched_results:
+                            matched_url = matched_entry["link"]
+                            matched_name = matched_entry["text"]
+                            print(f"[→] Navigating to matched profile: {matched_url}")
+
+                            matched_html = await navigate_to_profile(page, matched_url)
+                            if not matched_html:
+                                print(f"[!] CAPTCHA blocked access to: {matched_url}")
+                                continue
+
+                            phone_numbers, phone_types, emails = parse_contact_info(matched_html)
+                            phone_data = list(zip(phone_numbers, phone_types))
+
+                            if not phone_numbers or not phone_types:
+                                print(f"[!] Skipping row {row_index}: No phone data found.")
+                                continue
+
+                            # Extract name parts
+                            name_parts = matched_name.strip().split()
+                            first_name = name_parts[0] if name_parts else ""
+                            last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
+
+                            site_data = get_sheet_data(SHEET_ID, range_name=f"{SHEET_NAME}!B2612:B")
+                            site_dict = {idx: value for idx, value in site_data}  # Convert to dictionary
+                            site_value = site_dict.get(row_index, None)  # Fetch site value for current row
+
+                            if site_value is None:
+                                logging.warning(f"[!] No Site value found for row {row_index}. Skipping.")
+                                continue
+
+                            append_to_google_sheet(
+                                first_name=matched_name.split()[0],
+                                last_name=" ".join(matched_name.split()[1:]),
+                                phones=phone_data,
+                                emails=emails,
+                                site=site_value  # Now includes "Site"
+                            )
+
+                    except Exception as e:
+                        print(f"[!] Error processing row {row_index}: {e}")
+                        continue
+
+        except Exception as e:
+            print(f"[!] Error launching or processing browser: {e}")
+        finally:
+            # Cleanup browser and context
+            if context:
+                await context.close()
+            if browser:
+                await browser.close()
 
 if __name__ == "__main__":
-    print("👋 Starting script via __main__")
     asyncio.run(main())
