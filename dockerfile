@@ -24,4 +24,4 @@ COPY ["Skip Tracing", "/app/Skip Tracing"]
 COPY ["externals/VPNs", "/app/externals/VPNs"]
 
 # Entrypoint to run the scraper with virtual display (for headless browsers)
-CMD ["sh", "-c", "xvfb-run -a python '/app/Skip Tracing/truppl_parser.py'"]
+CMD ["xvfb-run", "-a", "python", "/app/Skip Tracing/truppl_parser.py"]
