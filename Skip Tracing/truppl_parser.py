@@ -90,6 +90,27 @@ def authenticate_google_sheets():
         logging.error(f"[!] Failed to authenticate with Google Sheets API: {e}")
         raise
 
+
+# === Get Data from Google Sheets ===
+def get_sheet_data(sheet_id, range_name):
+    """
+    Fetches data from a specified range in a Google Sheet.
+    :param sheet_id: The ID of the Google Sheet.
+    :param range_name: The range to fetch data from (e.g., 'Sheet1!A1:D10').
+    :return: List of rows from the specified range.
+    """
+    try:
+        service = authenticate_google_sheets()
+        result = service.spreadsheets().values().get(
+            spreadsheetId=sheet_id,
+            range=range_name
+        ).execute()
+        values = result.get('values', [])
+        return [(i + 1, row[0]) for i, row in enumerate(values) if row]  # Include row index and value
+    except Exception as e:
+        logging.error(f"[!] Failed to get data from Google Sheets: {e}")
+        return []
+
 def append_to_google_sheet(first_name, last_name, phones, emails, site):
     """
     Appends extracted data to the next available row in the 'For REI Upload' sheet.
