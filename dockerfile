@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install system and Chrome dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     curl unzip wget gnupg ca-certificates xvfb lsb-release \
     libxi6 libnss3 libxss1 libdbus-glib-1-2 libgtk-3-0 \
@@ -15,17 +15,19 @@ RUN apt-get update && apt-get install -y \
     libgbm1 libxshmfence1 libu2f-udev libvulkan1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Google Chrome
+# Install a specific, known-good version of Google Chrome
+ENV CHROME_VERSION=122.0.6261.69-1
+
 RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-linux.gpg && \
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
     > /etc/apt/sources.list.d/google-chrome.list && \
-    apt-get update && apt-get install -y google-chrome-stable && \
+    apt-get update && apt-get install -y google-chrome-stable=${CHROME_VERSION} && \
     rm -rf /var/lib/apt/lists/*
 
-# Install ChromeDriver
-RUN CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+') && \
-    DRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION}") && \
-    wget -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/${DRIVER_VERSION}/chromedriver_linux64.zip && \
+# Install matching ChromeDriver version
+ENV CHROMEDRIVER_VERSION=122.0.6261.69
+
+RUN wget -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip && \
     unzip /tmp/chromedriver.zip -d /usr/local/bin/ && \
     chmod +x /usr/local/bin/chromedriver && \
     rm /tmp/chromedriver.zip
@@ -34,9 +36,9 @@ RUN CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+') && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source code and VPN config files
+# Copy application code
 COPY ["Skip Tracing", "/app/Skip Tracing"]
 COPY ["externals/VPNs", "/app/externals/VPNs"]
 
-# Entrypoint
+# Default command
 CMD ["xvfb-run", "-a", "python", "/app/Skip Tracing/truppl_parser.py"]
