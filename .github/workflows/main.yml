@@ -2,6 +2,7 @@ name: Run Skip Tracing Parser
 
 on:
   workflow_dispatch:
+
   push:
     paths:
       - 'Skip Tracing/**'
@@ -25,6 +26,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Set up Docker Buildx (optional, but helpful)
+        uses: docker/setup-buildx-action@v3
+
       - name: Build Docker container
         run: |
           docker build -t skip-tracing-parser .
@@ -32,9 +36,10 @@ jobs:
       - name: Run Skip Tracing container
         run: |
           docker run --rm \
-            -e TWO_CAPTCHA_API_KEY="$TWO_CAPTCHA_API_KEY" \
-            -e VPN_USERNAME="$VPN_USERNAME" \
-            -e VPN_PASSWORD="$VPN_PASSWORD" \
-            -e GOOGLE_CREDENTIALS_JSON="$GOOGLE_CREDENTIALS_JSON" \
-            -e GOOGLE_TOKEN_JSON="$GOOGLE_TOKEN_JSON" \
+            -e TWO_CAPTCHA_API_KEY="${{ env.TWO_CAPTCHA_API_KEY }}" \
+            -e VPN_USERNAME="${{ env.VPN_USERNAME }}" \
+            -e VPN_PASSWORD="${{ env.VPN_PASSWORD }}" \
+            -e GOOGLE_CREDENTIALS_JSON="${{ env.GOOGLE_CREDENTIALS_JSON }}" \
+            -e GOOGLE_TOKEN_JSON="${{ env.GOOGLE_TOKEN_JSON }}" \
+            --cap-add=NET_ADMIN \  # (optional if using OpenVPN)
             skip-tracing-parser
