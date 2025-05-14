@@ -36,9 +36,33 @@ MAX_RETRIES = 1
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON") or "credentials.json"
-TOKEN_PATH = os.getenv("GOOGLE_TOKEN_JSON") or "token.json"
+CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
+TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
 
+# === Decode secrets and write to files (for GitHub Actions or secure environments) ===
+def write_base64_json_files():
+    credentials_b64 = os.getenv("GOOGLE_CREDENTIALS_JSON")
+    token_b64 = os.getenv("GOOGLE_TOKEN_JSON")
+
+    if credentials_b64:
+        try:
+            with open(CREDENTIALS_PATH, "wb") as f:
+                f.write(base64.b64decode(credentials_b64))
+        except Exception as e:
+            print(f"[!] Failed to decode/write credentials.json: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    if token_b64:
+        try:
+            with open(TOKEN_PATH, "wb") as f:
+                f.write(base64.b64decode(token_b64))
+        except Exception as e:
+            print(f"[!] Failed to decode/write token.json: {e}", file=sys.stderr)
+            sys.exit(1)
+
+write_base64_json_files()
+
+# === Check existence of credential files ===
 if not os.path.exists(CREDENTIALS_PATH):
     print(f"[!] credentials.json not found at path: {CREDENTIALS_PATH}", file=sys.stderr)
     sys.exit(1)
@@ -47,57 +71,17 @@ if not os.path.exists(TOKEN_PATH):
     print(f"[!] token.json not found at path: {TOKEN_PATH}", file=sys.stderr)
     sys.exit(1)
 
-# === Decode secrets if running in GitHub Actions ===
-def write_base64_json_files():
-    credentials_b64 = os.getenv("GOOGLE_CREDENTIALS_JSON")
-    token_b64 = os.getenv("GOOGLE_TOKEN_JSON")
-
-    if credentials_b64:
-        with open(CREDENTIALS_PATH, "wb") as f:
-            f.write(base64.b64decode(credentials_b64))
-
-    if token_b64:
-        with open(TOKEN_PATH, "wb") as f:
-            f.write(base64.b64decode(token_b64))
-
 # === Authenticate Google Sheets API ===
 def authenticate_google_sheets():
     try:
-        b64_creds = os.getenv("GOOGLE_CREDENTIALS_B64")
-        if not b64_creds:
-            raise EnvironmentError("Missing GOOGLE_CREDENTIALS_B64 in environment")
-
-        credentials_json = base64.b64decode(b64_creds).decode("utf-8")
-        creds_dict = json.loads(credentials_json)
-        creds = Credentials.from_service_account_info(creds_dict, scopes=["https://www.googleapis.com/auth/spreadsheets"])
+        creds = service_account.Credentials.from_service_account_file(
+            CREDENTIALS_PATH, scopes=SCOPES
+        )
         service = build("sheets", "v4", credentials=creds)
         return service
     except Exception as e:
         logging.error(f"[!] Failed to authenticate with Google Sheets API: {e}")
         raise
-
-def get_sheet_data(sheet_id, range_name):
-    """
-    Fetches data from Google Sheets for a given range.
-    Returns list of (row_index, value) tuples for non-empty first-column values.
-    """
-    try:
-        service = authenticate_google_sheets()
-        result = service.spreadsheets().values().get(
-            spreadsheetId=sheet_id,
-            range=range_name
-        ).execute()
-        values = result.get("values", [])
-        base_row = int(re.search(r"(\d+):", range_name).group(1))
-
-        return [
-            (i + base_row, row[0])
-            for i, row in enumerate(values)
-            if row and len(row) > 0 and row[0].strip()
-        ]
-    except Exception as e:
-        logging.error(f"Error fetching data from Google Sheets range '{range_name}': {e}")
-        return []
 
 def append_to_google_sheet(first_name, last_name, phones, emails, site):
     """
