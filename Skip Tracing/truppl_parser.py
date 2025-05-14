@@ -18,6 +18,13 @@ from captcha import get_site_key, solve_turnstile_captcha, inject_token  # CAPTC
 import traceback
 from dotenv import load_dotenv
 import os
+import sys
+import json
+import base64
+import logging
+from dotenv import load_dotenv
+from concurrent.futures import ThreadPoolExecutor  # <-- THIS FIXES YOUR ERROR
+import os
 print("Current Working Directory:", os.getcwd())
 import logging
 logging.basicConfig(level=logging.DEBUG, filename="logfile.log", filemode="a",
