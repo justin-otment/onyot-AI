@@ -80,8 +80,7 @@ def authenticate_google_sheets():
         logging.error(f"[!] Google Sheets authentication failed: {e}")
         raise
 
-# === Get Data ===
-def get_sheet_data(sheet_id, range_name):
+def get_sheet_data(sheet_id, range_name, start_row=2):
     try:
         service = authenticate_google_sheets()
         result = service.spreadsheets().values().get(
@@ -89,7 +88,7 @@ def get_sheet_data(sheet_id, range_name):
             range=range_name
         ).execute()
         values = result.get('values', [])
-        return [(i + 1, row[0]) for i, row in enumerate(values) if row and len(row) > 0]
+        return [(start_row + i, row[0]) for i, row in enumerate(values) if row and len(row) > 0]
     except Exception as e:
         logging.error(f"[!] Failed to read range {range_name}: {e}")
         return []
@@ -548,15 +547,17 @@ def extract_sitekey(response_body):
 executor = ThreadPoolExecutor()
 
 async def main():
-    MAILING_STREETS_RANGE = "CAPE CORAL FINAL!P2612:P"
-    ZIPCODE_RANGE = "CAPE CORAL FINAL!Q2612:Q"
+    START_ROW = 2612
     SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
-    SHEET_NAME = "CAPE CORAL FINAL!"
+    SHEET_NAME = "CAPE CORAL FINAL"
+    MAILING_STREETS_RANGE = f"{SHEET_NAME}!P{START_ROW}:P"
+    ZIPCODE_RANGE = f"{SHEET_NAME}!Q{START_ROW}:Q"
+    SITE_RANGE = f"{SHEET_NAME}!B{START_ROW}:B"
     BATCH_SIZE = 10
     MAX_CAPTCHA_RETRIES = 3
 
-    mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE)
-    zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE)
+    mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE, start_row=START_ROW)
+    zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE, start_row=START_ROW)
 
     if not mailing_streets or not zip_codes:
         print("[!] Missing data in one or both ranges. Skipping processing...")
@@ -638,7 +639,7 @@ async def main():
                     first_name = name_parts[0] if name_parts else ""
                     last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
 
-                    site_data = get_sheet_data(SHEET_ID, range_name=f"{SHEET_NAME}!B2612:B")
+                    site_data = get_sheet_data(SHEET_ID, SITE_RANGE, start_row=START_ROW)
                     site_dict = {idx: value for idx, value in site_data}
                     site_value = site_dict.get(row_index, None)
 
@@ -658,5 +659,3 @@ async def main():
                 print(f"[!] Error processing row {row_index}: {e}")
                 continue
 
-if __name__ == "__main__":
-    asyncio.run(main())
