@@ -659,7 +659,7 @@ async def main():
                 print(f"[!] Error processing row {row_index}: {e}")
                 continue
 
-        except Exception as e:
+    except Exception as e:
             print(f"[!] Error launching or processing browser: {e}")
         finally:
             # Cleanup browser and context
