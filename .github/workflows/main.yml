@@ -8,6 +8,8 @@ on:
       - 'externals/VPNs/**'
       - 'requirements.txt'
       - 'pip-requirements.txt'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
       - '.github/workflows/main.yml'
 
 jobs:
@@ -32,6 +34,8 @@ jobs:
       - name: Run Skip Tracing container
         run: |
           docker run --rm \
+            --cap-add=NET_ADMIN \
+            --device /dev/net/tun \
             -e TWO_CAPTCHA_API_KEY="$TWO_CAPTCHA_API_KEY" \
             -e VPN_USERNAME="$VPN_USERNAME" \
             -e VPN_PASSWORD="$VPN_PASSWORD" \
