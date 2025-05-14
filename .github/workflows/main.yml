@@ -35,9 +35,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y wget curl unzip xvfb \
-              libxi6 libgconf-2-4 libnss3 libxss1 libappindicator1 \
-              libindicator7 fonts-liberation libatk-bridge2.0-0 libgtk-3-0 \
-              libasound2 libgbm-dev libxrandr2 libu2f-udev
+              libxi6 libnss3 libxss1 libatk-bridge2.0-0 libgtk-3-0 \
+              libgbm-dev libxrandr2 libu2f-udev fonts-liberation
+
 
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y
