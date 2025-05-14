@@ -107,7 +107,7 @@ async def verify_vpn_connection():
         logging.error(f"[!] Error verifying VPN connectivity: {e}")
         return False
 
-async def handle_rate_limit(page):
+async def handle_rate_limit(driver):
     vpn_files = list_vpn_configs(vpn_folder_path)
     if not vpn_files:
         logging.error("[!] No VPN configuration files found. Exiting...")
@@ -126,8 +126,10 @@ async def handle_rate_limit(page):
                 continue
 
             logging.info(f"[✓] VPN switched successfully on attempt {attempt}. Reloading page...")
+
             try:
-                await page.reload(wait_until="domcontentloaded", timeout=60000)
+                current_url = driver.current_url
+                await asyncio.to_thread(driver.get, current_url)
                 logging.info("[✓] Page reloaded successfully after VPN switch.")
                 await asyncio.sleep(3)
                 return True
@@ -142,3 +144,4 @@ async def handle_rate_limit(page):
 
     logging.error("[!] Exhausted all retries. Rate limit handling failed.")
     return False
+
