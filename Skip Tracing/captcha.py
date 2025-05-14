@@ -6,8 +6,9 @@ from urllib.parse import urlparse, parse_qs
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 import os
-print("Current Working Directory:", os.getcwd())
 import logging
+import asyncio
+
 logging.basicConfig(level=logging.DEBUG, filename="logfile.log", filemode="a",
                     format="%(asctime)s - %(levelname)s - %(message)s")
 logging.info("Script started")
@@ -23,25 +24,21 @@ CAPTCHA_CONFIG = {
 }
 API_KEY = os.getenv("TWO_CAPTCHA_API_KEY")
 CAPTCHA_API_URL = "http://2captcha.com"
-LOGGING_FORMAT = "[%(asctime)s] %(levelname)s: %(message)s"
-logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
-
-MAX_RETRIES = 5  # Maximum retry attempts for main function
-BACKOFF_FACTOR = 5  # Exponential backoff factor
+CAPTCHA_SOLVE_TIMEOUT = 75  # Seconds
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 }
 
-
-async def get_site_key(page):
+async def get_site_key(driver):
     """
-    Extracts Turnstile CAPTCHA sitekey from page HTML or iframe.
+    Extracts Turnstile CAPTCHA sitekey from Selenium page HTML or iframe.
     """
     try:
-        html = await page.content()
+        html = await asyncio.to_thread(driver.page_source)
         soup = BeautifulSoup(html, "html.parser")
 
+        # Check iframe URLs
         for iframe in soup.find_all("iframe"):
             src = iframe.get("src", "")
             if "challenges.cloudflare.com/turnstile" in src:
@@ -52,11 +49,13 @@ async def get_site_key(page):
                     logging.info(f"[✓] Found sitekey in iframe: {sitekey}")
                     return sitekey
 
+        # Check for div with data-sitekey
         div = soup.find("div", {"data-sitekey": True})
         if div:
             logging.info(f"[✓] Found sitekey in data-sitekey div: {div['data-sitekey']}")
             return div["data-sitekey"]
 
+        # Regex fallback
         match = re.search(r'data-sitekey=["\']([\w-]+)["\']', html)
         if match:
             logging.info(f"[✓] Found sitekey via regex: {match.group(1)}")
@@ -68,7 +67,6 @@ async def get_site_key(page):
     except Exception as e:
         logging.error(f"[!] get_site_key error: {e}")
         return None
-
 
 def solve_turnstile_captcha(sitekey, page_url):
     """
@@ -87,7 +85,7 @@ def solve_turnstile_captcha(sitekey, page_url):
             "pageurl": page_url,
             "json": 1
         }
-        resp = requests.post("http://2captcha.com/in.php", data=payload, headers=HEADERS)
+        resp = requests.post(f"{CAPTCHA_API_URL}/in.php", data=payload, headers=HEADERS)
         result = resp.json()
 
         if result.get("status") != 1:
@@ -97,7 +95,7 @@ def solve_turnstile_captcha(sitekey, page_url):
         request_id = result["request"]
         logging.info(f"[✓] CAPTCHA task ID: {request_id}")
 
-        poll_url = f"http://2captcha.com/res.php?key={API_KEY}&action=get&id={request_id}&json=1"
+        poll_url = f"{CAPTCHA_API_URL}/res.php?key={API_KEY}&action=get&id={request_id}&json=1"
         start = time.time()
 
         while True:
@@ -122,28 +120,38 @@ def solve_turnstile_captcha(sitekey, page_url):
         logging.error(f"[!] solve_turnstile_captcha exception: {e}")
         return None
 
-
-async def inject_token(page, token, page_url):
+async def inject_token(driver, token):
     """
-    Injects solved CAPTCHA token into page and submits the form.
+    Injects the CAPTCHA token into a hidden form field and submits it.
     """
     try:
         logging.info("[!] Injecting CAPTCHA token into page...")
-        script = f"""
-        () => {{
-            let form = document.querySelector('form');
-            if (!form) return false;
-            let input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'cf-turnstile-response';
-            input.value = '{token}';
-            form.appendChild(input);
-            form.submit();
-            return true;
-        }}
-        """
-        result = await page.evaluate(script)
-        await page.wait_for_load_state("networkidle", timeout=60000)
+
+        def _inject():
+            from selenium.webdriver.common.by import By
+            from selenium.webdriver.support.ui import WebDriverWait
+            from selenium.webdriver.support import expected_conditions as EC
+
+            form = driver.find_element(By.TAG_NAME, "form")
+            if not form:
+                return False
+
+            driver.execute_script("""
+                let form = document.querySelector('form');
+                let input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'cf-turnstile-response';
+                input.value = arguments[0];
+                form.appendChild(input);
+                form.submit();
+            """, token)
+
+            WebDriverWait(driver, 60).until(
+                EC.presence_of_element_located((By.TAG_NAME, "body"))
+            )
+            return True
+
+        result = await asyncio.to_thread(_inject)
         return result
 
     except Exception as e:
