@@ -22,9 +22,12 @@ RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearm
     apt-get update && apt-get install -y google-chrome-stable && \
     rm -rf /var/lib/apt/lists/*
 
-# Install matching ChromeDriver with fallback logic
-RUN CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+') && \
+# Install matching ChromeDriver with robust fallback logic
+RUN set -e && \
+    CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+' || echo "114.0.5735.90") && \
+    echo "Detected Chrome Version: $CHROME_VERSION" && \
     DRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION}" || echo "114.0.5735.90") && \
+    echo "Using ChromeDriver Version: $DRIVER_VERSION" && \
     wget -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/${DRIVER_VERSION}/chromedriver_linux64.zip && \
     unzip /tmp/chromedriver.zip -d /usr/local/bin/ && \
     chmod +x /usr/local/bin/chromedriver && \
