@@ -1,43 +1,25 @@
-# --- Core scraping & browser automation ---
-selenium==4.20.0                    # Main browser automation library
-undetected-chromedriver==3.5.5      # Bypass bot detection (works with Selenium)
+selenium==4.20.0
+undetected-chromedriver==3.5.5
 
-# --- HTML parsing & data extraction ---
-beautifulsoup4==4.13.4              # For HTML parsing
-soupsieve==2.6                      # CSS selectors for BeautifulSoup
+beautifulsoup4==4.13.4
+requests==2.32.3
+python-dotenv
+pyyaml
 
-# --- Google Sheets & API Access ---
-google-api-core==2.24.2             # Google API helper functions
-google-api-python-client==2.167.0   # Google Sheets API interaction
-google-auth==2.39.0                 # Authentication for Google APIs
-google-auth-httplib2==0.2.0         # HTTP transport for Google APIs
-google-auth-oauthlib==1.2.1         # OAuth2 flow for Google APIs
-googleapis-common-protos==1.70.0    # Common protobuf definitions for APIs
-proto-plus==1.26.1                  # Protobuf helpers
-protobuf==6.30.2                    # Protocol buffers (serialization)
-
-# --- Networking, auth, utilities ---
-requests==2.32.3                    # HTTP requests
-requests-oauthlib==2.0.0            # OAuth2 for HTTP requests
-cachetools==5.5.2                   # Utility functions for caching
-oauthlib==3.2.2                     # OAuth implementation
-httplib2==0.22.0                    # HTTP client used by Google APIs
-
-# --- Cryptography dependencies ---
+# Google Sheets API and OAuth
+google-api-python-client==2.167.0
+google-auth==2.39.0
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.2.1
+googleapis-common-protos==1.70.0
+proto-plus==1.26.1
+protobuf==6.30.2
+httplib2==0.22.0
+oauthlib==3.2.2
+requests-oauthlib==2.0.0
+cachetools==5.5.2
 pyasn1==0.6.1
 pyasn1_modules==0.4.2
 rsa==4.9.1
-
-# --- Misc/utility ---
-charset-normalizer==3.4.1           # Encodes and normalizes characters
-idna==3.10                          # Internationalized domain names support
-typing_extensions==4.13.2           # Typing backports
-uritemplate==4.1.1                  # URI templating
-urllib3==2.4.0                      # HTTP library
-pyaml                               # YAML parsing
-python-dotenv                      # Load environment variables from .env
-greenlet==3.2.0                    # Useful for async concurrency (used in some dependencies)
-
-# --- Optional if you use asyncio with subprocess for VPN rotation ---
-pyee==12.1.1                        # EventEmitter pattern for async apps
-pyparsing==3.2.3                    # String parsing (used by other libs)
+uritemplate==4.1.1
+typing_extensions==4.13.2
