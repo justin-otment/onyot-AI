@@ -659,3 +659,15 @@ async def main():
                 print(f"[!] Error processing row {row_index}: {e}")
                 continue
 
+        except Exception as e:
+            print(f"[!] Error launching or processing browser: {e}")
+        finally:
+            # Cleanup browser and context
+            if context:
+                await context.close()
+            if browser:
+                await browser.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
