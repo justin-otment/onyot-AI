@@ -37,16 +37,31 @@ jobs:
           sudo apt-get install -y wget curl unzip xvfb \
               libxi6 libnss3 libxss1 libatk-bridge2.0-0 libgtk-3-0 \
               libgbm-dev libxrandr2 libu2f-udev fonts-liberation
-
-
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y
+
+      - name: Debug Chrome and ChromeDriver versions
+        run: |
+          echo "Google Chrome Version:"
+          google-chrome --version || echo "Google Chrome not installed."
+          echo "ChromeDriver Version:"
+          chromedriver --version || echo "ChromeDriver not installed."
 
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Create credentials file
+        run: |
+          echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" > credentials.json
+          echo "${{ secrets.GOOGLE_TOKEN_JSON }}" > token.json
+
       - name: Run Skip Tracing Parser
         run: |
           python 'Skip Tracing/truppl_parser.py'
+
+      - name: List all generated files for debugging (Optional)
+        run: |
+          echo "Listing all files in the current directory:"
+          ls -R
