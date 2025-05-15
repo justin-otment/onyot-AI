@@ -15,6 +15,11 @@ from urllib3.exceptions import ProtocolError
 import ssl
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials  # Correct import for OAuth2 credentials
+import requests
+
+url = "https://www.leepa.org/Search/PropertySearch.aspx"
+response = requests.get(url)
+print(response.text[:500])  # Print first 500 characters to check the response
 
 # Request with retries
 def make_request_with_retries(url, retries=3, backoff_factor=1):
