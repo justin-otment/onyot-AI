@@ -31,17 +31,19 @@ executor = ThreadPoolExecutor()
 sys.stdout.reconfigure(encoding='utf-8')
 
 # === Constants ===
+
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SHEET_ID = os.getenv("SHEET_ID")
+
+# Hardcoded sheet config
+SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "CAPE CORAL FINAL"
 SHEET_NAME_2 = "For REI Upload"
-CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON_BASE64")
-TOKEN_PATH = os.path.join(BASE_DIR, "token.json")  # currently unused
-MAX_RETRIES = 1
 
-if not SHEET_ID:
-    raise EnvironmentError("SHEET_ID environment variable not set.")
+CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
+TOKEN_PATH = os.path.join(BASE_DIR, "token.json")  # optional
+
+MAX_RETRIES = 1
     
 def write_base64_json_files():
     credentials_b64 = os.getenv("GOOGLE_CREDENTIALS_JSON")
