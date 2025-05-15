@@ -27,21 +27,21 @@ logging.basicConfig(
 logging.info("Script started")
 
 load_dotenv()
-
+executor = ThreadPoolExecutor()
 sys.stdout.reconfigure(encoding='utf-8')
 
+# === Constants ===
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Pulled from GitHub Actions secrets
-SHEET_ID = os.environ.get("SHEET_ID")
-START_ROW = 2612
+SHEET_ID = os.getenv("SHEET_ID")
 SHEET_NAME = "CAPE CORAL FINAL"
 SHEET_NAME_2 = "For REI Upload"
-BATCH_SIZE = 10
-MAX_CAPTCHA_RETRIES = 3
+CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
+TOKEN_PATH = os.path.join(BASE_DIR, "token.json")  # currently unused
+MAX_RETRIES = 1
 
-executor = ThreadPoolExecutor()
+if not SHEET_ID:
+    raise EnvironmentError("SHEET_ID environment variable not set.")
 
 # Paths where base64 credentials will be written by the script
 CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
