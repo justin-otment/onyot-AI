@@ -59,16 +59,11 @@ SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
 SHEET_NAME = "'Cape Coral - ArcGIS_LANDonly'"  # Ensure sheet name is properly formatted
 
 def authenticate_google_sheets():
-    creds = None
-    if os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_service_account_file(TOKEN_PATH, scopes=["https://www.googleapis.com/auth/spreadsheets"])
-    
-    if not creds or not creds.valid:
-        if creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            creds = Credentials.from_service_account_file(CREDENTIALS_PATH, scopes=["https://www.googleapis.com/auth/spreadsheets"])
+    if not os.path.exists(CREDENTIALS_PATH):
+        raise Exception(f"Google Sheets authentication failed: Credential file not found at {CREDENTIALS_PATH}")
 
+    creds = Credentials.from_service_account_file(CREDENTIALS_PATH, scopes=["https://www.googleapis.com/auth/spreadsheets"])
+    
     return build("sheets", "v4", credentials=creds)
 
 # Fetch and update data in Google Sheets
