@@ -32,46 +32,74 @@ logging.basicConfig(
 load_dotenv()
 executor = ThreadPoolExecutor()
 
-# === Constants ===
-SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
-SHEET_NAME = "CAPE CORAL FINAL"
-SHEET_NAME_2 = "For REI Upload"
-START_ROW = 2
-BATCH_SIZE = 10
-MAX_CAPTCHA_RETRIES = 3
+import os
+import json
+import time
+import asyncio
+import urllib3
+import ssl
+import traceback
+from concurrent.futures import ThreadPoolExecutor
 
-CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
+from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from google.oauth2.credentials import Credentials
+
+# === Global Settings ===
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+os.environ['NO_PROXY'] = 'localhost,127.0.0.1'
+
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
+SHEET_NAME = 'Skip Tracing'
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
+TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
+
+executor = ThreadPoolExecutor()
+
+# === Authenticate Google Sheets API ===
 def authenticate_google_sheets():
-    """Authenticate with Google Sheets API using service account credentials."""
-    scopes = ['https://www.googleapis.com/auth/spreadsheets']
+    creds = None
+    if os.path.exists(TOKEN_PATH):
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
     
-    cred_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
-    if not cred_json:
-        raise ValueError("GOOGLE_CREDENTIALS_JSON environment variable is missing or incorrectly set.")
-    
-    try:
-        credentials = Credentials.from_service_account_info(json.loads(cred_json), scopes=scopes)
-    except json.JSONDecodeError:
-        raise ValueError("GOOGLE_CREDENTIALS_JSON is not a valid JSON format.")
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
+            creds = flow.run_local_server(port=0)
 
-    return build('sheets', 'v4', credentials=credentials)
+        with open(TOKEN_PATH, "w") as token:
+            token.write(creds.to_json())
 
+    return build("sheets", "v4", credentials=creds)
+
+# === Fetch Data From Google Sheets ===
 def get_sheet_data(sheet_id, range_name):
-    """Fetch data from Google Sheets with error handling."""
     try:
         service = authenticate_google_sheets()
-        result = service.spreadsheets().values().get(spreadsheetId=sheet_id, range=range_name).execute()
-        values = result.get('values', [])
+        sheet = service.spreadsheets()
+        
+        result = sheet.values().get(spreadsheetId=sheet_id, range=range_name).execute()
+        values = result.get("values", [])
 
         if not values:
-            logging.warning(f"[!] Empty response for range {range_name}. Check if the sheet has data.")
+            print(f"[!] No data found in range: {range_name}")
 
-        logging.info(f"[DEBUG] Retrieved {len(values)} rows from range {range_name}")
-        return [(i + START_ROW, row[0]) for i, row in enumerate(values) if row and len(row) > 0]
-    
+        return [(i+2, row[0]) for i, row in enumerate(values) if row]
     except Exception as e:
-        logging.error(f"Error fetching data from Google Sheets: {traceback.format_exc()}")
+        print(f"[ERROR] Failed to retrieve data: {traceback.format_exc()}")
         return []
 
 def extract_reference_names(sheet_id, row_index):
