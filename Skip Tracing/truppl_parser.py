@@ -16,7 +16,7 @@ import ssl
 
 # Define constants
 GECKODRIVER_PATH = "/usr/local/bin/geckodriver"
-GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON")
 
 if not GOOGLE_CREDENTIALS_PATH or not os.path.exists(GOOGLE_CREDENTIALS_PATH):
     raise Exception(f"Google Sheets authentication failed: Credential file not found. Path: {GOOGLE_CREDENTIALS_PATH}")
