@@ -1,8 +1,8 @@
 import os
-import asyncio
 import sys
 import json
 import base64
+import asyncio
 import logging
 import traceback
 from dotenv import load_dotenv
@@ -28,19 +28,29 @@ logging.info("Script started")
 
 load_dotenv()
 
-# === Constants ===
+sys.stdout.reconfigure(encoding='utf-8')
+
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
+
+# Pulled from GitHub Actions secrets
+SHEET_ID = os.environ.get("SHEET_ID")
+START_ROW = 2612
 SHEET_NAME = "CAPE CORAL FINAL"
 SHEET_NAME_2 = "For REI Upload"
+BATCH_SIZE = 10
+MAX_CAPTCHA_RETRIES = 3
+
+executor = ThreadPoolExecutor()
+
+# Paths where base64 credentials will be written by the script
 CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
-TOKEN_PATH = os.path.join(BASE_DIR, "token.json")  # currently unused
+TOKEN_PATH = os.path.join(BASE_DIR, "token.json")  # unused but retained
+
 MAX_RETRIES = 1
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-# === Write credentials if in CI ===
 def write_base64_json_files():
     credentials_b64 = os.getenv("GOOGLE_CREDENTIALS_JSON")
     token_b64 = os.getenv("GOOGLE_TOKEN_JSON")
@@ -63,21 +73,29 @@ def write_base64_json_files():
 
 write_base64_json_files()
 
+if not os.path.exists(CREDENTIALS_PATH):
+    print(f"[!] credentials.json not found at {CREDENTIALS_PATH}", file=sys.stderr)
+    sys.exit(1)
+
 # === Check credential file existence ===
 if not os.path.exists(CREDENTIALS_PATH):
     print(f"[!] credentials.json not found at path: {CREDENTIALS_PATH}", file=sys.stderr)
     sys.exit(1)
 
+# === Google Sheets Integration ===
+
 def authenticate_google_sheets():
+    """Authenticate with Google Sheets API using service account credentials."""
     scopes = ['https://www.googleapis.com/auth/spreadsheets']
     credentials = Credentials.from_service_account_file(
-        'credentials.json',
+        CREDENTIALS_PATH,  # Use the correct path variable
         scopes=scopes
     )
     service = build('sheets', 'v4', credentials=credentials)
     return service
 
 def get_sheet_data(sheet_id, range_name, start_row=2):
+    """Fetch data from the specified Google Sheet range."""
     service = authenticate_google_sheets()
     result = service.spreadsheets().values().get(
         spreadsheetId=sheet_id,
@@ -85,12 +103,12 @@ def get_sheet_data(sheet_id, range_name, start_row=2):
     ).execute()
     values = result.get('values', [])
     print(f"[DEBUG] Retrieved {len(values)} rows from range {range_name}")
-
     return [(start_row + i, row[0]) for i, row in enumerate(values) if row and len(row) > 0]
 
 def extract_reference_names(sheet_id, row_index):
+    """Extract B:H values on the given row index from the first sheet."""
     service = authenticate_google_sheets()
-    range_ = f"CAPE CORAL FINAL!B{row_index}:H{row_index}"
+    range_ = f"{SHEET_NAME}!B{row_index}:H{row_index}"
     result = service.spreadsheets().values().get(
         spreadsheetId=sheet_id,
         range=range_
@@ -99,6 +117,7 @@ def extract_reference_names(sheet_id, row_index):
     return [val for val in row if val.strip()]
 
 def append_to_google_sheet(first_name, last_name, phones, emails, site):
+    """Append a structured row to the 'For REI Upload' sheet."""
     service = authenticate_google_sheets()
     sheet = service.spreadsheets()
 
@@ -110,17 +129,20 @@ def append_to_google_sheet(first_name, last_name, phones, emails, site):
 
     row = [first_name, last_name]
     for i in range(max_phones):
-        row += [phone_values[i] if i < len(phone_values) else "", phone_types[i] if i < len(phone_types) else ""]
+        row += [
+            phone_values[i] if i < len(phone_values) else "",
+            phone_types[i] if i < len(phone_types) else ""
+        ]
     row += email_values + [""] * (max_emails - len(email_values)) + [site]
 
     sheet.values().append(
-        spreadsheetId=sheet_id,
-        range="For REI Upload!A1",
+        spreadsheetId=SHEET_ID,
+        range=f"{SHEET_NAME_2}!A1",
         valueInputOption="USER_ENTERED",
         body={"values": [row]}
     ).execute()
     print(f"[+] Appended result for {first_name} {last_name}")
-
+    
 user_agents = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -182,15 +204,6 @@ def is_match(entry_text, ref_names):
         if normalized_ref in normalized_entry or normalized_entry in normalized_ref:
             return True
     return False
-
-def extract_reference_names(sheet_id, row_index):
-    range_ = f'CAPE CORAL FINAL!D{row_index}:J{row_index}'
-    result = sheets_service.spreadsheets().values().get(
-        spreadsheetId=sheet_id,
-        range=range_
-    ).execute()
-    values = result.get('values', [[]])[0]
-    return [normalize_text(val) for val in values if val.strip()]
 
 def match_entries(extracted, ref_names):
     matched_results = []
@@ -524,17 +537,16 @@ def extract_sitekey(response_body):
         logging.error(f"[!] Error extracting sitekey: {e}")
         return None
 
-executor = ThreadPoolExecutor()
 
 async def main():
-    START_ROW = 2612
-    SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
-    SHEET_NAME = "CAPE CORAL FINAL"
+    SHEET_ID = os.environ.get("SHEET_ID")
+    if not SHEET_ID:
+        print("[ERROR] SHEET_ID environment variable not set.")
+        return
+
     MAILING_STREETS_RANGE = f"{SHEET_NAME}!P{START_ROW}:P"
     ZIPCODE_RANGE = f"{SHEET_NAME}!Q{START_ROW}:Q"
     SITE_RANGE = f"{SHEET_NAME}!B{START_ROW}:B"
-    BATCH_SIZE = 10
-    MAX_CAPTCHA_RETRIES = 3
 
     mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE, START_ROW)
     zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE, START_ROW)
@@ -632,4 +644,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
