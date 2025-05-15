@@ -1,4 +1,4 @@
-name: Run Property Search Script
+name: Run Truppl Parser
 
 on:
   workflow_dispatch:
@@ -6,13 +6,11 @@ on:
   push:
     paths:
       - 'Skip Tracing/**'
-      - 'externals/VPNs/**'
       - 'requirements.txt'
-      - 'pip-requirements.txt'
       - '.github/workflows/main.yml'
 
 jobs:
-  run-script:
+  run-parser:
     runs-on: ubuntu-latest
 
     env:
@@ -28,25 +26,27 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install system dependencies (Firefox & Geckodriver)
+      - name: Install Firefox and Geckodriver
         run: |
           sudo apt-get update
+          sudo apt-get install -y firefox geckodriver
+
+      - name: Install system dependencies (unzip, SSL libraries)
+        run: |
           sudo apt-get install -y wget curl unzip xvfb \
-              firefox-geckodriver \
               libxi6 libnss3 libxss1 libatk-bridge2.0-0 libgtk-3-0 \
               libgbm-dev libxrandr2 libu2f-udev fonts-liberation
-
-      - name: Debug Python and system dependencies
-        run: |
-          python --version
-          pip --version
-          firefox --version || echo "Firefox not installed."
-          geckodriver --version || echo "Geckodriver not installed."
 
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Validate installed dependencies
+        run: |
+          pip freeze | tee installed_packages.txt
+          grep -i "selenium" installed_packages.txt || { echo "[!] Selenium not installed"; exit 1; }
+          grep -i "urllib3" installed_packages.txt || { echo "[!] urllib3 not installed"; exit 1; }
 
       - name: Validate environment variables
         run: |
@@ -58,16 +58,16 @@ jobs:
           done
           echo "All environment variables are set."
 
-          # Debug Google Credentials format
-          echo "${GOOGLE_CREDENTIALS_JSON}" | jq . || { echo "[!] Invalid JSON format for GOOGLE_CREDENTIALS_JSON"; exit 1; }
+          # Debug credentials format
+          echo "${GOOGLE_CREDENTIALS_JSON}" | jq . || { echo "[!] Invalid JSON format"; exit 1; }
 
-      - name: Run Property Search Script
+      - name: Run Truppl Parser
         run: |
-          python property_search_script.py 2>&1 | tee property_search.log || { echo "[!] Script execution failed"; exit 1; }
+          python 'Skip Tracing/truppl_parser.py' 2>&1 | tee truppl_parser.log || { echo "[!] Script execution failed"; exit 1; }
 
       - name: Upload Logs for Debugging
         if: failure()
         uses: actions/upload-artifact@v3
         with:
-          name: property-search-log
-          path: property_search.log
+          name: truppl-parser-log
+          path: truppl_parser.log
