@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         script:
-          - "truppl_parser.py"
+          - "Skip Tracing/truppl_parser.py"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -66,4 +66,4 @@ jobs:
       - run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-      - run: python truppl_parser.py
+      - run: python "Skip Tracing/truppl_parser.py"
