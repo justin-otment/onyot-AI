@@ -12,8 +12,14 @@ from dotenv import load_dotenv
 
 from nordvpn import handle_rate_limit, verify_vpn_connection
 from captcha import get_site_key, solve_turnstile_captcha, inject_token
-import json
-print(json.loads(os.getenv("GOOGLE_CREDENTIALS_JSON")))
+import json, os, base64
+
+raw_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
+if raw_json:
+    decoded_json = base64.b64decode(raw_json).decode("utf-8")
+    credentials = json.loads(decoded_json)
+else:
+    raise ValueError("GOOGLE_CREDENTIALS_JSON is not set or is invalid.")
 
 # === Setup ===
 logging.basicConfig(
