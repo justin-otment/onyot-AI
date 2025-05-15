@@ -51,8 +51,7 @@ def authenticate_google_sheets():
 
     return build("sheets", "v4", credentials=creds)
 
-# === Fetch Data From Google Sheets ===
-def get_sheet_data(sheet_id, range_name):
+def get_sheet_data(sheet_id, range_name, start_row=2):  # Added `start_row` as an optional parameter
     """Fetch data from Google Sheets with error handling."""
     try:
         service = authenticate_google_sheets()
