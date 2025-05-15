@@ -56,22 +56,21 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 # Authenticate with Google Sheets API
 def authenticate_google_sheets():
-    """Authenticate with Google Sheets API."""
     creds = None
-    # Check if the token file exists
+
     if os.path.exists(TOKEN_PATH):
         creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-    # If no valid credentials, allow the user to login via OAuth
+
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())  # Refresh token if expired
+            creds.refresh(Request())  # Refresh expired token
         else:
             flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
-            creds = flow.run_local_server(port=0)
+            creds = flow.run_local_server(port=0)  # User must approve access
 
-    # Save the credentials for the next run
-    with open(TOKEN_PATH, "w") as token:
-        token.write(creds.to_json())
+        # Save new token for future use
+        with open(TOKEN_PATH, "w") as token:
+            token.write(creds.to_json())
 
     return build("sheets", "v4", credentials=creds)
 
