@@ -2,7 +2,6 @@ name: Run Skip Tracing Parser
 
 on:
   workflow_dispatch:
-
   push:
     paths:
       - 'Skip Tracing/**'
@@ -20,7 +19,6 @@ jobs:
       VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
       VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
       GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
-      GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
 
     steps:
       - name: Checkout repository
@@ -31,7 +29,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install system dependencies (Chrome + unzip)
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y wget curl unzip xvfb \
@@ -40,28 +38,25 @@ jobs:
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y
 
-      - name: Debug Chrome and ChromeDriver versions
+      - name: Debug Chrome installation
         run: |
-          echo "Google Chrome Version:"
-          google-chrome --version || echo "Google Chrome not installed."
-          echo "ChromeDriver Version:"
-          chromedriver --version || echo "ChromeDriver not installed."
+          echo "Chrome version:"
+          google-chrome --version || echo "Chrome not installed."
 
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Create credentials file
+      - name: Write credentials.json
         run: |
           echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" > credentials.json
-          echo "${{ secrets.GOOGLE_TOKEN_JSON }}" > token.json
 
       - name: Run Skip Tracing Parser
         run: |
           python 'Skip Tracing/truppl_parser.py'
 
-      - name: List all generated files for debugging (Optional)
+      - name: Debug file output
         run: |
-          echo "Listing all files in the current directory:"
+          echo "Files in workspace:"
           ls -R
