@@ -25,7 +25,7 @@ jobs:
       - name: Cache Python dependencies
         uses: actions/cache@v3
         with:
-          path: ~/.cache/pip
+          path: ~\AppData\Local\pip\Cache
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
@@ -52,11 +52,29 @@ jobs:
           C:\GeckoDriver\geckodriver.exe --version
         shell: powershell
 
+      - name: Set up Google Credentials
+        run: |
+          $jsonString = '${{ secrets.GOOGLE_CREDENTIALS_JSON }}'
+          Set-Content -Path $env:TEMP\credentials.json -Value $jsonString
+        shell: powershell
+
+      - name: Verify credentials existence
+        run: |
+          if (Test-Path $env:TEMP\credentials.json) { Write-Output "Credential file exists." } else { Write-Output "Credential file missing!" }
+        shell: powershell
+
+      - name: Set environment variable
+        run: echo "GOOGLE_APPLICATION_CREDENTIALS=$env:TEMP\credentials.json" >> $GITHUB_ENV
+
+      - name: Verify script location
+        run: Get-ChildItem -Path "Skip Tracing" -Recurse
+        shell: powershell
+
       - name: Run Python script
-        run: python "${{ matrix.script }}"
+        run: python "Skip Tracing/truppl_parser.py"
 
   run-script-1:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -64,25 +82,31 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.x'
+          python-version: '3.10'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if (Test-Path requirements.txt) { pip install -r requirements.txt }
+        shell: powershell
 
-      - name: Install Geckodriver
+      - name: Install Firefox and Geckodriver
         run: |
-          GECKO_VERSION=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | jq -r .tag_name | sed 's/v//')
-          wget https://github.com/mozilla/geckodriver/releases/download/v$GECKO_VERSION/geckodriver-v$GECKO_VERSION-linux64.tar.gz
-          tar -xvzf geckodriver-v$GECKO_VERSION-linux64.tar.gz
-          sudo mv geckodriver /usr/local/bin/
-          geckodriver --version
+          choco install firefox -y
+          $response = Invoke-WebRequest -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest" | ConvertFrom-Json
+          $GECKO_VERSION = $response.tag_name -replace "v", ""
+          $GECKO_URL = "https://github.com/mozilla/geckodriver/releases/download/v$GECKO_VERSION/geckodriver-v$GECKO_VERSION-win64.zip"
+          Invoke-WebRequest -Uri $GECKO_URL -OutFile geckodriver.zip
+          Expand-Archive geckodriver.zip -DestinationPath C:\GeckoDriver
+          $env:PATH += ";C:\GeckoDriver"
+          C:\GeckoDriver\geckodriver.exe --version
+        shell: powershell
 
       - name: Verify script location
-        run: ls -R
+        run: Get-ChildItem -Path "Skip Tracing" -Recurse
+        shell: powershell
 
       - name: Run Python script
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          GOOGLE_APPLICATION_CREDENTIALS: $env:TEMP\credentials.json
         run: python "Skip Tracing/truppl_parser.py"
