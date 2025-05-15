@@ -52,14 +52,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Write credentials.json
-        run: |
-          echo "$GOOGLE_CREDENTIALS_JSON" > credentials.json
-
-      - name: Write token.json (optional)
-        run: |
-          echo "$GOOGLE_TOKEN_JSON" > token.json
-
       - name: Run Skip Tracing Parser
         run: |
           python 'Skip Tracing/truppl_parser.py'
