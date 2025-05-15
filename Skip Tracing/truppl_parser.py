@@ -1,68 +1,62 @@
 import os
-import sys
 import json
-import base64
 import asyncio
 import logging
 import traceback
-from dotenv import load_dotenv
+import time
 from concurrent.futures import ThreadPoolExecutor
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from bs4 import BeautifulSoup
+from dotenv import load_dotenv
 
 from nordvpn import handle_rate_limit, verify_vpn_connection
 from captcha import get_site_key, solve_turnstile_captcha, inject_token
 
 # === Setup ===
-print("Current Working Directory:", os.getcwd())
 logging.basicConfig(
     level=logging.DEBUG,
     filename="logfile.log",
     filemode="a",
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
-logging.info("Script started")
 
 load_dotenv()
 executor = ThreadPoolExecutor()
-sys.stdout.reconfigure(encoding='utf-8')
 
 # === Constants ===
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "CAPE CORAL FINAL"
 SHEET_NAME_2 = "For REI Upload"
-START_ROW = 2
+START_ROW = 2612
 BATCH_SIZE = 10
 MAX_CAPTCHA_RETRIES = 3
 
-CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON")
-TOKEN_PATH = os.getenv("GOOGLE_TOKEN_JSON")
+CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
 
 # === Google Sheets Integration ===
-
 def authenticate_google_sheets():
     """Authenticate with Google Sheets API using service account credentials."""
     scopes = ['https://www.googleapis.com/auth/spreadsheets']
-    credentials = Credentials.from_service_account_file(
-        CREDENTIALS_PATH,  # Use the correct path variable
-        scopes=scopes
-    )
-    service = build('sheets', 'v4', credentials=credentials)
-    return service
+    
+    if not CREDENTIALS_JSON:
+        raise ValueError("Google credentials JSON is missing or incorrectly set.")
+    
+    credentials = Credentials.from_service_account_info(json.loads(CREDENTIALS_JSON), scopes=scopes)
+    return build('sheets', 'v4', credentials=credentials)
 
-def get_sheet_data(sheet_id, range_name, start_row=2):
-    """Fetch data from the specified Google Sheet range."""
-    service = authenticate_google_sheets()
-    result = service.spreadsheets().values().get(
-        spreadsheetId=sheet_id,
-        range=range_name
-    ).execute()
-    values = result.get('values', [])
-    print(f"[DEBUG] Retrieved {len(values)} rows from range {range_name}")
-    return [(start_row + i, row[0]) for i, row in enumerate(values) if row and len(row) > 0]
+def get_sheet_data(sheet_id, range_name):
+    """Fetch data from Google Sheets with error handling."""
+    try:
+        service = authenticate_google_sheets()
+        result = service.spreadsheets().values().get(spreadsheetId=sheet_id, range=range_name).execute()
+        values = result.get('values', [])
+        logging.info(f"[DEBUG] Retrieved {len(values)} rows from range {range_name}")
+        return [(i + START_ROW, row[0]) for i, row in enumerate(values) if row and len(row) > 0]
+    except Exception as e:
+        logging.error(f"Error fetching data from Google Sheets: {traceback.format_exc()}")
+        return []
 
 def extract_reference_names(sheet_id, row_index):
     """Extract B:H values on the given row index from the first sheet."""
@@ -497,11 +491,10 @@ def extract_sitekey(response_body):
         return None
 
 
+# === Main Function ===
 async def main():
-    # Use hardcoded SHEET_ID instead of environment variable
     MAILING_STREETS_RANGE = "CAPE CORAL FINAL!P2612:P"
     ZIPCODE_RANGE = "CAPE CORAL FINAL!Q2612:Q"
-    SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
     SITE_RANGE = f"{SHEET_NAME}!B{START_ROW}:B"
 
     mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE)
@@ -511,16 +504,10 @@ async def main():
         print("[!] Missing data in one or both ranges. Skipping processing...")
         return
 
-    mailing_streets = [(i, v) for i, v in mailing_streets if v.strip()]
-    zip_codes = [(i, v) for i, v in zip_codes if v.strip()]
-
     street_dict = dict(mailing_streets)
     zip_dict = dict(zip_codes)
 
-    valid_entries = [
-        (idx, street_dict[idx], zip_dict[idx])
-        for idx in street_dict.keys() & zip_dict.keys()
-    ]
+    valid_entries = [(idx, street_dict[idx], zip_dict[idx]) for idx in street_dict.keys() & zip_dict.keys()]
 
     if not valid_entries:
         print("[!] No valid entries to process. Exiting...")
@@ -541,18 +528,8 @@ async def main():
             for row_index, mailing_street, zip_code in batch:
                 print(f"\n[→] Processing Row {row_index}: {mailing_street}, {zip_code}")
                 try:
-                    captcha_retries = 0
-                    html_content = None
-
-                    while captcha_retries < MAX_CAPTCHA_RETRIES:
-                        html_content = await asyncio.to_thread(
-                            fetch_truepeoplesearch_data, driver, row_index, mailing_street, zip_code
-                        )
-                        if html_content:
-                            break
-                        captcha_retries += 1
-                        print(f"[!] CAPTCHA retry {captcha_retries}/{MAX_CAPTCHA_RETRIES}...")
-
+                    html_content = await asyncio.to_thread(fetch_truepeoplesearch_data, driver, row_index, mailing_street, zip_code)
+                    
                     if not html_content:
                         print("[!] Skipping row due to repeated CAPTCHA failures.")
                         continue
@@ -575,11 +552,13 @@ async def main():
                         matched_name = matched_entry["text"]
                         print(f"[→] Visiting profile: {matched_url}")
 
-                        matched_html = await asyncio.to_thread(
-                            navigate_to_profile, driver, matched_url
-                        )
-                        if not matched_html:
-                            print(f"[!] CAPTCHA blocked: {matched_url}")
+                        try:
+                            matched_html = await asyncio.to_thread(navigate_to_profile, driver, matched_url)
+                            if not matched_html:
+                                logging.warning(f"[!] CAPTCHA blocked: {matched_url}")
+                                continue
+                        except Exception as e:
+                            logging.error(f"[!] Selenium error navigating to profile {matched_url}: {e}")
                             continue
 
                         phone_numbers, phone_types, emails = parse_contact_info(matched_html)
@@ -607,7 +586,6 @@ async def main():
                     continue
     finally:
         driver.quit()
-
 
 if __name__ == "__main__":
     asyncio.run(main())
