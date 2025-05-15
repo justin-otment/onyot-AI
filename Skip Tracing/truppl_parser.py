@@ -38,6 +38,9 @@ START_ROW = 2
 BATCH_SIZE = 10
 MAX_CAPTCHA_RETRIES = 3
 
+CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON")
+TOKEN_PATH = os.getenv("GOOGLE_TOKEN_JSON")
+
     
 def write_base64_json_files():
     credentials_b64 = os.getenv("GOOGLE_CREDENTIALS_JSON")
