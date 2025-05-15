@@ -13,6 +13,9 @@ from google.oauth2.service_account import Credentials
 import urllib3
 from urllib3.exceptions import ProtocolError
 import ssl
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Define constants
 GECKODRIVER_PATH = "/usr/local/bin/geckodriver"
