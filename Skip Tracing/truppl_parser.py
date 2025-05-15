@@ -1,4 +1,3 @@
-import os
 import time
 import json
 from selenium import webdriver
@@ -14,6 +13,9 @@ from urllib3.exceptions import ProtocolError
 import ssl
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
+import os
+credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+print(f"Credentials Path: {credentials_path}")
 
 # Define constants
 GECKODRIVER_PATH = "/usr/local/bin/geckodriver"
