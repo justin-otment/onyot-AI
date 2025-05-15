@@ -16,6 +16,9 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
+      GOOGLE_CREDENTIALS_JSON_BASE64: ${{ secrets.GOOGLE_CREDENTIALS_JSON_BASE64 }}
+      GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
+      SHEET_ID: ${{ secrets.SHEET_ID }}
       TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
       VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
       VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
@@ -50,15 +53,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Write Google credentials file (base64 safe)
+      - name: Write Google credentials file from base64 secret
         run: |
           echo "$GOOGLE_CREDENTIALS_JSON_BASE64" | base64 --decode > credentials.json
-        env:
-          GOOGLE_CREDENTIALS_JSON_BASE64: ${{ secrets.GOOGLE_CREDENTIALS_JSON_BASE64 }}
 
-      - name: Write token.json (optional, if needed)
+      - name: Write token.json file (optional)
         run: |
-          echo "${{ secrets.GOOGLE_TOKEN_JSON }}" > token.json
+          echo "$GOOGLE_TOKEN_JSON" > token.json
 
       - name: Run Skip Tracing Parser
         run: |
@@ -66,6 +67,4 @@ jobs:
 
       - name: List all generated files for debugging (Optional)
         run: |
-          echo "Listing all files in the current directory:"
           ls -R
-
