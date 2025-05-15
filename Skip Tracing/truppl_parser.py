@@ -7,8 +7,8 @@ import logging
 import traceback
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor
+from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-from google.oauth2 import service_account
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
@@ -68,78 +68,58 @@ if not os.path.exists(CREDENTIALS_PATH):
     print(f"[!] credentials.json not found at path: {CREDENTIALS_PATH}", file=sys.stderr)
     sys.exit(1)
 
-# === Authenticate Google Sheets ===
 def authenticate_google_sheets():
-    try:
-        creds = service_account.Credentials.from_service_account_file(
-            CREDENTIALS_PATH, scopes=SCOPES
-        )
-        service = build("sheets", "v4", credentials=creds)
-        return service
-    except Exception as e:
-        logging.error(f"[!] Google Sheets authentication failed: {e}")
-        raise
+    scopes = ['https://www.googleapis.com/auth/spreadsheets']
+    credentials = Credentials.from_service_account_file(
+        'credentials.json',
+        scopes=scopes
+    )
+    service = build('sheets', 'v4', credentials=credentials)
+    return service
 
 def get_sheet_data(sheet_id, range_name, start_row=2):
-    try:
-        service = authenticate_google_sheets()
-        result = service.spreadsheets().values().get(
-            spreadsheetId=sheet_id,
-            range=range_name
-        ).execute()
-        values = result.get('values', [])
-        return [(start_row + i, row[0]) for i, row in enumerate(values) if row and len(row) > 0]
-    except Exception as e:
-        logging.error(f"[!] Failed to read range {range_name}: {e}")
-        return []
+    service = authenticate_google_sheets()
+    result = service.spreadsheets().values().get(
+        spreadsheetId=sheet_id,
+        range=range_name
+    ).execute()
+    values = result.get('values', [])
+    print(f"[DEBUG] Retrieved {len(values)} rows from range {range_name}")
 
-# === Append Data ===
+    return [(start_row + i, row[0]) for i, row in enumerate(values) if row and len(row) > 0]
+
+def extract_reference_names(sheet_id, row_index):
+    service = authenticate_google_sheets()
+    range_ = f"CAPE CORAL FINAL!B{row_index}:H{row_index}"
+    result = service.spreadsheets().values().get(
+        spreadsheetId=sheet_id,
+        range=range_
+    ).execute()
+    row = result.get("values", [[]])[0]
+    return [val for val in row if val.strip()]
+
 def append_to_google_sheet(first_name, last_name, phones, emails, site):
-    try:
-        service = authenticate_google_sheets()
+    service = authenticate_google_sheets()
+    sheet = service.spreadsheets()
 
-        # Fetch headers
-        header_row = service.spreadsheets().values().get(
-            spreadsheetId=SHEET_ID,
-            range=f"{SHEET_NAME_2}!1:1"
-        ).execute().get("values", [[]])[0]
+    max_phones = 5
+    max_emails = 3
+    phone_values = [p[0] for p in phones[:max_phones]]
+    phone_types = [p[1] for p in phones[:max_phones]]
+    email_values = emails[:max_emails]
 
-        row_data = [""] * len(header_row)
+    row = [first_name, last_name]
+    for i in range(max_phones):
+        row += [phone_values[i] if i < len(phone_values) else "", phone_types[i] if i < len(phone_types) else ""]
+    row += email_values + [""] * (max_emails - len(email_values)) + [site]
 
-        # Fill fields
-        if "Site" in header_row:
-            row_data[header_row.index("Site")] = site
-        if "First Name" in header_row:
-            row_data[header_row.index("First Name")] = first_name
-        if "Last Name" in header_row:
-            row_data[header_row.index("Last Name")] = last_name
-
-        for i, (phone, phone_type) in enumerate(phones[:5]):
-            try:
-                phone_col = header_row.index("Phone Number") + (i * 2)
-                type_col = header_row.index("Phone Type") + (i * 2)
-                row_data[phone_col] = phone
-                row_data[type_col] = phone_type
-            except ValueError:
-                logging.warning(f"[!] Phone columns missing for entry {i + 1}")
-
-        for i, email in enumerate(emails[:3]):
-            email_col = f"Email {i + 1}"
-            if email_col in header_row:
-                row_data[header_row.index(email_col)] = email
-
-        service.spreadsheets().values().append(
-            spreadsheetId=SHEET_ID,
-            range=f"{SHEET_NAME_2}!A1",
-            valueInputOption="RAW",
-            insertDataOption="INSERT_ROWS",
-            body={"values": [row_data]}
-        ).execute()
-
-        print(f"[✓] Data appended to '{SHEET_NAME_2}'")
-    except Exception as e:
-        logging.error(f"[!] Failed to append row: {e}")
-
+    sheet.values().append(
+        spreadsheetId=sheet_id,
+        range="For REI Upload!A1",
+        valueInputOption="USER_ENTERED",
+        body={"values": [row]}
+    ).execute()
+    print(f"[+] Appended result for {first_name} {last_name}")
 
 user_agents = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
@@ -556,8 +536,8 @@ async def main():
     BATCH_SIZE = 10
     MAX_CAPTCHA_RETRIES = 3
 
-    mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE, start_row=START_ROW)
-    zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE, start_row=START_ROW)
+    mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE, START_ROW)
+    zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE, START_ROW)
 
     if not mailing_streets or not zip_codes:
         print("[!] Missing data in one or both ranges. Skipping processing...")
@@ -578,97 +558,77 @@ async def main():
         print("[!] No valid entries to process. Exiting...")
         return
 
-    try:
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
 
-        for batch_start in range(0, len(valid_entries), BATCH_SIZE):
-            batch = valid_entries[batch_start:batch_start + BATCH_SIZE]
-            print(f"[→] Processing batch {batch_start // BATCH_SIZE + 1} with {len(batch)} entries...")
+    for batch_start in range(0, len(valid_entries), BATCH_SIZE):
+        batch = valid_entries[batch_start:batch_start + BATCH_SIZE]
+        print(f"[→] Processing batch {batch_start // BATCH_SIZE + 1} with {len(batch)} entries...")
 
-            for row_index, mailing_street, zip_code in batch:
-                print(f"\n[→] Processing Row {row_index}: Mailing Street '{mailing_street}', ZIP '{zip_code}'")
-                try:
-                    captcha_retries = 0
-                    html_content = None
+        for row_index, mailing_street, zip_code in batch:
+            print(f"\n[→] Processing Row {row_index}: {mailing_street}, {zip_code}")
+            try:
+                captcha_retries = 0
+                html_content = None
 
-                    while captcha_retries < MAX_CAPTCHA_RETRIES:
-                        html_content = await fetch_truepeoplesearch_data(row_index, mailing_street, zip_code)
-                        if html_content:
-                            break
-                        captcha_retries += 1
-                        print(f"[!] Retrying CAPTCHA solving for row {row_index} ({captcha_retries}/{MAX_CAPTCHA_RETRIES})...")
+                while captcha_retries < MAX_CAPTCHA_RETRIES:
+                    html_content = await fetch_truepeoplesearch_data(row_index, mailing_street, zip_code)
+                    if html_content:
+                        break
+                    captcha_retries += 1
+                    print(f"[!] CAPTCHA retry {captcha_retries}/{MAX_CAPTCHA_RETRIES}...")
 
-                    if not html_content:
-                        print("[!] Skipping row due to repeated CAPTCHA failures.")
-                        continue
-
-                    extracted_links = extract_links(html_content)
-
-                    if not extracted_links:
-                        print("[DEBUG] Extracted 0 links:")
-                        await handle_rate_limit()
-                        continue
-
-                    ref_names = extract_reference_names(SHEET_ID, row_index)
-                    matched_results = match_entries(extracted_links, ref_names)
-
-                    if not matched_results:
-                        print(f"[!] No match found in row {row_index}. Skipping second batch extraction.")
-                        continue
-
-                    for matched_entry in matched_results:
-                        matched_url = matched_entry["link"]
-                        matched_name = matched_entry["text"]
-                        print(f"[→] Navigating to matched profile: {matched_url}")
-
-                        matched_html = await navigate_to_profile(matched_name, mailing_street, matched_url)
-                        if not matched_html:
-                            print(f"[!] CAPTCHA blocked access to: {matched_url}")
-                            continue
-
-                        phone_numbers, phone_types, emails = parse_contact_info(matched_html)
-                        phone_data = list(zip(phone_numbers, phone_types))
-
-                        if not phone_numbers or not phone_types:
-                            print(f"[!] Skipping row {row_index}: No phone data found.")
-                            continue
-
-                        name_parts = matched_name.strip().split()
-                        first_name = name_parts[0] if name_parts else ""
-                        last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
-
-                        site_data = get_sheet_data(SHEET_ID, SITE_RANGE, start_row=START_ROW)
-                        site_dict = {idx: value for idx, value in site_data}
-                        site_value = site_dict.get(row_index, None)
-
-                        if site_value is None:
-                            logging.warning(f"[!] No Site value found for row {row_index}. Skipping.")
-                            continue
-
-                        append_to_google_sheet(
-                            first_name=first_name,
-                            last_name=last_name,
-                            phones=phone_data,
-                            emails=emails,
-                            site=site_value
-                        )
-
-                except Exception as e:
-                    print(f"[!] Error processing row {row_index}: {e}")
+                if not html_content:
+                    print("[!] Skipping row due to repeated CAPTCHA failures.")
                     continue
 
-    except Exception as e:
-        print(f"[!] Error launching or processing browser: {e}")
+                extracted_links = extract_links(html_content)
+                if not extracted_links:
+                    print("[DEBUG] Extracted 0 links.")
+                    await handle_rate_limit()
+                    continue
 
-    finally:
-        # Cleanup browser/session objects if declared
-        if 'context' in locals() and context:
-            await context.close()
-        if 'browser' in locals() and browser:
-            await browser.close()
+                ref_names = extract_reference_names(SHEET_ID, row_index)
+                matched_results = match_entries(extracted_links, ref_names)
+                if not matched_results:
+                    print(f"[!] No match found for row {row_index}.")
+                    continue
+
+                for matched_entry in matched_results:
+                    matched_url = matched_entry["link"]
+                    matched_name = matched_entry["text"]
+                    print(f"[→] Visiting profile: {matched_url}")
+
+                    matched_html = await navigate_to_profile(matched_name, mailing_street, matched_url)
+                    if not matched_html:
+                        print(f"[!] CAPTCHA blocked: {matched_url}")
+                        continue
+
+                    phone_numbers, phone_types, emails = parse_contact_info(matched_html)
+                    if not phone_numbers:
+                        print(f"[!] No phone numbers found for row {row_index}")
+                        continue
+
+                    name_parts = matched_name.strip().split()
+                    first_name = name_parts[0]
+                    last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
+
+                    site_data = get_sheet_data(SHEET_ID, SITE_RANGE, START_ROW)
+                    site_dict = {idx: value for idx, value in site_data}
+                    site_value = site_dict.get(row_index, None)
+
+                    if site_value is None:
+                        print(f"[!] No Site value found for row {row_index}")
+                        continue
+
+                    phone_data = list(zip(phone_numbers, phone_types))
+                    append_to_google_sheet(first_name, last_name, phone_data, emails, site_value)
+
+            except Exception as e:
+                print(f"[!] Error processing row {row_index}: {e}")
+                continue
 
 if __name__ == "__main__":
     asyncio.run(main())
