@@ -42,15 +42,19 @@ MAX_CAPTCHA_RETRIES = 3
 
 CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
 
-# === Google Sheets Integration ===
 def authenticate_google_sheets():
     """Authenticate with Google Sheets API using service account credentials."""
     scopes = ['https://www.googleapis.com/auth/spreadsheets']
     
-    if not CREDENTIALS_JSON:
-        raise ValueError("Google credentials JSON is missing or incorrectly set.")
+    cred_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
+    if not cred_json:
+        raise ValueError("GOOGLE_CREDENTIALS_JSON environment variable is missing or incorrectly set.")
     
-    credentials = Credentials.from_service_account_info(json.loads(CREDENTIALS_JSON), scopes=scopes)
+    try:
+        credentials = Credentials.from_service_account_info(json.loads(cred_json), scopes=scopes)
+    except json.JSONDecodeError:
+        raise ValueError("GOOGLE_CREDENTIALS_JSON is not a valid JSON format.")
+
     return build('sheets', 'v4', credentials=credentials)
 
 def get_sheet_data(sheet_id, range_name):
@@ -59,8 +63,13 @@ def get_sheet_data(sheet_id, range_name):
         service = authenticate_google_sheets()
         result = service.spreadsheets().values().get(spreadsheetId=sheet_id, range=range_name).execute()
         values = result.get('values', [])
+
+        if not values:
+            logging.warning(f"[!] Empty response for range {range_name}. Check if the sheet has data.")
+
         logging.info(f"[DEBUG] Retrieved {len(values)} rows from range {range_name}")
         return [(i + START_ROW, row[0]) for i, row in enumerate(values) if row and len(row) > 0]
+    
     except Exception as e:
         logging.error(f"Error fetching data from Google Sheets: {traceback.format_exc()}")
         return []
@@ -78,6 +87,13 @@ def extract_reference_names(sheet_id, row_index):
 
 def append_to_google_sheet(first_name, last_name, phones, emails, site):
     """Append a structured row to the 'For REI Upload' sheet."""
+    if not first_name or not last_name:
+        logging.warning("[!] Attempting to append data with missing name fields. Skipping entry.")
+        return
+    if not phones:
+        logging.warning(f"[!] No phone numbers found for {first_name} {last_name}. Skipping entry.")
+        return
+    
     service = authenticate_google_sheets()
     sheet = service.spreadsheets()
 
@@ -95,13 +111,16 @@ def append_to_google_sheet(first_name, last_name, phones, emails, site):
         ]
     row += email_values + [""] * (max_emails - len(email_values)) + [site]
 
-    sheet.values().append(
-        spreadsheetId=SHEET_ID,
-        range=f"{SHEET_NAME_2}!A1",
-        valueInputOption="USER_ENTERED",
-        body={"values": [row]}
-    ).execute()
-    print(f"[+] Appended result for {first_name} {last_name}")
+    try:
+        sheet.values().append(
+            spreadsheetId=SHEET_ID,
+            range=f"{SHEET_NAME_2}!A1",
+            valueInputOption="USER_ENTERED",
+            body={"values": [row]}
+        ).execute()
+        print(f"[+] Successfully appended result for {first_name} {last_name}")
+    except Exception as e:
+        logging.error(f"[!] Failed to append data for {first_name} {last_name}: {traceback.format_exc()}")
     
 user_agents = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
