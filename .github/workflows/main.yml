@@ -40,11 +40,11 @@ jobs:
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y
 
-      - name: Debug Chrome and ChromeDriver versions
+      - name: Debug Python and system dependencies
         run: |
-          echo "Google Chrome Version:"
+          python --version
+          pip --version
           google-chrome --version || echo "Google Chrome not installed."
-          echo "ChromeDriver Version:"
           chromedriver --version || echo "ChromeDriver not installed."
 
       - name: Install Python dependencies
@@ -52,10 +52,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Validate environment variables
+        run: |
+          echo "Checking environment variables..."
+          if [[ -z "${GOOGLE_CREDENTIALS_JSON}" ]]; then echo "[!] Missing GOOGLE_CREDENTIALS_JSON"; exit 1; fi
+          if [[ -z "${GOOGLE_TOKEN_JSON}" ]]; then echo "[!] Missing GOOGLE_TOKEN_JSON"; exit 1; fi
+          if [[ -z "${TWO_CAPTCHA_API_KEY}" ]]; then echo "[!] Missing TWO_CAPTCHA_API_KEY"; exit 1; fi
+          if [[ -z "${VPN_USERNAME}" ]]; then echo "[!] Missing VPN_USERNAME"; exit 1; fi
+          if [[ -z "${VPN_PASSWORD}" ]]; then echo "[!] Missing VPN_PASSWORD"; exit 1; fi
+          echo "All environment variables are set."
+
       - name: Run Skip Tracing Parser
         run: |
           python 'Skip Tracing/truppl_parser.py'
 
-      - name: List all generated files (for debugging)
+      - name: List generated files for debugging
         run: |
           ls -R
