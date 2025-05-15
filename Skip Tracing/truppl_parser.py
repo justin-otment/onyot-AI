@@ -41,38 +41,6 @@ MAX_CAPTCHA_RETRIES = 3
 CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON")
 TOKEN_PATH = os.getenv("GOOGLE_TOKEN_JSON")
 
-    
-def write_base64_json_files():
-    credentials_b64 = os.getenv("GOOGLE_CREDENTIALS_JSON")
-    token_b64 = os.getenv("GOOGLE_TOKEN_JSON")
-
-    if credentials_b64:
-        try:
-            with open(CREDENTIALS_PATH, "wb") as f:
-                f.write(base64.b64decode(credentials_b64))
-        except Exception as e:
-            print(f"[!] Failed to write credentials.json: {e}", file=sys.stderr)
-            sys.exit(1)
-
-    if token_b64:
-        try:
-            with open(TOKEN_PATH, "wb") as f:
-                f.write(base64.b64decode(token_b64))
-        except Exception as e:
-            print(f"[!] Failed to write token.json: {e}", file=sys.stderr)
-            sys.exit(1)
-
-write_base64_json_files()
-
-if not os.path.exists(CREDENTIALS_PATH):
-    print(f"[!] credentials.json not found at {CREDENTIALS_PATH}", file=sys.stderr)
-    sys.exit(1)
-
-# === Check credential file existence ===
-if not os.path.exists(CREDENTIALS_PATH):
-    print(f"[!] credentials.json not found at path: {CREDENTIALS_PATH}", file=sys.stderr)
-    sys.exit(1)
-
 # === Google Sheets Integration ===
 
 def authenticate_google_sheets():
