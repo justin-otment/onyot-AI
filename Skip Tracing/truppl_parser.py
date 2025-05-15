@@ -36,7 +36,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SHEET_ID = os.getenv("SHEET_ID")
 SHEET_NAME = "CAPE CORAL FINAL"
 SHEET_NAME_2 = "For REI Upload"
-CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
+CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_JSON_BASE64")
 TOKEN_PATH = os.path.join(BASE_DIR, "token.json")  # currently unused
 MAX_RETRIES = 1
 
