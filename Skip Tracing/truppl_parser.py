@@ -42,15 +42,7 @@ MAX_RETRIES = 1
 
 if not SHEET_ID:
     raise EnvironmentError("SHEET_ID environment variable not set.")
-
-# Paths where base64 credentials will be written by the script
-CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
-TOKEN_PATH = os.path.join(BASE_DIR, "token.json")  # unused but retained
-
-MAX_RETRIES = 1
-
-sys.stdout.reconfigure(encoding='utf-8')
-
+    
 def write_base64_json_files():
     credentials_b64 = os.getenv("GOOGLE_CREDENTIALS_JSON")
     token_b64 = os.getenv("GOOGLE_TOKEN_JSON")
