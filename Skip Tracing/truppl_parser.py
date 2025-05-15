@@ -16,7 +16,7 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
 # Define constants
-GECKODRIVER_PATH = "/usr/local/bin/geckodriver"
+GECKODRIVER_PATH = "C:\\GeckoDriver\\geckodriver.exe"  # Windows-compatible path
 GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 
 if not GOOGLE_CREDENTIALS_PATH or not os.path.exists(GOOGLE_CREDENTIALS_PATH):
@@ -91,7 +91,7 @@ def fetch_data_and_update_sheet():
         options = webdriver.FirefoxOptions()
         options.add_argument("--headless")
 
-        service = Service(GECKODRIVER_PATH)
+        service = Service(GECKODRIVER_PATH)  # Ensure path works in Windows
         driver = webdriver.Firefox(service=service, options=options)
 
         try:
