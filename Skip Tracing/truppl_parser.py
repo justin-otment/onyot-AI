@@ -505,11 +505,8 @@ def extract_sitekey(response_body):
 
 
 async def main():
-    SHEET_ID = os.environ.get("SHEET_ID")
-    if not SHEET_ID:
-        print("[ERROR] SHEET_ID environment variable not set.")
-        return
-
+    SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
+    START_ROW = 2
     MAILING_STREETS_RANGE = f"{SHEET_NAME}!P{START_ROW}:P"
     ZIPCODE_RANGE = f"{SHEET_NAME}!Q{START_ROW}:Q"
     SITE_RANGE = f"{SHEET_NAME}!B{START_ROW}:B"
