@@ -1,29 +1,19 @@
-# Core scraping stack
+# Web Scraping & Automation
 selenium==4.21.0
-undetected-chromedriver==3.5.5
-beautifulsoup4==4.13.4
+urllib3==2.32.3
 requests==2.32.3
-python-dotenv
-pyyaml
 
-# Google Sheets API and OAuth
+# Google Sheets API & OAuth
 google-api-python-client==2.167.0
 google-auth==2.39.0
 google-auth-httplib2==0.2.0
 google-auth-oauthlib==1.2.1
-googleapis-common-protos==1.70.0
-proto-plus==1.26.1
-protobuf==6.30.2
 
-# OAuth & Auth dependencies
+# Authentication Handling
 httplib2==0.22.0
 oauthlib==3.2.2
 requests-oauthlib==2.0.0
 cachetools==5.5.2
-pyasn1==0.6.1
-pyasn1_modules==0.4.2
-rsa==4.9.1
-uritemplate==4.1.1
 
-# Typing extensions for compatibility
-typing_extensions==4.13.2
+# Optional: If HTML parsing is needed
+beautifulsoup4==4.13.4
