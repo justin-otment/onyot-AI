@@ -11,9 +11,10 @@ from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from urllib3.exceptions import ProtocolError
-from google.auth.transport.requests import Request
-from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import InstalledAppFlow
 
 # Define constants
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -58,13 +59,33 @@ def make_request_with_retries(url, retries=3, backoff_factor=1):
 SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
 SHEET_NAME = "'Cape Coral - ArcGIS_LANDonly'"  # Ensure sheet name is properly formatted
 
+# === Google Sheets Auth ===
 def authenticate_google_sheets():
-    if not os.path.exists(CREDENTIALS_PATH):
-        raise Exception(f"Google Sheets authentication failed: Credential file not found at {CREDENTIALS_PATH}")
+    """Authenticate with Google Sheets API."""
+    creds = None
 
-    creds = Credentials.from_service_account_file(CREDENTIALS_PATH, scopes=["https://www.googleapis.com/auth/spreadsheets"])
-    
-    return build("sheets", "v4", credentials=creds)
+    if os.path.exists(TOKEN_PATH):
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            try:
+                creds.refresh(Request())
+                print("[✓] Token refreshed successfully.")
+                with open(TOKEN_PATH, 'w') as token:
+                    token.write(creds.to_json())
+            except Exception as e:
+                print(f"[!] Error refreshing token: {e}")
+                creds = None
+
+        if not creds:
+            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
+            creds = flow.run_local_server(port=0)
+            with open(TOKEN_PATH, 'w') as token:
+                token.write(creds.to_json())
+            print("[✓] New credentials obtained and saved.")
+
+    return build('sheets', 'v4', credentials=creds)
 
 # Fetch and update data in Google Sheets
 def fetch_data_and_update_sheet():
