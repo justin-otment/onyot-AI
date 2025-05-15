@@ -52,17 +52,18 @@ jobs:
           C:\GeckoDriver\geckodriver.exe --version
         shell: powershell
 
-      - name: Set up Google Credentials
-        run: echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > $env:TEMP\credentials.json
-        shell: powershell
-
       - name: Verify credentials existence
         run: |
-          if (Test-Path $env:TEMP\credentials.json) { Write-Output "Credential file exists." } else { Write-Output "Credential file missing!" }
+          if (!(Test-Path "Skip Tracing\credentials.json") -or !(Test-Path "Skip Tracing\token.json")) {
+            Write-Output "Credential files missing! Ensure they exist in the project root."
+            exit 1
+          }
         shell: powershell
 
-      - name: Set environment variable
-        run: echo "GOOGLE_APPLICATION_CREDENTIALS=$env:TEMP\credentials.json" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
+      - name: Set environment variables
+        run: |
+          echo "GOOGLE_APPLICATION_CREDENTIALS=Skip Tracing\credentials.json" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
+          echo "TOKEN_PATH=Skip Tracing\token.json" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
         shell: powershell
 
       - name: Verify script location
@@ -107,5 +108,6 @@ jobs:
 
       - name: Run Python script
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: $env:TEMP\credentials.json
+          GOOGLE_APPLICATION_CREDENTIALS: Skip Tracing\credentials.json
+          TOKEN_PATH: Skip Tracing\token.json
         run: python "Skip Tracing/truppl_parser.py"
