@@ -84,5 +84,5 @@ jobs:
 
       - name: Run Python script
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
         run: python "Skip Tracing/truppl_parser.py"
