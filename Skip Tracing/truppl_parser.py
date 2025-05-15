@@ -31,22 +31,13 @@ executor = ThreadPoolExecutor()
 sys.stdout.reconfigure(encoding='utf-8')
 
 # === Constants ===
-
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Hardcoded sheet config
-# Constants
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "CAPE CORAL FINAL"
+SHEET_NAME_2 = "For REI Upload"
 START_ROW = 2
 BATCH_SIZE = 10
 MAX_CAPTCHA_RETRIES = 3
 
-CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
-TOKEN_PATH = os.path.join(BASE_DIR, "token.json")  # optional
-
-MAX_RETRIES = 1
     
 def write_base64_json_files():
     credentials_b64 = os.getenv("GOOGLE_CREDENTIALS_JSON")
