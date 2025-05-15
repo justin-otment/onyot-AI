@@ -13,7 +13,10 @@ import urllib3
 from urllib3.exceptions import ProtocolError
 import ssl
 from googleapiclient.discovery import build
-from google.oauth2.credentials import Credentials  # Correct import for OAuth2 credentials
+from google.oauth2.credentials import Credentials
+
+# Define constants
+GECKODRIVER_PATH = "/usr/local/bin/geckodriver"
 
 # Request with retries
 def make_request_with_retries(url, retries=3, backoff_factor=1):
@@ -22,56 +25,33 @@ def make_request_with_retries(url, retries=3, backoff_factor=1):
     while attempt < retries:
         try:
             response = http.request('GET', url)
-            return response
+            if response.status == 200:
+                return response.data
         except ProtocolError as e:
             print(f"Attempt {attempt + 1} failed: {e}")
             attempt += 1
-            sleep_time = backoff_factor * (2 ** attempt)  # Exponential backoff
+            sleep_time = backoff_factor * (2 ** attempt)
             print(f"Retrying in {sleep_time} seconds...")
             time.sleep(sleep_time)
     raise Exception(f"Failed to fetch {url} after {retries} attempts.")
-
-# Example usage:
-url = 'https://www.leepa.org/Search/PropertySearch.aspx'
-response = make_request_with_retries(url)
-print(response.data)
-
-# Disable SSL verification temporarily (use only for testing)
-os.environ['NO_PROXY'] = 'localhost,127.0.0.1'
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-context = ssl.create_default_context()
-context.check_hostname = False
-context.verify_mode = ssl.CERT_NONE
 
 # Google Sheets setup
 SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
 SHEET_NAME = 'Cape Coral - ArcGIS_LANDonly'
 
-
-# Define file paths
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
-TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-
 # Authenticate with Google Sheets API
 def authenticate_google_sheets():
-    """Authenticate with Google Sheets API."""
     creds = None
-    # Check if the token file exists
-    if os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-    # If no valid credentials, allow the user to login via OAuth
+    token_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+
+    if token_path and os.path.exists(token_path):
+        creds = Credentials.from_authorized_user_file(token_path, ['https://www.googleapis.com/auth/spreadsheets'])
+
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())  # Refresh token if expired
+            creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
-            creds = flow.run_local_server(port=0)
-
-    # Save the credentials for the next run
-    with open(TOKEN_PATH, "w") as token:
-        token.write(creds.to_json())
+            raise Exception("Google Sheets authentication failed.")
 
     return build("sheets", "v4", credentials=creds)
 
@@ -80,7 +60,6 @@ def fetch_data_and_update_sheet():
         sheets_service = authenticate_google_sheets()
         sheet = sheets_service.spreadsheets()
 
-        # Fetch column A (names) and column E (sale_date)
         names_range = f"{SHEET_NAME}!A2:A"
         dates_range = f"{SHEET_NAME}!E2:E"
 
@@ -102,35 +81,29 @@ def fetch_data_and_update_sheet():
         owner = name_row[0].strip() if name_row else ""
         sale_date = date_row[0].strip() if date_row else ""
 
-        # Skip if column E is non-empty
-        if sale_date:
-            print(f"Skipping row {i} because column E is already filled.")
-            continue
-
-        if not owner:
-            print(f"Skipping row {i} because owner name is blank.")
+        if sale_date or not owner:
+            print(f"Skipping row {i}: sale_date={sale_date}, owner={owner}")
             continue
 
         print(f"Processing row {i}: Owner = {owner}")
 
         options = webdriver.FirefoxOptions()
         options.add_argument("--headless")
-        service = Service()
+
+        service = Service(GECKODRIVER_PATH)
         driver = webdriver.Firefox(service=service, options=options)
 
         try:
             driver.get(url)
-
             strap_input = WebDriverWait(driver, 60).until(
                 EC.presence_of_element_located((By.ID, "ctl00_BodyContentPlaceHolder_WebTab1_tmpl0_STRAPTextBox"))
             )
             strap_input.send_keys(owner, Keys.RETURN)
 
             try:
-                WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.ID, "ctl00_BodyContentPlaceHolder_pnlIssues"))
+                warning_button = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.ID, "ctl00_BodyContentPlaceHolder_btnWarning"))
                 )
-                warning_button = driver.find_element(By.ID, "ctl00_BodyContentPlaceHolder_btnWarning")
                 warning_button.click()
             except:
                 print("No warning popup.")
@@ -155,7 +128,6 @@ def fetch_data_and_update_sheet():
                 EC.presence_of_element_located((By.XPATH, '//*[@id="SalesDetails"]/div[3]/table/tbody/tr[2]/td[1]'))
             ).text
 
-            # Write sale_date to column E
             sheet.values().update(
                 spreadsheetId=SHEET_ID,
                 range=f"{SHEET_NAME}!E{i}",
@@ -163,7 +135,6 @@ def fetch_data_and_update_sheet():
                 body={"values": [[sale_date]]}
             ).execute()
 
-            # Write sale_amount to column F
             sheet.values().update(
                 spreadsheetId=SHEET_ID,
                 range=f"{SHEET_NAME}!F{i}",
