@@ -1,4 +1,4 @@
-name: Run Skip Tracing Parser
+name: Run Property Search Script
 
 on:
   workflow_dispatch:
@@ -12,15 +12,12 @@ on:
       - '.github/workflows/main.yml'
 
 jobs:
-  run-parser:
+  run-script:
     runs-on: ubuntu-latest
 
     env:
       GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
       GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
-      TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
-      VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
-      VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
 
     steps:
       - name: Checkout repository
@@ -31,21 +28,20 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install system dependencies (Chrome + unzip)
+      - name: Install system dependencies (Firefox & Geckodriver)
         run: |
           sudo apt-get update
           sudo apt-get install -y wget curl unzip xvfb \
+              firefox-geckodriver \
               libxi6 libnss3 libxss1 libatk-bridge2.0-0 libgtk-3-0 \
               libgbm-dev libxrandr2 libu2f-udev fonts-liberation
-          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y
 
       - name: Debug Python and system dependencies
         run: |
           python --version
           pip --version
-          google-chrome --version || echo "Google Chrome not installed."
-          chromedriver --version || echo "ChromeDriver not installed."
+          firefox --version || echo "Firefox not installed."
+          geckodriver --version || echo "Geckodriver not installed."
 
       - name: Install Python dependencies
         run: |
@@ -55,17 +51,23 @@ jobs:
       - name: Validate environment variables
         run: |
           echo "Checking environment variables..."
-          if [[ -z "${GOOGLE_CREDENTIALS_JSON}" ]]; then echo "[!] Missing GOOGLE_CREDENTIALS_JSON"; exit 1; fi
-          if [[ -z "${GOOGLE_TOKEN_JSON}" ]]; then echo "[!] Missing GOOGLE_TOKEN_JSON"; exit 1; fi
-          if [[ -z "${TWO_CAPTCHA_API_KEY}" ]]; then echo "[!] Missing TWO_CAPTCHA_API_KEY"; exit 1; fi
-          if [[ -z "${VPN_USERNAME}" ]]; then echo "[!] Missing VPN_USERNAME"; exit 1; fi
-          if [[ -z "${VPN_PASSWORD}" ]]; then echo "[!] Missing VPN_PASSWORD"; exit 1; fi
+          for var in GOOGLE_CREDENTIALS_JSON GOOGLE_TOKEN_JSON; do
+            if [[ -z "${!var}" ]]; then
+              echo "[!] Missing $var"; exit 1;
+            fi
+          done
           echo "All environment variables are set."
 
-      - name: Run Skip Tracing Parser
-        run: |
-          python 'Skip Tracing/truppl_parser.py'
+          # Debug Google Credentials format
+          echo "${GOOGLE_CREDENTIALS_JSON}" | jq . || { echo "[!] Invalid JSON format for GOOGLE_CREDENTIALS_JSON"; exit 1; }
 
-      - name: List generated files for debugging
+      - name: Run Property Search Script
         run: |
-          ls -R
+          python property_search_script.py 2>&1 | tee property_search.log || { echo "[!] Script execution failed"; exit 1; }
+
+      - name: Upload Logs for Debugging
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: property-search-log
+          path: property_search.log
