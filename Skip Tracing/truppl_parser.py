@@ -14,7 +14,7 @@ import ssl
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 import os
-credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+credentials_path = os.getenv("GOOGLE_CREDENTIALS_JSON")
 print(f"Credentials Path: {credentials_path}")
 
 # Define constants
