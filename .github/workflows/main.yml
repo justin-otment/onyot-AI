@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         script:
-          - "rapid_API.py"
+          - "truppl_parser.py"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
