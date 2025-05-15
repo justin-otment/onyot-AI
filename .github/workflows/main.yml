@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         script:
-          - "Skip Tracing/truppl_parser.py"
+          - "rapid_API.py"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -40,7 +40,7 @@ jobs:
           python -m pip install nest_asyncio
         shell: powershell
 
-      - name: Install Chrome and ChromeDriver
+      - name: Install Firefox and Geckodriver
         run: |
           choco install firefox -y
           $response = Invoke-WebRequest -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest" | ConvertFrom-Json
@@ -55,15 +55,24 @@ jobs:
       - name: Run Python script
         run: python "${{ matrix.script }}"
 
-  # Existing Ubuntu-based jobs from remote repo
   run-script-1:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
         with:
           python-version: '3.x'
-      - run: |
+
+      - name: Install dependencies
+        run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-      - run: python "Skip Tracing/truppl_parser.py"
+
+      - name: Verify script location
+        run: ls -R
+
+      - name: Run Python script
+        run: python "Skip Tracing/truppl_parser.py"
