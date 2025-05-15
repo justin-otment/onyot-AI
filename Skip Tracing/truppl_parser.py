@@ -58,6 +58,7 @@ def make_request_with_retries(url, retries=3, backoff_factor=1):
 # Google Sheets setup
 SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
 SHEET_NAME = "'Cape Coral - ArcGIS_LANDonly'"  # Ensure sheet name is properly formatted
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # === Google Sheets Auth ===
 def authenticate_google_sheets():
