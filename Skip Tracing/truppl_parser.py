@@ -1,608 +1,181 @@
 import os
-import sys
+import time
 import json
-import base64
-import asyncio
-import logging
-import traceback
-from dotenv import load_dotenv
-from concurrent.futures import ThreadPoolExecutor
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from bs4 import BeautifulSoup
-
-from nordvpn import handle_rate_limit, verify_vpn_connection
-from captcha import get_site_key, solve_turnstile_captcha, inject_token
-
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.firefox.service import Service
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
+import urllib3
+from urllib3.exceptions import ProtocolError
+import ssl
 from googleapiclient.discovery import build
-from google.oauth2.credentials import Credentials
+from google.oauth2.credentials import Credentials  # Correct import for OAuth2 credentials
 
-# === Constants ===
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+# Request with retries
+def make_request_with_retries(url, retries=3, backoff_factor=1):
+    http = urllib3.PoolManager()
+    attempt = 0
+    while attempt < retries:
+        try:
+            response = http.request('GET', url)
+            return response
+        except ProtocolError as e:
+            print(f"Attempt {attempt + 1} failed: {e}")
+            attempt += 1
+            sleep_time = backoff_factor * (2 ** attempt)  # Exponential backoff
+            print(f"Retrying in {sleep_time} seconds...")
+            time.sleep(sleep_time)
+    raise Exception(f"Failed to fetch {url} after {retries} attempts.")
+
+# Example usage:
+url = 'https://www.leepa.org/Search/PropertySearch.aspx'
+response = make_request_with_retries(url)
+print(response.data)
+
+# Disable SSL verification temporarily (use only for testing)
+os.environ['NO_PROXY'] = 'localhost,127.0.0.1'
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+context = ssl.create_default_context()
+context.check_hostname = False
+context.verify_mode = ssl.CERT_NONE
+
+# Google Sheets setup
 SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
-SHEET_NAME = 'CAPE CORAL FINAL'
+SHEET_NAME = 'Cape Coral - ArcGIS_LANDonly'
 
+
+# Define file paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
 TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
-# === Authenticate Google Sheets API ===
+# Authenticate with Google Sheets API
 def authenticate_google_sheets():
-    """Authenticate with Google Sheets API using OAuth."""
+    """Authenticate with Google Sheets API."""
     creds = None
-
-    # Load existing token if available
+    # Check if the token file exists
     if os.path.exists(TOKEN_PATH):
         creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-
-    # Refresh token if expired or prompt login if unavailable
+    # If no valid credentials, allow the user to login via OAuth
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            creds.refresh(Request())  # Refresh token if expired
         else:
             flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
             creds = flow.run_local_server(port=0)
 
-        # Save refreshed credentials
-        with open(TOKEN_PATH, "w") as token:
-            token.write(creds.to_json())
+    # Save the credentials for the next run
+    with open(TOKEN_PATH, "w") as token:
+        token.write(creds.to_json())
 
     return build("sheets", "v4", credentials=creds)
 
-def get_sheet_data(sheet_id, range_name, start_row=2):  # Added `start_row` as an optional parameter
-    """Fetch data from Google Sheets with error handling."""
+def fetch_data_and_update_sheet():
     try:
-        service = authenticate_google_sheets()
-        sheet = service.spreadsheets()
+        sheets_service = authenticate_google_sheets()
+        sheet = sheets_service.spreadsheets()
 
-        result = sheet.values().get(spreadsheetId=sheet_id, range=range_name).execute()
-        values = result.get("values", [])
+        # Fetch column A (names) and column E (sale_date)
+        names_range = f"{SHEET_NAME}!A2:A"
+        dates_range = f"{SHEET_NAME}!E2:E"
 
-        if not values:
-            logging.warning(f"[!] No data found in range: {range_name}")
+        names_result = sheet.values().get(spreadsheetId=SHEET_ID, range=names_range).execute()
+        dates_result = sheet.values().get(spreadsheetId=SHEET_ID, range=dates_range).execute()
 
-        logging.info(f"[DEBUG] Retrieved {len(values)} rows from range {range_name}")
-        return [(i+START_ROW, row[0]) for i, row in enumerate(values) if row]
-    
+        names_data = names_result.get("values", [])
+        dates_data = dates_result.get("values", [])
+
+        print(f"Fetched {len(names_data)} names and {len(dates_data)} date cells.")
+
     except Exception as e:
-        logging.error(f"[ERROR] Failed to retrieve data: {traceback.format_exc()}")
-        return []
-
-def extract_reference_names(sheet_id, row_index):
-    """Extract B:H values on the given row index from the first sheet."""
-    service = authenticate_google_sheets()
-    range_ = f"{SHEET_NAME}!B{row_index}:H{row_index}"
-    result = service.spreadsheets().values().get(
-        spreadsheetId=sheet_id,
-        range=range_
-    ).execute()
-    row = result.get("values", [[]])[0]
-    return [val for val in row if val.strip()]
-
-def append_to_google_sheet(first_name, last_name, phones, emails, site):
-    """Append a structured row to the 'For REI Upload' sheet."""
-    service = authenticate_google_sheets()
-    sheet = service.spreadsheets()
-
-    max_phones = 5
-    max_emails = 3
-    phone_values = [p[0] for p in phones[:max_phones]]
-    phone_types = [p[1] for p in phones[:max_phones]]
-    email_values = emails[:max_emails]
-
-    row = [first_name, last_name]
-    for i in range(max_phones):
-        row += [
-            phone_values[i] if i < len(phone_values) else "",
-            phone_types[i] if i < len(phone_types) else ""
-        ]
-    row += email_values + [""] * (max_emails - len(email_values)) + [site]
-
-    sheet.values().append(
-        spreadsheetId=SHEET_ID,
-        range=f"{SHEET_NAME_2}!A1",
-        valueInputOption="USER_ENTERED",
-        body={"values": [row]}
-    ).execute()
-    print(f"[+] Appended result for {first_name} {last_name}")
-    
-user_agents = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1",
-    "Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.74 Mobile Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 11_2_3) AppleWebKit/537.36 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15",
-    "Mozilla/5.0 (Linux; Android 10; Mi 9T Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Mobile Safari/537.36",
-    "Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
-    "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.141 Safari/537.36",
-]
-
-stealth_js = """
-Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-Object.defineProperty(navigator, 'plugins', { get: () => [1,2,3,4,5] });
-Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
-window.chrome = { runtime: {} };
-window.navigator.chrome = { runtime: {} };
-"""
-
-def extract_links(html):
-    soup = BeautifulSoup(html, 'html.parser')
-    entries = []
-
-    for card in soup.find_all("div", class_="card-summary"):
-        link = card.get("data-detail-link")
-        if not link:
-            continue
-        full_link = f"https://www.truepeoplesearch.com{link}"
-
-        name_tag = card.find("div", class_="h4")
-        name = name_tag.get_text(strip=True) if name_tag else ""
-
-        if name:
-            entries.append({"link": full_link, "text": name})
-
-    print(f"[DEBUG] Extracted {len(entries)} links:")
-    for e in entries:
-        print(f"    - {e['text']} -> {e['link']}")
-    return entries
-
-
-def name_tokens(name):
-    return [normalize_and_sort(part) for part in name.split()]
-
-def normalize_text(text):
-    return re.sub(r'\s+', ' ', text.strip().upper())
-
-def normalize_and_sort(text):
-    words = re.findall(r'\w+', text.upper())
-    return ' '.join(sorted(words))
-
-def is_match(entry_text, ref_names):
-    normalized_entry = normalize_and_sort(entry_text)
-    for ref in ref_names:
-        normalized_ref = normalize_and_sort(ref)
-        if normalized_ref in normalized_entry or normalized_entry in normalized_ref:
-            return True
-    return False
-
-def match_entries(extracted, ref_names):
-    matched_results = []
-    for entry in extracted:
-        if "link" in entry and "text" in entry:
-            normalized_text = normalize_and_sort(entry["text"])
-            for ref in ref_names:
-                normalized_ref = normalize_and_sort(ref)
-                if normalized_ref in normalized_text or normalized_text in normalized_ref:
-                    matched_results.append({
-                        "link": entry["link"],
-                        "text": entry["text"],
-                        "matched_to": ref
-                    })
-    return matched_results
-
-def log_matches_to_sheet(sheet_id, row_index, matched_results):
-    values = []
-    for result in matched_results:
-        if "matched_to" in result:
-            entry_text = result['text']
-            entry_link = result['link']
-            match_label = result['matched_to']
-            combined_entry = f"{entry_text} (Matched: {match_label})"
-            values.extend([combined_entry, entry_link])  # Each pair in two columns
-
-    if values:
-        append_to_google_sheet(sheet_id, row_index, values)
-
-# === Configure Logging ===
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# === Constants ===
-MAX_RETRIES = 5
-
-# === Rate-Limit Detection ===
-async def detect_rate_limit(content):
-    """
-    Detects rate-limiting messages in the page content.
-    :param content: The HTML content of the page.
-    :return: True if rate limit detected, False otherwise.
-    """
-    if "rate limit" in content.lower() or "too many requests" in content.lower() or "temporarily rate-limited" in content.lower():
-        logging.warning("[!] Rate limit detected in page content.")
-        return True
-    return False
-
-# === Utility: Switch VPN with Retry ===
-def switch_vpn_with_retry(max_attempts=3):
-    """
-    Attempts to switch VPN connection using 'verify_vpn_connection' function from nordvpn.py.
-    :param max_attempts: Number of retries for VPN connection.
-    :return: True if VPN switched successfully, False otherwise.
-    """
-    for attempt in range(1, max_attempts + 1):
-        logging.info(f"[*] Attempting VPN switch (Attempt {attempt}/{max_attempts})...")
-        vpn_success = verify_vpn_connection()
-        if vpn_success:
-            logging.info("[✓] VPN rotated successfully.")
-            return True
-        else:
-            logging.error("[✗] VPN rotation failed.")
-            time.sleep(5)  # Introduce a brief delay before retrying.
-    logging.error("[!] VPN switch attempts exceeded maximum retries. Operation failed.")
-    return False
-
-
-async def fetch_truepeoplesearch_data(row_index, mailing_street, zip_code, browser, context, page):
-    """
-    Fetches page content while handling CAPTCHA detection and rate-limit errors dynamically.
-    Inputs mailing street and zip code into the target website form, navigates, and handles parsing.
-
-    :param row_index: Row index of the entry for logging purposes.
-    :param mailing_street: Mailing street address to input in the form.
-    :param zip_code: ZIP code to input in the form.
-    :param browser: Browser instance.
-    :param context: Browser context object.
-    :param page: Playwright page object.
-    :return: Fetched content or None if retries fail.
-    """
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            logging.info(f"[!] Navigating to the page and processing row {row_index} (Attempt {attempt}/{MAX_RETRIES}).")
-            
-            await page.goto("https://www.truepeoplesearch.com", wait_until="networkidle", timeout=60000)
-
-            # Check for rate limits and block messages
-            content = await page.content()
-            if "rate limited" in content.lower() or "rate limit" in content.lower() or "blocked" in content.lower():
-                logging.warning("[!] Rate limit or block detected. Attempting to resolve...")
-                if await handle_rate_limit(page):
-                    await asyncio.sleep(BACKOFF_FACTOR ** attempt)
-                    continue
-                else:
-                    logging.error("[!] Rate limit handling failed. Exiting...")
-                    break
-
-            # Fill and submit the form
-            await page.wait_for_selector('#id-d-n', state='visible', timeout=60000)
-            await page.click('#id-d-n')  # Focus on the input field
-            await page.press('#id-d-n', 'Control+A')  # Select all text
-            await page.press('#id-d-n', 'Delete')  # Delete selected text
-            await page.fill('#id-d-n', mailing_street)
-
-            await page.wait_for_selector('#id-d-loc-name', state='visible', timeout=60000)
-            await page.click('#id-d-loc-name')  # Focus on the input field
-            await page.press('#id-d-loc-name', 'Control+A')  # Select all text
-            await page.press('#id-d-loc-name', 'Delete')  # Delete selected text
-            await page.fill('#id-d-loc-name', zip_code)
-
-            await page.click('#btnSubmit-d-n')
-            await page.wait_for_load_state("domcontentloaded", timeout=60000)
-
-            # Simulate human-like interactions for stealth
-            await asyncio.sleep(random.uniform(3, 5))
-            await page.mouse.move(random.randint(100, 400), random.randint(100, 400), steps=20)
-            await page.mouse.wheel(0, random.randint(400, 800))
-            await asyncio.sleep(random.uniform(3, 5))
-
-            content = await page.content()
-            logging.debug(f"[DEBUG] Full page content at timeout: {content[:1000]}")  # Logs a snippet (1000 characters).
-
-            # CAPTCHA handling logic
-            if "captcha" in content.lower() or "are you a human" in content.lower():
-                logging.warning(f"[!] CAPTCHA detected on attempt {attempt}. Fetching sitekey dynamically...")
-                sitekey = await get_site_key(page)
-                if not sitekey:
-                    logging.error("[!] Failed to retrieve sitekey. Retrying...")
-                    await asyncio.sleep(BACKOFF_FACTOR ** attempt)
-                    continue
-
-                logging.info(f"[✓] Sitekey found: {sitekey}. Solving CAPTCHA via 2Captcha API.")
-                captcha_token = solve_turnstile_captcha(sitekey, page.url)
-                if not captcha_token:
-                    logging.error("[!] CAPTCHA solving failed. Retrying...")
-                    await asyncio.sleep(BACKOFF_FACTOR ** attempt)
-                    continue
-
-                success = await inject_token(page, captcha_token, page.url)
-                if not success:
-                    logging.error("[!] CAPTCHA token injection failed. Retrying...")
-                    await asyncio.sleep(BACKOFF_FACTOR ** attempt)
-                    continue
-
-                await page.reload(wait_until="networkidle")
-                content = await page.content()
-                if "captcha" not in content.lower():
-                    logging.info("[✓] CAPTCHA solved and page loaded successfully.")
-                    return content
-                else:
-                    logging.warning("[!] CAPTCHA challenge persists after solving. Retrying...")
-                    continue
-
-            # If no CAPTCHA or rate limit, return the content
-            return content
-
-        except Exception as e:
-            logging.error(f"[!] Error during attempt {attempt}: {str(e)}")
-            await asyncio.sleep(BACKOFF_FACTOR ** attempt)
-            continue
-
-    logging.error(f"[!] Maximum retries reached. Failed to fetch data for row {row_index}.")
-    return None
-
-def parse_contact_info(html):
-    soup = BeautifulSoup(html, 'html.parser')
-
-    phone_numbers = []
-    phone_types = []
-    emails = []
-
-    # Extract Phone Numbers
-    phone_spans = soup.select(".col-12 > div.row span[itemprop='telephone'], .collapse span[itemprop='telephone']")
-    for span in phone_spans:
-        phone_numbers.append(span.get_text(strip=True))
-
-    # Extract Phone Types
-    phone_types_spans = soup.select(".col-12 > div.row span.smaller, .collapse span.smaller")
-    for span in phone_types_spans:
-        phone_types.append(span.get_text(strip=True))
-
-    # Extract Emails
-    email_divs = soup.select("div:nth-of-type(12) .col-12 > div.pl-sm-2 .col div")
-    for email_div in email_divs:
-        email_text = email_div.get_text(strip=True)
-        if re.match(r"[^@]+@[^@]+\.[^@]+", email_text):  # Validate email format
-            emails.append(email_text)
-
-    return phone_numbers, phone_types, emails
-
-# === Sheet Update Logic ===
-def get_column_letter(index):
-    letters = string.ascii_uppercase
-    return letters[index] if index < 26 else letters[(index // 26) - 1] + letters[index % 26]
-
-def get_existing_headers(sheet_id, sheet_name):
-    """Fetch column headers from row 1 of the specified sheet."""
-    range_ = f"{sheet_name}!1:1"  # Specify correct sheet name
-    result = sheets_service.spreadsheets().values().get(
-        spreadsheetId=sheet_id,
-        range=range_
-    ).execute()
-    headers = result.get("values", [[]])[0]
-    return headers if headers else []
-
-async def navigate_to_profile(page, matched_url):
-    """
-    Handles CAPTCHA while navigating to matched profiles and dynamically manages rate-limit errors.
-    Checks for specific keywords indicating "Death Record" or "Deceased" before proceeding.
-    :param page: Playwright Page object.
-    :param matched_url: URL of the profile to navigate to.
-    :return: Page content or None if retries fail.
-    """
-    MAX_RETRIES = 3  # Limit retries
-
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            print(f"[!] Attempt {attempt} to fetch: {matched_url}")
-            
-            # Open new tab manually using the browser context of the existing page
-            browser_context = page.context
-            new_tab = await browser_context.new_page()
-
-            # Wait for network activity to idle
-            await new_tab.wait_for_load_state("networkidle")
-            await new_tab.goto(matched_url, wait_until="networkidle", timeout=60000)
-
-            # Check if rate-limited by inspecting the current URL
-            page = new_tab.url
-            if "ratelimited" in page:
-                print("[!] Rate limit detected. Switching VPN server and retrying...")
-                await handle_rate_limit(page)  # Fixed usage by passing `new_tab`
-                await new_tab.reload(wait_until="networkidle", timeout=60000)
-                await asyncio.sleep(3)  # Allow stabilization
-                continue
-
-            # Check for specific keywords ("Death Record" or "Deceased")
-            print("[!] Checking for 'Death Record' or 'Deceased'...")
-            element = await new_tab.query_selector("div.row.pl-md-1")
-            if element:
-                element_text = await element.text_content()
-                if "Death Record" in element_text or "Deceased" in element_text:
-                    print("[!] Profile indicates 'Death Record' or 'Deceased'. Skipping...")
-                    await new_tab.close()  # Close the tab before skipping
-                    return None  
-
-            # Human-like interactions
-            await new_tab.wait_for_timeout(random.randint(3000, 5000))
-            await new_tab.mouse.move(random.randint(100, 400), random.randint(100, 400), steps=20)
-            await new_tab.mouse.wheel(0, random.randint(400, 800))
-            await new_tab.wait_for_timeout(random.randint(3000, 5000))
-
-            content = await new_tab.content()
-
-            # Detect CAPTCHA
-            if "captcha" in content.lower() or "are you a human" in content.lower():
-                print(f"[!] CAPTCHA detected on attempt {attempt}. Fetching sitekey dynamically...")
-                sitekey = await get_site_key(new_tab)
-                if not sitekey:
-                    print("[!] No valid sitekey found. Skipping CAPTCHA solving.")
-                    await new_tab.close()  # Close the tab before skipping
-                    continue  
-
-                print(f"[✓] Sitekey found: {sitekey}. Solving CAPTCHA via 2Captcha API.")
-                captcha_token = solve_turnstile_captcha(sitekey, matched_url)
-                if not captcha_token:
-                    print("[!] CAPTCHA solving failed. Retrying...")
-                    await new_tab.close()  # Close the tab before retrying
-                    continue  
-
-                # Inject CAPTCHA token
-                success = await inject_token(new_tab, captcha_token, matched_url)
-                if not success:
-                    print("[!] CAPTCHA token injection failed. Retrying...")
-                    await new_tab.close()  # Close the tab before retrying
-                    continue  
-
-                print("[✓] CAPTCHA solved successfully. Reloading page...")
-                await new_tab.reload(wait_until="networkidle")
-                content = await new_tab.content()
-
-                if "captcha" not in content.lower():
-                    print("[✓] CAPTCHA solved and page loaded successfully.")
-                    await new_tab.close()  # Close the tab after successful processing
-                    return content
-
-                print("[!] CAPTCHA challenge still present. Retrying...")
-                await new_tab.close()  # Close the tab before retrying
-                continue  
-
-            await new_tab.close()  # Close the tab after successful processing
-            return content  # Page loaded successfully without CAPTCHA or rate-limiting issues
-        
-        except Exception as e:
-            print(f"[!] Error during attempt {attempt} for {matched_url}: {e}")
-            await handle_rate_limit(new_tab)  # Corrected to retry VPN on `new_tab`
-            continue
-
-    print(f"[!] Skipping {matched_url} due to persistent CAPTCHA or rate-limit issues.")
-    return None
-
-async def clear_browser_cookies(page):
-    """Clear cookies and local storage for the current browser session."""
-    try:
-        print("[!] Clearing browser cookies and session storage...")
-        await page.context.clear_cookies()
-        await page.evaluate("window.localStorage.clear();")
-        await page.evaluate("window.sessionStorage.clear();")
-        print("[✓] Browser session cleared.")
-    except Exception as e:
-        print(f"[!] Error clearing browser session: {e}")
-
-
-def extract_sitekey(response_body):
-    """
-    Extracts the CAPTCHA sitekey from the network response body.
-    :param response_body: The raw response content as a string.
-    :return: The extracted sitekey or None if not found.
-    """
-    try:
-        # Use regex to search for "data-sitekey" in the response
-        match = re.search(r'data-sitekey="([a-zA-Z0-9_\-]+)"', response_body)
-        if match:
-            sitekey = match.group(1)
-            logging.info(f"[✓] Sitekey extracted: {sitekey}")
-            return sitekey
-        else:
-            logging.warning("[!] Sitekey not found in the response body.")
-            return None
-    except Exception as e:
-        logging.error(f"[!] Error extracting sitekey: {e}")
-        return None
-
-
-async def main():
-    SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
-    START_ROW = 2
-    MAILING_STREETS_RANGE = f"{SHEET_NAME}!P{START_ROW}:P"
-    ZIPCODE_RANGE = f"{SHEET_NAME}!Q{START_ROW}:Q"
-    SITE_RANGE = f"{SHEET_NAME}!B{START_ROW}:B"
-
-    mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE, START_ROW)
-    zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE, START_ROW)
-
-    if not mailing_streets or not zip_codes:
-        print("[!] Missing data in one or both ranges. Skipping processing...")
+        print(f"Error fetching data from Google Sheets: {e}")
         return
 
-    mailing_streets = [(row_index, value) for row_index, value in mailing_streets if value.strip()]
-    zip_codes = [(row_index, value) for row_index, value in zip_codes if value.strip()]
+    url = 'https://www.leepa.org/Search/PropertySearch.aspx'
 
-    street_dict = {row_index: value for row_index, value in mailing_streets}
-    zip_dict = {row_index: value for row_index, value in zip_codes}
+    for i, (name_row, date_row) in enumerate(zip(names_data, dates_data), start=2):
+        owner = name_row[0].strip() if name_row else ""
+        sale_date = date_row[0].strip() if date_row else ""
 
-    valid_entries = [
-        (index, street_dict[index], zip_dict[index])
-        for index in street_dict.keys() & zip_dict.keys()
-    ]
+        # Skip if column E is non-empty
+        if sale_date:
+            print(f"Skipping row {i} because column E is already filled.")
+            continue
 
-    if not valid_entries:
-        print("[!] No valid entries to process. Exiting...")
-        return
+        if not owner:
+            print(f"Skipping row {i} because owner name is blank.")
+            continue
 
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
+        print(f"Processing row {i}: Owner = {owner}")
 
-    for batch_start in range(0, len(valid_entries), BATCH_SIZE):
-        batch = valid_entries[batch_start:batch_start + BATCH_SIZE]
-        print(f"[→] Processing batch {batch_start // BATCH_SIZE + 1} with {len(batch)} entries...")
+        options = webdriver.FirefoxOptions()
+        options.add_argument("--headless")
+        service = Service()
+        driver = webdriver.Firefox(service=service, options=options)
 
-        for row_index, mailing_street, zip_code in batch:
-            print(f"\n[→] Processing Row {row_index}: {mailing_street}, {zip_code}")
+        try:
+            driver.get(url)
+
+            strap_input = WebDriverWait(driver, 60).until(
+                EC.presence_of_element_located((By.ID, "ctl00_BodyContentPlaceHolder_WebTab1_tmpl0_STRAPTextBox"))
+            )
+            strap_input.send_keys(owner, Keys.RETURN)
+
             try:
-                captcha_retries = 0
-                html_content = None
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.ID, "ctl00_BodyContentPlaceHolder_pnlIssues"))
+                )
+                warning_button = driver.find_element(By.ID, "ctl00_BodyContentPlaceHolder_btnWarning")
+                warning_button.click()
+            except:
+                print("No warning popup.")
 
-                while captcha_retries < MAX_CAPTCHA_RETRIES:
-                    html_content = await fetch_truepeoplesearch_data(row_index, mailing_street, zip_code)
-                    if html_content:
-                        break
-                    captcha_retries += 1
-                    print(f"[!] CAPTCHA retry {captcha_retries}/{MAX_CAPTCHA_RETRIES}...")
+            href = WebDriverWait(driver, 30).until(
+                EC.presence_of_element_located((By.XPATH, '//*[@id="ctl00_BodyContentPlaceHolder_WebTab1"]/div/div[1]/div[1]/table/tbody/tr/td[4]/div/div[1]/a'))
+            ).get_attribute('href')
+            driver.get(href)
 
-                if not html_content:
-                    print("[!] Skipping row due to repeated CAPTCHA failures.")
-                    continue
+            img_element = WebDriverWait(driver, 30).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, '#SalesHyperLink > img'))
+            )
+            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", img_element)
+            time.sleep(1)
+            driver.execute_script("arguments[0].click();", img_element)
+            time.sleep(1)
 
-                extracted_links = extract_links(html_content)
-                if not extracted_links:
-                    print("[DEBUG] Extracted 0 links.")
-                    await handle_rate_limit()
-                    continue
+            sale_date = WebDriverWait(driver, 60).until(
+                EC.presence_of_element_located((By.XPATH, '//*[@id="SalesDetails"]/div[3]/table/tbody/tr[2]/td[2]'))
+            ).text
+            sale_amount = WebDriverWait(driver, 60).until(
+                EC.presence_of_element_located((By.XPATH, '//*[@id="SalesDetails"]/div[3]/table/tbody/tr[2]/td[1]'))
+            ).text
 
-                ref_names = extract_reference_names(SHEET_ID, row_index)
-                matched_results = match_entries(extracted_links, ref_names)
-                if not matched_results:
-                    print(f"[!] No match found for row {row_index}.")
-                    continue
+            # Write sale_date to column E
+            sheet.values().update(
+                spreadsheetId=SHEET_ID,
+                range=f"{SHEET_NAME}!E{i}",
+                valueInputOption="RAW",
+                body={"values": [[sale_date]]}
+            ).execute()
 
-                for matched_entry in matched_results:
-                    matched_url = matched_entry["link"]
-                    matched_name = matched_entry["text"]
-                    print(f"[→] Visiting profile: {matched_url}")
+            # Write sale_amount to column F
+            sheet.values().update(
+                spreadsheetId=SHEET_ID,
+                range=f"{SHEET_NAME}!F{i}",
+                valueInputOption="RAW",
+                body={"values": [[sale_amount]]}
+            ).execute()
 
-                    matched_html = await navigate_to_profile(matched_name, mailing_street, matched_url)
-                    if not matched_html:
-                        print(f"[!] CAPTCHA blocked: {matched_url}")
-                        continue
+        except Exception as e:
+            print(f"Error processing row {i}: {e}")
 
-                    phone_numbers, phone_types, emails = parse_contact_info(matched_html)
-                    if not phone_numbers:
-                        print(f"[!] No phone numbers found for row {row_index}")
-                        continue
-
-                    name_parts = matched_name.strip().split()
-                    first_name = name_parts[0]
-                    last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
-
-                    site_data = get_sheet_data(SHEET_ID, SITE_RANGE, START_ROW)
-                    site_dict = {idx: value for idx, value in site_data}
-                    site_value = site_dict.get(row_index, None)
-
-                    if site_value is None:
-                        print(f"[!] No Site value found for row {row_index}")
-                        continue
-
-                    phone_data = list(zip(phone_numbers, phone_types))
-                    append_to_google_sheet(first_name, last_name, phone_data, emails, site_value)
-
-            except Exception as e:
-                print(f"[!] Error processing row {row_index}: {e}")
-                continue
+        finally:
+            driver.quit()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    fetch_data_and_update_sheet()
