@@ -1,5 +1,4 @@
 import os
-import json
 import asyncio
 import logging
 import traceback
@@ -13,6 +12,8 @@ from dotenv import load_dotenv
 
 from nordvpn import handle_rate_limit, verify_vpn_connection
 from captcha import get_site_key, solve_turnstile_captcha, inject_token
+import json
+print(json.loads(os.getenv("GOOGLE_CREDENTIALS_JSON")))
 
 # === Setup ===
 logging.basicConfig(
@@ -29,7 +30,7 @@ executor = ThreadPoolExecutor()
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "CAPE CORAL FINAL"
 SHEET_NAME_2 = "For REI Upload"
-START_ROW = 2612
+START_ROW = 2
 BATCH_SIZE = 10
 MAX_CAPTCHA_RETRIES = 3
 
@@ -499,6 +500,9 @@ async def main():
 
     mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE)
     zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE)
+
+    print(f"DEBUG: Mailing Streets - {mailing_streets}")
+    print(f"DEBUG: Zip Codes - {zip_codes}")
 
     if not mailing_streets or not zip_codes:
         print("[!] Missing data in one or both ranges. Skipping processing...")
