@@ -1,38 +1,69 @@
-name: Selenium Automation
+name: Run Multiple Python Scripts
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch: # Allows manual execution
+  workflow_dispatch:
 
 jobs:
-  automation:
-    runs-on: ubuntu-latest
-
+  rapid-api-script:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        script:
+          - "rapid_API.py"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v2
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - name: Set up Python
+        uses: actions/setup-python@v2
         with:
-          python-version: '3.x'  # Adjust as needed
+          python-version: '3.10'
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Set Python UTF-8 Encoding
+        run: echo "PYTHONIOENCODING=UTF-8" >> $GITHUB_ENV
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          sudo apt-get update
-          sudo apt-get install -y firefox geckodriver || echo "Trying manual install..."
+          if (Test-Path requirements.txt) { pip install -r requirements.txt }
+          python -m pip install nest_asyncio
+        shell: powershell
 
-      - name: Install Geckodriver Manually (if needed)
+      - name: Install Chrome and ChromeDriver
         run: |
-          wget -q https://github.com/mozilla/geckodriver/releases/latest/download/geckodriver-linux64.tar.gz
-          tar -xzf geckodriver-linux64.tar.gz
-          sudo mv geckodriver /usr/local/bin/
+          choco install firefox -y
+          $response = Invoke-WebRequest -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest" | ConvertFrom-Json
+          $GECKO_VERSION = $response.tag_name -replace "v", ""
+          $GECKO_URL = "https://github.com/mozilla/geckodriver/releases/download/v$GECKO_VERSION/geckodriver-v$GECKO_VERSION-win64.zip"
+          Invoke-WebRequest -Uri $GECKO_URL -OutFile geckodriver.zip
+          Expand-Archive geckodriver.zip -DestinationPath C:\GeckoDriver
+          $env:PATH += ";C:\GeckoDriver"
+          C:\GeckoDriver\geckodriver.exe --version
+        shell: powershell
 
-      - name: Run Selenium script
-        env:
-          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
-        run: python "Skip Tracing/truppl_parser.py"
+      - name: Run Python script
+        run: python "${{ matrix.script }}"
+
+  # Existing Ubuntu-based jobs from remote repo
+  run-script-1:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+      - run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      - run: python truppl_parser.py
