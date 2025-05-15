@@ -7,8 +7,6 @@ import logging
 import traceback
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
@@ -16,94 +14,62 @@ from bs4 import BeautifulSoup
 from nordvpn import handle_rate_limit, verify_vpn_connection
 from captcha import get_site_key, solve_turnstile_captcha, inject_token
 
-# === Setup ===
-print("Current Working Directory:", os.getcwd())
-logging.basicConfig(
-    level=logging.DEBUG,
-    filename="logfile.log",
-    filemode="a",
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
-logging.info("Script started")
+from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from google.oauth2.credentials import Credentials
 
-load_dotenv()
-
-sys.stdout.reconfigure(encoding='utf-8')
-
+# === Constants ===
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
+SHEET_NAME = 'CAPE CORAL FINAL'
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Pulled from GitHub Actions secrets
-SHEET_ID = os.environ.get("SHEET_ID")
-START_ROW = 2612
-SHEET_NAME = "CAPE CORAL FINAL"
-SHEET_NAME_2 = "For REI Upload"
-BATCH_SIZE = 10
-MAX_CAPTCHA_RETRIES = 3
-
-executor = ThreadPoolExecutor()
-
-# Paths where base64 credentials will be written by the script
 CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
-TOKEN_PATH = os.path.join(BASE_DIR, "token.json")  # unused but retained
+TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
 
-MAX_RETRIES = 1
-
-sys.stdout.reconfigure(encoding='utf-8')
-
-def write_base64_json_files():
-    credentials_b64 = os.getenv("GOOGLE_CREDENTIALS_JSON")
-    token_b64 = os.getenv("GOOGLE_TOKEN_JSON")
-
-    if credentials_b64:
-        try:
-            with open(CREDENTIALS_PATH, "wb") as f:
-                f.write(base64.b64decode(credentials_b64))
-        except Exception as e:
-            print(f"[!] Failed to write credentials.json: {e}", file=sys.stderr)
-            sys.exit(1)
-
-    if token_b64:
-        try:
-            with open(TOKEN_PATH, "wb") as f:
-                f.write(base64.b64decode(token_b64))
-        except Exception as e:
-            print(f"[!] Failed to write token.json: {e}", file=sys.stderr)
-            sys.exit(1)
-
-write_base64_json_files()
-
-if not os.path.exists(CREDENTIALS_PATH):
-    print(f"[!] credentials.json not found at {CREDENTIALS_PATH}", file=sys.stderr)
-    sys.exit(1)
-
-# === Check credential file existence ===
-if not os.path.exists(CREDENTIALS_PATH):
-    print(f"[!] credentials.json not found at path: {CREDENTIALS_PATH}", file=sys.stderr)
-    sys.exit(1)
-
-# === Google Sheets Integration ===
-
+# === Authenticate Google Sheets API ===
 def authenticate_google_sheets():
-    """Authenticate with Google Sheets API using service account credentials."""
-    scopes = ['https://www.googleapis.com/auth/spreadsheets']
-    credentials = Credentials.from_service_account_file(
-        CREDENTIALS_PATH,  # Use the correct path variable
-        scopes=scopes
-    )
-    service = build('sheets', 'v4', credentials=credentials)
-    return service
+    """Authenticate with Google Sheets API using OAuth."""
+    creds = None
 
-def get_sheet_data(sheet_id, range_name, start_row=2):
-    """Fetch data from the specified Google Sheet range."""
-    service = authenticate_google_sheets()
-    result = service.spreadsheets().values().get(
-        spreadsheetId=sheet_id,
-        range=range_name
-    ).execute()
-    values = result.get('values', [])
-    print(f"[DEBUG] Retrieved {len(values)} rows from range {range_name}")
-    return [(start_row + i, row[0]) for i, row in enumerate(values) if row and len(row) > 0]
+    # Load existing token if available
+    if os.path.exists(TOKEN_PATH):
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+
+    # Refresh token if expired or prompt login if unavailable
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
+            creds = flow.run_local_server(port=0)
+
+        # Save refreshed credentials
+        with open(TOKEN_PATH, "w") as token:
+            token.write(creds.to_json())
+
+    return build("sheets", "v4", credentials=creds)
+
+# === Fetch Data From Google Sheets ===
+def get_sheet_data(sheet_id, range_name):
+    """Fetch data from Google Sheets with error handling."""
+    try:
+        service = authenticate_google_sheets()
+        sheet = service.spreadsheets()
+
+        result = sheet.values().get(spreadsheetId=sheet_id, range=range_name).execute()
+        values = result.get("values", [])
+
+        if not values:
+            logging.warning(f"[!] No data found in range: {range_name}")
+
+        logging.info(f"[DEBUG] Retrieved {len(values)} rows from range {range_name}")
+        return [(i+START_ROW, row[0]) for i, row in enumerate(values) if row]
+    
+    except Exception as e:
+        logging.error(f"[ERROR] Failed to retrieve data: {traceback.format_exc()}")
+        return []
 
 def extract_reference_names(sheet_id, row_index):
     """Extract B:H values on the given row index from the first sheet."""
