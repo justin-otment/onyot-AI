@@ -36,9 +36,12 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Hardcoded sheet config
+# Constants
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "CAPE CORAL FINAL"
-SHEET_NAME_2 = "For REI Upload"
+START_ROW = 2
+BATCH_SIZE = 10
+MAX_CAPTCHA_RETRIES = 3
 
 CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
 TOKEN_PATH = os.path.join(BASE_DIR, "token.json")  # optional
@@ -533,31 +536,28 @@ def extract_sitekey(response_body):
 
 
 async def main():
-    SHEET_ID = os.environ.get("SHEET_ID")
-    if not SHEET_ID:
-        print("[ERROR] SHEET_ID environment variable not set.")
-        return
-
-    MAILING_STREETS_RANGE = f"{SHEET_NAME}!P{START_ROW}:P"
-    ZIPCODE_RANGE = f"{SHEET_NAME}!Q{START_ROW}:Q"
+    # Use hardcoded SHEET_ID instead of environment variable
+    MAILING_STREETS_RANGE = "CAPE CORAL FINAL!P2612:P"
+    ZIPCODE_RANGE = "CAPE CORAL FINAL!Q2612:Q"
+    SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
     SITE_RANGE = f"{SHEET_NAME}!B{START_ROW}:B"
 
-    mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE, START_ROW)
-    zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE, START_ROW)
+    mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE)
+    zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE)
 
     if not mailing_streets or not zip_codes:
         print("[!] Missing data in one or both ranges. Skipping processing...")
         return
 
-    mailing_streets = [(row_index, value) for row_index, value in mailing_streets if value.strip()]
-    zip_codes = [(row_index, value) for row_index, value in zip_codes if value.strip()]
+    mailing_streets = [(i, v) for i, v in mailing_streets if v.strip()]
+    zip_codes = [(i, v) for i, v in zip_codes if v.strip()]
 
-    street_dict = {row_index: value for row_index, value in mailing_streets}
-    zip_dict = {row_index: value for row_index, value in zip_codes}
+    street_dict = dict(mailing_streets)
+    zip_dict = dict(zip_codes)
 
     valid_entries = [
-        (index, street_dict[index], zip_dict[index])
-        for index in street_dict.keys() & zip_dict.keys()
+        (idx, street_dict[idx], zip_dict[idx])
+        for idx in street_dict.keys() & zip_dict.keys()
     ]
 
     if not valid_entries:
@@ -569,72 +569,83 @@ async def main():
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
 
-    for batch_start in range(0, len(valid_entries), BATCH_SIZE):
-        batch = valid_entries[batch_start:batch_start + BATCH_SIZE]
-        print(f"[→] Processing batch {batch_start // BATCH_SIZE + 1} with {len(batch)} entries...")
+    driver = webdriver.Chrome(options=chrome_options)
 
-        for row_index, mailing_street, zip_code in batch:
-            print(f"\n[→] Processing Row {row_index}: {mailing_street}, {zip_code}")
-            try:
-                captcha_retries = 0
-                html_content = None
+    try:
+        for batch_start in range(0, len(valid_entries), BATCH_SIZE):
+            batch = valid_entries[batch_start:batch_start + BATCH_SIZE]
+            print(f"[→] Processing batch {batch_start // BATCH_SIZE + 1} with {len(batch)} entries...")
 
-                while captcha_retries < MAX_CAPTCHA_RETRIES:
-                    html_content = await fetch_truepeoplesearch_data(row_index, mailing_street, zip_code)
-                    if html_content:
-                        break
-                    captcha_retries += 1
-                    print(f"[!] CAPTCHA retry {captcha_retries}/{MAX_CAPTCHA_RETRIES}...")
+            for row_index, mailing_street, zip_code in batch:
+                print(f"\n[→] Processing Row {row_index}: {mailing_street}, {zip_code}")
+                try:
+                    captcha_retries = 0
+                    html_content = None
 
-                if not html_content:
-                    print("[!] Skipping row due to repeated CAPTCHA failures.")
-                    continue
+                    while captcha_retries < MAX_CAPTCHA_RETRIES:
+                        html_content = await asyncio.to_thread(
+                            fetch_truepeoplesearch_data, driver, row_index, mailing_street, zip_code
+                        )
+                        if html_content:
+                            break
+                        captcha_retries += 1
+                        print(f"[!] CAPTCHA retry {captcha_retries}/{MAX_CAPTCHA_RETRIES}...")
 
-                extracted_links = extract_links(html_content)
-                if not extracted_links:
-                    print("[DEBUG] Extracted 0 links.")
-                    await handle_rate_limit()
-                    continue
-
-                ref_names = extract_reference_names(SHEET_ID, row_index)
-                matched_results = match_entries(extracted_links, ref_names)
-                if not matched_results:
-                    print(f"[!] No match found for row {row_index}.")
-                    continue
-
-                for matched_entry in matched_results:
-                    matched_url = matched_entry["link"]
-                    matched_name = matched_entry["text"]
-                    print(f"[→] Visiting profile: {matched_url}")
-
-                    matched_html = await navigate_to_profile(matched_name, mailing_street, matched_url)
-                    if not matched_html:
-                        print(f"[!] CAPTCHA blocked: {matched_url}")
+                    if not html_content:
+                        print("[!] Skipping row due to repeated CAPTCHA failures.")
                         continue
 
-                    phone_numbers, phone_types, emails = parse_contact_info(matched_html)
-                    if not phone_numbers:
-                        print(f"[!] No phone numbers found for row {row_index}")
+                    extracted_links = extract_links(html_content)
+                    if not extracted_links:
+                        print("[DEBUG] Extracted 0 links.")
+                        await handle_rate_limit(driver)
                         continue
 
-                    name_parts = matched_name.strip().split()
-                    first_name = name_parts[0]
-                    last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
+                    ref_names = extract_reference_names(SHEET_ID, row_index)
+                    matched_results = match_entries(extracted_links, ref_names)
 
-                    site_data = get_sheet_data(SHEET_ID, SITE_RANGE, START_ROW)
-                    site_dict = {idx: value for idx, value in site_data}
-                    site_value = site_dict.get(row_index, None)
-
-                    if site_value is None:
-                        print(f"[!] No Site value found for row {row_index}")
+                    if not matched_results:
+                        print(f"[!] No match found for row {row_index}.")
                         continue
 
-                    phone_data = list(zip(phone_numbers, phone_types))
-                    append_to_google_sheet(first_name, last_name, phone_data, emails, site_value)
+                    for matched_entry in matched_results:
+                        matched_url = matched_entry["link"]
+                        matched_name = matched_entry["text"]
+                        print(f"[→] Visiting profile: {matched_url}")
 
-            except Exception as e:
-                print(f"[!] Error processing row {row_index}: {e}")
-                continue
+                        matched_html = await asyncio.to_thread(
+                            navigate_to_profile, driver, matched_url
+                        )
+                        if not matched_html:
+                            print(f"[!] CAPTCHA blocked: {matched_url}")
+                            continue
+
+                        phone_numbers, phone_types, emails = parse_contact_info(matched_html)
+                        if not phone_numbers:
+                            print(f"[!] No phone numbers found for row {row_index}")
+                            continue
+
+                        name_parts = matched_name.strip().split()
+                        first_name = name_parts[0]
+                        last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
+
+                        site_data = get_sheet_data(SHEET_ID, SITE_RANGE)
+                        site_dict = dict(site_data)
+                        site_value = site_dict.get(row_index)
+
+                        if site_value is None:
+                            print(f"[!] No Site value found for row {row_index}")
+                            continue
+
+                        phone_data = list(zip(phone_numbers, phone_types))
+                        append_to_google_sheet(first_name, last_name, phone_data, emails, site_value)
+
+                except Exception as e:
+                    print(f"[!] Error processing row {row_index}: {e}")
+                    continue
+    finally:
+        driver.quit()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
