@@ -11,7 +11,7 @@ on:
 
 jobs:
   run-parser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Ensuring compatibility with the latest runner image
 
     env:
       GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
@@ -67,7 +67,7 @@ jobs:
 
       - name: Upload Logs for Debugging
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4  # Updated to `v4` for latest GitHub Actions compatibility
         with:
           name: truppl-parser-log
           path: truppl_parser.log
