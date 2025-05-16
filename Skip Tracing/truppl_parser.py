@@ -7,13 +7,12 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 import urllib3
 from urllib3.exceptions import ProtocolError
 import ssl
-from googleapiclient.discovery import build
-from google.oauth2.credentials import Credentials  # Correct import for OAuth2 credentials
 
 # Request with retries
 def make_request_with_retries(url, retries=3, backoff_factor=1):
@@ -54,7 +53,6 @@ CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
 TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
-# Authenticate with Google Sheets API
 def authenticate_google_sheets():
     creds = None
 
