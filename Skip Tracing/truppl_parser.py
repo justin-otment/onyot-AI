@@ -27,7 +27,8 @@ if not SERVICE_ACCOUNT_JSON:
 
 # Load service account JSON directly from environment variable
 creds = Credentials.from_service_account_info(json.loads(SERVICE_ACCOUNT_JSON), scopes=SCOPES)
-sheets_service = build("sheets", "v4", credentials=creds)GECKODRIVER_PATH = "C:\\GeckoDriver\\geckodriver.exe"
+sheets_service = build("sheets", "v4", credentials=creds)
+GECKODRIVER_PATH = "C:\\GeckoDriver\\geckodriver.exe"
 
 # Google Sheets setup
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
