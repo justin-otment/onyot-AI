@@ -28,12 +28,6 @@ SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "Cape Coral - ArcGIS_LANDonly"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# Verify service account file existence
-if not os.path.exists(SERVICE_ACCOUNT_PATH):
-    raise Exception(f"Google Sheets authentication failed: Service account file not found at {SERVICE_ACCOUNT_PATH}")
-
-print(f"Using credentials from: {SERVICE_ACCOUNT_PATH}")
-
 # Authenticate with Google Sheets API
 def authenticate_google_sheets():
     try:
