@@ -10,6 +10,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 import urllib3
 from urllib3.exceptions import ProtocolError
 import ssl
@@ -57,13 +58,13 @@ def authenticate_google_sheets():
     creds = None
 
     if os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH, ["https://www.googleapis.com/auth/spreadsheets"])
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())  # Refresh expired token
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, ["https://www.googleapis.com/auth/spreadsheets"])
             creds = flow.run_local_server(port=0)  # User must approve access
 
         # Save new token for future use
