@@ -48,6 +48,11 @@ jobs:
           C:\GeckoDriver\geckodriver.exe --version
         shell: powershell
 
+      - name: Decode service account JSON secret
+        run: |
+          echo "${{ secrets.SERVICE_ACCOUNT_JSON }}" | base64 --decode > Skip Tracing/service-account.json
+        shell: bash
+
       - name: Verify service account credentials
         run: |
           if (!(Test-Path "Skip Tracing/service-account.json")) {
@@ -63,11 +68,6 @@ jobs:
             Write-Output "Removed expired token.json"
           }
         shell: powershell
-
-      - name: Set environment variables
-        run: |
-          echo "SERVICE_ACCOUNT_JSON=${{ secrets.SERVICE_ACCOUNT_JSON }}" >> $GITHUB_ENV
-        shell: bash
 
       - name: Debug logs
         run: |
