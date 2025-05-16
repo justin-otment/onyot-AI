@@ -1,9 +1,9 @@
 # Web Scraping & Automation
 selenium==4.21.0
-urllib3>=2.0,<2.32
+urllib3>=1.26.18,<2.0  # Compatible with Selenium
 requests==2.32.3
 
-# Google Sheets API & OAuth
+# Google Sheets API & Authentication
 google-api-python-client==2.167.0
 google-auth==2.39.0
 google-auth-httplib2==0.2.0
@@ -17,4 +17,7 @@ cachetools==5.5.2
 
 # Optional: If HTML parsing is needed
 beautifulsoup4==4.13.4
-dotenv
+python-dotenv==1.0.1  # Correct package name
+
+# Dependency Management
+setuptools>=69.5.1
