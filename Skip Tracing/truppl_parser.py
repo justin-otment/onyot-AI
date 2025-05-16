@@ -15,6 +15,7 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 import json
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from googleapiclient.errors import HttpError
 
 # Define constants
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
