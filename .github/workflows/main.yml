@@ -66,8 +66,8 @@ jobs:
 
       - name: Set environment variables
         run: |
-          echo "CREDENTIALS_PATH=Skip Tracing/credentials.json" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
-        shell: powershell
+          echo "SERVICE_ACCOUNT_JSON=${{ secrets.SERVICE_ACCOUNT_JSON }}" >> $GITHUB_ENV
+        shell: bash
 
       - name: Debug logs
         run: |
