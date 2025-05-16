@@ -81,16 +81,22 @@ def authenticate_google_sheets():
 
 # Fetch and update data in Google Sheets
 def fetch_data_and_update_sheet():
+    print("Authenticating with Google Sheets API...")
     sheets_service = authenticate_google_sheets()
+    print("Authentication successful!")
     sheet = sheets_service.spreadsheets()
+
+    if not SHEET_NAME or not SHEET_ID:
+        raise Exception("Error: SHEET_NAME or SHEET_ID is not defined!")
 
     names_range = f"{SHEET_NAME}!A2:A2500"
     dates_range = f"{SHEET_NAME}!E2:E2500"
 
     try:
-        names_result = sheet.values().get(spreadsheetId=SHEET_ID, range=names_range).execute()
-        dates_result = sheet.values().get(spreadsheetId=SHEET_ID, range=dates_range).execute()
-    except Exception as e:
+        print("Fetching data from Google Sheets...")
+        names_result = sheet.values().get(spreadsheetId=SHEET_ID, range=names_range).execute(timeout=60)
+        dates_result = sheet.values().get(spreadsheetId=SHEET_ID, range=dates_range).execute(timeout=60)
+    except googleapiclient.errors.HttpError as e:
         print(f"Error fetching data from Google Sheets: {e}")
         return
 
@@ -101,10 +107,11 @@ def fetch_data_and_update_sheet():
 
     url = "https://www.leepa.org/Search/PropertySearch.aspx"
 
-    # Verify URL availability before launching Selenium
-    response = requests.get(url)
-    if response.status_code != 200:
-        raise Exception(f"Error: Unable to fetch {url}. Status code: {response.status_code}")
+    try:
+        response = requests.get(url, timeout=15)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"Error: Unable to fetch {url}. Reason: {e}")
 
     for i, (name_row, date_row) in enumerate(zip(names_data, dates_data), start=2):
         owner = name_row[0].strip() if name_row else ""
@@ -172,6 +179,10 @@ def fetch_data_and_update_sheet():
                 body={"values": [[sale_amount]]}
             ).execute()
 
+        except TimeoutException:
+            print(f"Error: Element timeout in row {i}. Skipping...")
+        except NoSuchElementException:
+            print(f"Error: Missing expected element in row {i}. Skipping...")
         except Exception as e:
             print(f"Error processing row {i}: {e}")
 
