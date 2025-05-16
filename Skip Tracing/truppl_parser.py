@@ -18,7 +18,13 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 # Define constants
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SERVICE_ACCOUNT_PATH = os.path.join(BASE_DIR, "service-account.json")
 GECKODRIVER_PATH = "C:\\GeckoDriver\\geckodriver.exe"
+
+# Google Sheets setup
+SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"  # Ensure correct spreadsheet ID
+SHEET_NAME = "Cape Coral - ArcGIS_LANDonly"  # Ensure correct sheet name
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # Disable SSL verification temporarily (use only for testing)
 os.environ['NO_PROXY'] = 'localhost,127.0.0.1'
