@@ -54,9 +54,12 @@ def make_request_with_retries(url, retries=3, backoff_factor=1):
 SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
 SHEET_NAME = "'Cape Coral - ArcGIS_LANDonly'"  # Ensure sheet name is properly formatted
 
-# Authenticate with Google Sheets API
 def authenticate_google_sheets():
+    if not os.path.exists(CREDENTIALS_PATH):
+        raise Exception(f"Google Sheets authentication failed: Credential file not found at {CREDENTIALS_PATH}")
+
     creds = Credentials.from_service_account_file(CREDENTIALS_PATH, scopes=["https://www.googleapis.com/auth/spreadsheets"])
+    
     return build("sheets", "v4", credentials=creds)
 
 # Fetch and update data in Google Sheets
