@@ -52,14 +52,9 @@ jobs:
         run: mkdir -p "Skip Tracing"
         shell: bash
 
-      - name: Encode service account JSON and save as file
+      - name: Write service account JSON secret to file
         run: |
-          echo "${{ secrets.SERVICE_ACCOUNT_JSON }}" | base64 > "Skip Tracing/service-account.b64"
-        shell: bash
-
-      - name: Decode service account JSON secret
-        run: |
-          base64 --decode "Skip Tracing/service-account.b64" > "Skip Tracing/service-account.json"
+          echo '${{ secrets.SERVICE_ACCOUNT_JSON }}' > "Skip Tracing/service-account.json"
         shell: bash
 
       - name: Verify service account credentials
