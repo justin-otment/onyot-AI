@@ -56,18 +56,13 @@ jobs:
           }
         shell: powershell
 
-      - name: Clear expired token file
-        run: |
-          if (Test-Path "Skip Tracing\token.json") {
-            Remove-Item "Skip Tracing\token.json"
-            Write-Output "Removed expired token.json"
-          }
-        shell: powershell
-
-      - name: Set environment variables
-        run: |
-          echo "GOOGLE_APPLICATION_CREDENTIALS=Skip Tracing\credentials.json" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
-        shell: powershell
+      - name: Cache OAuth Token
+        uses: actions/cache@v3
+        with:
+          path: Skip Tracing/token.json
+          key: ${{ runner.os }}-oauth-token-${{ hashFiles('Skip Tracing/credentials.json') }}
+          restore-keys: |
+            ${{ runner.os }}-oauth-token-
 
       - name: Debug logs
         run: |
