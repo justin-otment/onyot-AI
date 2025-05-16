@@ -19,7 +19,7 @@ from googleapiclient.discovery import build
 # Define constants
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
-TOKEN_PATH = "Skip Tracing/token.json"  # Adjust based on actual file location
+TOKEN_PATH = os.path.join(BASE_DIR, "token.json")  # Adjust based on actual file location
 GECKODRIVER_PATH = "C:\\GeckoDriver\\geckodriver.exe"
 
 # Verify credential file existence
