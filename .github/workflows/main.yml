@@ -60,6 +60,14 @@ jobs:
           }
         shell: powershell
 
+      - name: Clear expired token file
+        run: |
+          if (Test-Path "Skip Tracing\token.json") {
+            Remove-Item "Skip Tracing\token.json"
+            Write-Output "Expired token.json removed."
+          }
+        shell: powershell
+
       - name: Set environment variables
         run: |
           echo "GOOGLE_APPLICATION_CREDENTIALS=Skip Tracing\credentials.json" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
