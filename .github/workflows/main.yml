@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         script:
-          - "Skip Tracer/truppl_parser.py"
+          - "truppl_parser.py"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
