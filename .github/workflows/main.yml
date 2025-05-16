@@ -48,10 +48,10 @@ jobs:
           C:\GeckoDriver\geckodriver.exe --version
         shell: powershell
 
-      - name: Verify credentials existence
+      - name: Verify service account credentials
         run: |
-          if (!(Test-Path "Skip Tracing/credentials.json")) {
-            Write-Output "ERROR: credentials.json is missing! Ensure it exists in the project root."
+          if (!(Test-Path "Skip Tracing/service-account.json")) {
+            Write-Output "ERROR: service-account.json is missing! Ensure it exists in the project root."
             exit 1
           }
         shell: powershell
