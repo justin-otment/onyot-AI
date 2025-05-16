@@ -1,7 +1,5 @@
 import os
 import time
-import json
-import requests
 import urllib3
 import ssl
 from selenium import webdriver
@@ -14,7 +12,7 @@ from urllib3.exceptions import ProtocolError
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
+import json
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 # Define constants
@@ -28,14 +26,21 @@ context = ssl.create_default_context()
 context.check_hostname = False
 context.verify_mode = ssl.CERT_NONE
 
-SERVICE_ACCOUNT_PATH = os.path.join(BASE_DIR, "service-account.json")  # Path to your service account file
+SERVICE_ACCOUNT_PATH = os.path.join(BASE_DIR, "service-account.json")
 
 def authenticate_google_sheets():
     if not os.path.exists(SERVICE_ACCOUNT_PATH):
         raise Exception(f"Google Sheets authentication failed: Service account file not found at {SERVICE_ACCOUNT_PATH}")
 
+    # Verify JSON file integrity before loading
+    try:
+        with open(SERVICE_ACCOUNT_PATH, "r") as f:
+            json.load(f)  # Ensure it's a valid JSON file
+    except json.JSONDecodeError:
+        raise Exception("Error: service-account.json is corrupted or improperly formatted.")
+
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_PATH, scopes=["https://www.googleapis.com/auth/spreadsheets"])
-    
+
     return build("sheets", "v4", credentials=creds)
 
 # Fetch and update data in Google Sheets
@@ -45,15 +50,21 @@ def fetch_data_and_update_sheet():
     print("Authentication successful!")
     sheet = sheets_service.spreadsheets()
 
-    names_range = "Cape Coral - ArcGIS_LANDonly!A2:A2500"
-    dates_range = "Cape Coral - ArcGIS_LANDonly!E2:E2500"
+    if not SHEET_ID or not SHEET_NAME:
+        raise Exception("Error: SHEET_ID or SHEET_NAME is not defined!")
+
+    names_range = f"{SHEET_NAME}!A2:A2500"
+    dates_range = f"{SHEET_NAME}!E2:E2500"
 
     try:
         print("Fetching data from Google Sheets...")
-        names_result = sheet.values().get(spreadsheetId="1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A", range=names_range).execute()
-        dates_result = sheet.values().get(spreadsheetId="1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A", range=dates_range).execute()
+        names_result = sheet.values().get(spreadsheetId=SHEET_ID, range=names_range).execute()
+        dates_result = sheet.values().get(spreadsheetId=SHEET_ID, range=dates_range).execute()
+    except googleapiclient.errors.HttpError as e:
+        print(f"HTTP Error fetching data from Google Sheets: {e}")
+        return
     except Exception as e:
-        print(f"Error fetching data from Google Sheets: {e}")
+        print(f"Unexpected error fetching data from Google Sheets: {e}")
         return
 
     names_data = names_result.get("values", [])
@@ -114,19 +125,23 @@ def fetch_data_and_update_sheet():
             ).text
 
             sheet.values().update(
-                spreadsheetId="1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A",
-                range=f"Cape Coral - ArcGIS_LANDonly!E{i}",
+                spreadsheetId=SHEET_ID,
+                range=f"{SHEET_NAME}!E{i}",
                 valueInputOption="RAW",
                 body={"values": [[sale_date]]}
             ).execute()
 
             sheet.values().update(
-                spreadsheetId="1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A",
-                range=f"Cape Coral - ArcGIS_LANDonly!F{i}",
+                spreadsheetId=SHEET_ID,
+                range=f"{SHEET_NAME}!F{i}",
                 valueInputOption="RAW",
                 body={"values": [[sale_amount]]}
             ).execute()
 
+        except TimeoutException:
+            print(f"Error: Timeout waiting for data in row {i}. Skipping...")
+        except NoSuchElementException:
+            print(f"Error: Expected element missing in row {i}. Skipping...")
         except Exception as e:
             print(f"Error processing row {i}: {e}")
 
