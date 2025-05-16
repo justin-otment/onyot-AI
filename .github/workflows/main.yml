@@ -36,7 +36,12 @@ jobs:
       - name: Install Firefox and Geckodriver
         run: |
           choco install firefox -y
-          $GECKO_URL = "https://github.com/mozilla/geckodriver/releases/latest/download/geckodriver-v0.33.0-win64.zip"
+          
+          # Fetch latest Geckodriver release dynamically
+          $response = Invoke-RestMethod -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest"
+          $GECKO_VERSION = $response.tag_name -replace "v", ""
+          $GECKO_URL = "https://github.com/mozilla/geckodriver/releases/download/v$GECKO_VERSION/geckodriver-v$GECKO_VERSION-win64.zip"
+          
           Invoke-WebRequest -Uri $GECKO_URL -OutFile geckodriver.zip
           Expand-Archive geckodriver.zip -DestinationPath C:\GeckoDriver
           echo "C:\GeckoDriver" | Out-File -Encoding utf8 -Append $env:GITHUB_PATH
