@@ -15,12 +15,14 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 # Define constants
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
-TOKEN_PATH = os.path.join(BASE_DIR, "token.json")  # Adjust based on actual file location
+TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
 GECKODRIVER_PATH = "C:\\GeckoDriver\\geckodriver.exe"
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # Verify credential file existence
 if not os.path.exists(CREDENTIALS_PATH):
@@ -35,47 +37,36 @@ context = ssl.create_default_context()
 context.check_hostname = False
 context.verify_mode = ssl.CERT_NONE
 
-# Function to request with retries for webpage access
-def make_request_with_retries(url, retries=3, backoff_factor=1):
-    http = urllib3.PoolManager()
-    attempt = 0
-    while attempt < retries:
-        try:
-            response = http.request('GET', url)
-            if response.status == 200:
-                return response.data
-        except ProtocolError as e:
-            print(f"Attempt {attempt + 1} failed: {e}")
-            attempt += 1
-            sleep_time = backoff_factor * (2 ** attempt)
-            print(f"Retrying in {sleep_time} seconds...")
-            time.sleep(sleep_time)
-    raise Exception(f"Failed to fetch {url} after {retries} attempts.")
-
-# Google Sheets setup
-SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
-SHEET_NAME = "'Cape Coral - ArcGIS_LANDonly'"  # Ensure sheet name is properly formatted
-
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-
+# Authenticate with Google Sheets API
 def authenticate_google_sheets():
     creds = None
 
-    # Load existing token if available
-    if os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+    # Force fresh authentication inside GitHub Actions
+    if os.getenv("GITHUB_ACTIONS") == "true":
+        print("Running inside GitHub Actions. Using console-based authentication...")
+        flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
+        creds = flow.run_console()
 
-    # Refresh or request new credentials
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())  # Refresh expired token
-        else:
+    else:
+        # Remove expired OAuth token if it exists
+        if os.path.exists(TOKEN_PATH):
+            try:
+                creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+                if creds.expired and creds.refresh_token:
+                    creds.refresh(Request())  # Refresh token if needed
+            except:
+                print("Token expired or invalid. Generating a new one...")
+                os.remove(TOKEN_PATH)
+
+        # Request new token if not valid
+        if not creds or not creds.valid:
             flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
-            creds = flow.run_local_server(port=0)  # User must approve access
+            creds = flow.run_local_server(port=0)  # Requires manual approval
 
-        # Save new token for future use
-        with open(TOKEN_PATH, "w") as token:
-            token.write(creds.to_json())
+            # Save new token locally (only for local executions)
+            if os.getenv("GITHUB_ACTIONS") != "true":
+                with open(TOKEN_PATH, "w") as token:
+                    token.write(creds.to_json())
 
     return build("sheets", "v4", credentials=creds)
 
@@ -86,17 +77,14 @@ def fetch_data_and_update_sheet():
     print("Authentication successful!")
     sheet = sheets_service.spreadsheets()
 
-    if not SHEET_NAME or not SHEET_ID:
-        raise Exception("Error: SHEET_NAME or SHEET_ID is not defined!")
-
-    names_range = f"{SHEET_NAME}!A2:A2500"
-    dates_range = f"{SHEET_NAME}!E2:E2500"
+    names_range = "Cape Coral - ArcGIS_LANDonly!A2:A2500"
+    dates_range = "Cape Coral - ArcGIS_LANDonly!E2:E2500"
 
     try:
         print("Fetching data from Google Sheets...")
-        names_result = sheet.values().get(spreadsheetId=SHEET_ID, range=names_range).execute(timeout=60)
-        dates_result = sheet.values().get(spreadsheetId=SHEET_ID, range=dates_range).execute(timeout=60)
-    except googleapiclient.errors.HttpError as e:
+        names_result = sheet.values().get(spreadsheetId="1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A", range=names_range).execute()
+        dates_result = sheet.values().get(spreadsheetId="1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A", range=dates_range).execute()
+    except Exception as e:
         print(f"Error fetching data from Google Sheets: {e}")
         return
 
@@ -126,7 +114,7 @@ def fetch_data_and_update_sheet():
         options = webdriver.FirefoxOptions()
         options.add_argument("--headless")
 
-        service = Service(GECKODRIVER_PATH)  # Ensure path works in Windows
+        service = Service(GECKODRIVER_PATH)
         driver = webdriver.Firefox(service=service, options=options)
 
         try:
@@ -150,14 +138,6 @@ def fetch_data_and_update_sheet():
             ).get_attribute('href')
             driver.get(href)
 
-            img_element = WebDriverWait(driver, 30).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, '#SalesHyperLink > img'))
-            )
-            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", img_element)
-            time.sleep(1)
-            driver.execute_script("arguments[0].click();", img_element)
-            time.sleep(1)
-
             sale_date = WebDriverWait(driver, 30).until(
                 EC.presence_of_element_located((By.XPATH, '//*[@id="SalesDetails"]/div[3]/table/tbody/tr[2]/td[2]'))
             ).text
@@ -166,23 +146,19 @@ def fetch_data_and_update_sheet():
             ).text
 
             sheet.values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!E{i}",
+                spreadsheetId="1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A",
+                range=f"Cape Coral - ArcGIS_LANDonly!E{i}",
                 valueInputOption="RAW",
                 body={"values": [[sale_date]]}
             ).execute()
 
             sheet.values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!F{i}",
+                spreadsheetId="1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A",
+                range=f"Cape Coral - ArcGIS_LANDonly!F{i}",
                 valueInputOption="RAW",
                 body={"values": [[sale_amount]]}
             ).execute()
 
-        except TimeoutException:
-            print(f"Error: Element timeout in row {i}. Skipping...")
-        except NoSuchElementException:
-            print(f"Error: Missing expected element in row {i}. Skipping...")
         except Exception as e:
             print(f"Error processing row {i}: {e}")
 
