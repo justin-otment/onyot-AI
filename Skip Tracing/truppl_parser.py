@@ -14,10 +14,13 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Define constants
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SERVICE_ACCOUNT_PATH = os.path.join(BASE_DIR, "service-account.json")
+SERVICE_ACCOUNT_PATH = os.getenv("SERVICE_ACCOUNT_JSON")
 GECKODRIVER_PATH = "C:\\GeckoDriver\\geckodriver.exe"
 
 # Google Sheets setup
