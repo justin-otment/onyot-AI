@@ -22,9 +22,6 @@ load_dotenv()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SERVICE_ACCOUNT_JSON = os.getenv("SERVICE_ACCOUNT_JSON")
 
-if not SERVICE_ACCOUNT_JSON:
-    raise Exception("Error: SERVICE_ACCOUNT_JSON secret is missing!")
-
 # Load service account JSON directly from environment variable
 creds = Credentials.from_service_account_info(json.loads(SERVICE_ACCOUNT_JSON), scopes=SCOPES)
 sheets_service = build("sheets", "v4", credentials=creds)
