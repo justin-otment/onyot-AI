@@ -1,5 +1,7 @@
 import os
+import json
 import time
+import requests
 import urllib3
 import ssl
 from selenium import webdriver
@@ -8,14 +10,10 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from urllib3.exceptions import ProtocolError
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-import json
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from googleapiclient.errors import HttpError
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 # Define constants
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -23,32 +21,25 @@ SERVICE_ACCOUNT_PATH = os.path.join(BASE_DIR, "service-account.json")
 GECKODRIVER_PATH = "C:\\GeckoDriver\\geckodriver.exe"
 
 # Google Sheets setup
-SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"  # Ensure correct spreadsheet ID
-SHEET_NAME = "Cape Coral - ArcGIS_LANDonly"  # Ensure correct sheet name
+SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
+SHEET_NAME = "Cape Coral - ArcGIS_LANDonly"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# Disable SSL verification temporarily (use only for testing)
-os.environ['NO_PROXY'] = 'localhost,127.0.0.1'
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-context = ssl.create_default_context()
-context.check_hostname = False
-context.verify_mode = ssl.CERT_NONE
+# Verify service account file existence
+if not os.path.exists(SERVICE_ACCOUNT_PATH):
+    raise Exception(f"Google Sheets authentication failed: Service account file not found at {SERVICE_ACCOUNT_PATH}")
 
-SERVICE_ACCOUNT_PATH = os.path.join(BASE_DIR, "service-account.json")
+print(f"Using credentials from: {SERVICE_ACCOUNT_PATH}")
 
+# Authenticate with Google Sheets API
 def authenticate_google_sheets():
-    if not os.path.exists(SERVICE_ACCOUNT_PATH):
-        raise Exception(f"Google Sheets authentication failed: Service account file not found at {SERVICE_ACCOUNT_PATH}")
-
-    # Verify JSON file integrity before loading
     try:
         with open(SERVICE_ACCOUNT_PATH, "r") as f:
-            json.load(f)  # Ensure it's a valid JSON file
+            json.load(f)  # Validate JSON integrity
     except json.JSONDecodeError:
         raise Exception("Error: service-account.json is corrupted or improperly formatted.")
 
-    creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_PATH, scopes=["https://www.googleapis.com/auth/spreadsheets"])
-
+    creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_PATH, scopes=SCOPES)
     return build("sheets", "v4", credentials=creds)
 
 # Fetch and update data in Google Sheets
@@ -68,7 +59,7 @@ def fetch_data_and_update_sheet():
         print("Fetching data from Google Sheets...")
         names_result = sheet.values().get(spreadsheetId=SHEET_ID, range=names_range).execute()
         dates_result = sheet.values().get(spreadsheetId=SHEET_ID, range=dates_range).execute()
-    except googleapiclient.errors.HttpError as e:
+    except HttpError as e:
         print(f"HTTP Error fetching data from Google Sheets: {e}")
         return
     except Exception as e:
