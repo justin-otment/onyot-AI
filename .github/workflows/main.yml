@@ -46,24 +46,12 @@ jobs:
           Expand-Archive geckodriver.zip -DestinationPath C:\GeckoDriver
           echo "C:\GeckoDriver" | Out-File -Encoding utf8 -Append $env:GITHUB_PATH
           C:\GeckoDriver\geckodriver.exe --version
-        shell: powershell
+        shell: powershell 
 
-      - name: Create directory for service account file
-        run: mkdir -p "Skip Tracing"
-        shell: bash
-
-      - name: Write service account JSON secret to file
+      - name: Set environment variables
         run: |
-          echo '${{ secrets.SERVICE_ACCOUNT_JSON }}' > "Skip Tracing/service-account.json"
+          echo "SERVICE_ACCOUNT_JSON=${{ secrets.SERVICE_ACCOUNT_JSON }}" >> $GITHUB_ENV
         shell: bash
-
-      - name: Verify service account credentials
-        run: |
-          if (!(Test-Path "Skip Tracing/service-account.json")) {
-            Write-Output "ERROR: service-account.json is missing! Ensure it exists in the project root."
-            exit 1
-          }
-        shell: powershell
 
       - name: Remove expired OAuth token
         run: |
