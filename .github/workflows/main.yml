@@ -1,4 +1,4 @@
-name: Run Multiple Python Scripts
+name: Run Python Automation Script
 
 on:
   push:
@@ -7,12 +7,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  run-scripts:
+  run-python-script:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        script:
-          - "truppl_parser.py"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -20,37 +16,71 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.x'
+          python-version: '3.10'
 
-      - name: Set Python UTF-8 Encoding
-        run: echo "PYTHONIOENCODING=UTF-8" >> $GITHUB_ENV
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           if (Test-Path requirements.txt) { pip install -r requirements.txt }
+          python -m pip install nest_asyncio google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client selenium
         shell: powershell
 
-      - name: Install Firefox and GeckoDriver (Windows)
+      - name: Install Firefox and Geckodriver
         run: |
-          # Install Firefox
           choco install firefox -y
-
-          # Fetch the latest GeckoDriver version (no authentication)
-          $response = Invoke-WebRequest -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest" | ConvertFrom-Json
+          
+          # Fetch latest Geckodriver release dynamically
+          $response = Invoke-RestMethod -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest"
           $GECKO_VERSION = $response.tag_name -replace "v", ""
           $GECKO_URL = "https://github.com/mozilla/geckodriver/releases/download/v$GECKO_VERSION/geckodriver-v$GECKO_VERSION-win64.zip"
-
-          # Download and extract GeckoDriver
+          
           Invoke-WebRequest -Uri $GECKO_URL -OutFile geckodriver.zip
           Expand-Archive geckodriver.zip -DestinationPath C:\GeckoDriver
-
-          # Add GeckoDriver to PATH for this session
-          $env:PATH += ";C:\GeckoDriver"
-
-          # Verify installation
+          echo "C:\GeckoDriver" | Out-File -Encoding utf8 -Append $env:GITHUB_PATH
           C:\GeckoDriver\geckodriver.exe --version
         shell: powershell
 
+      - name: Create directory for service account file
+        run: mkdir -p "Skip Tracing"
+        shell: bash
+
+      - name: Write service account JSON secret to file
+        run: |
+          echo '${{ secrets.SERVICE_ACCOUNT_JSON }}' > "Skip Tracing/service-account.json"
+        shell: bash
+
+      - name: Verify service account credentials
+        run: |
+          if (!(Test-Path "Skip Tracing/service-account.json")) {
+            Write-Output "ERROR: service-account.json is missing! Ensure it exists in the project root."
+            exit 1
+          }
+        shell: powershell
+
+      - name: Remove expired OAuth token
+        run: |
+          if (Test-Path "Skip Tracing/token.json")) {
+            Remove-Item "Skip Tracing/token.json"
+            Write-Output "Removed expired token.json"
+          }
+        shell: powershell
+
+      - name: Debug logs
+        run: |
+          echo "Starting script execution at $(Get-Date)"
+        shell: powershell
+
+      - name: Verify script location
+        run: Get-ChildItem -Path "Skip Tracing" -Recurse
+        shell: powershell
+
       - name: Run Python script
-        run: python "${{ matrix.script }}"
+        run: python "Skip Tracing/truppl_parser.py"
