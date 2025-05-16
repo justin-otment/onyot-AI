@@ -13,22 +13,13 @@ from selenium.webdriver.support import expected_conditions as EC
 from urllib3.exceptions import ProtocolError
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
+from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 # Define constants
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
-TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
 GECKODRIVER_PATH = "C:\\GeckoDriver\\geckodriver.exe"
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-
-# Verify credential file existence
-if not os.path.exists(CREDENTIALS_PATH):
-    raise Exception(f"Google Sheets authentication failed: Credential file not found at {CREDENTIALS_PATH}")
-
-print(f"Using credentials from: {CREDENTIALS_PATH}")
 
 # Disable SSL verification temporarily (use only for testing)
 os.environ['NO_PROXY'] = 'localhost,127.0.0.1'
@@ -37,37 +28,14 @@ context = ssl.create_default_context()
 context.check_hostname = False
 context.verify_mode = ssl.CERT_NONE
 
-# Authenticate with Google Sheets API
+SERVICE_ACCOUNT_PATH = os.path.join(BASE_DIR, "service-account.json")  # Path to your service account file
+
 def authenticate_google_sheets():
-    creds = None
+    if not os.path.exists(SERVICE_ACCOUNT_PATH):
+        raise Exception(f"Google Sheets authentication failed: Service account file not found at {SERVICE_ACCOUNT_PATH}")
 
-    # Force fresh authentication inside GitHub Actions
-    if os.getenv("GITHUB_ACTIONS") == "true":
-        print("Running inside GitHub Actions. Using console-based authentication...")
-        flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
-        creds = flow.run_console()
-
-    else:
-        # Remove expired OAuth token if it exists
-        if os.path.exists(TOKEN_PATH):
-            try:
-                creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-                if creds.expired and creds.refresh_token:
-                    creds.refresh(Request())  # Refresh token if needed
-            except:
-                print("Token expired or invalid. Generating a new one...")
-                os.remove(TOKEN_PATH)
-
-        # Request new token if not valid
-        if not creds or not creds.valid:
-            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
-            creds = flow.run_local_server(port=0)  # Requires manual approval
-
-            # Save new token locally (only for local executions)
-            if os.getenv("GITHUB_ACTIONS") != "true":
-                with open(TOKEN_PATH, "w") as token:
-                    token.write(creds.to_json())
-
+    creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_PATH, scopes=["https://www.googleapis.com/auth/spreadsheets"])
+    
     return build("sheets", "v4", credentials=creds)
 
 # Fetch and update data in Google Sheets
