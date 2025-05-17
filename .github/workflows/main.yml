@@ -52,13 +52,13 @@ jobs:
         run: mkdir -p "Skip Tracing"
         shell: bash
 
-      - name: Write service account JSON secret to file
+      - name: Decode and Save Service Account JSON Secret
         run: |
           if [ -z "${{ secrets.SERVICE_ACCOUNT_JSON }}" ]; then
             echo "ERROR: SERVICE_ACCOUNT_JSON secret is missing in GitHub Actions!"
             exit 1
           fi
-          echo '${{ secrets.SERVICE_ACCOUNT_JSON }}' > "Skip Tracing/service-account.json"
+          echo "${{ secrets.SERVICE_ACCOUNT_JSON }}" | base64 --decode > "Skip Tracing/service-account.json"
         shell: bash
 
       - name: Verify service account credentials
@@ -88,7 +88,7 @@ jobs:
 
       - name: Set environment variables
         run: |
-          echo "SERVICE_ACCOUNT_JSON=${{ secrets.SERVICE_ACCOUNT_JSON }}" >> $GITHUB_ENV
+          echo "SERVICE_ACCOUNT_JSON=${{ secrets.SERVICE_ACCOUNT_JSON }}" | base64 --decode >> $GITHUB_ENV
         shell: bash
 
       - name: Run Python script
