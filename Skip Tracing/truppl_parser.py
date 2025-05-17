@@ -71,8 +71,8 @@ def fetch_data_and_update_sheet():
     if not SHEET_ID or not SHEET_NAME:
         raise Exception("Error: SHEET_ID or SHEET_NAME is not defined!")
 
-    names_range = f"{SHEET_NAME_QUOTED}!A2:A2500"
-    dates_range = f"{SHEET_NAME_QUOTED}!E2:E2500"
+    names_range = f"{SHEET_NAME}!A2:A2500"
+    dates_range = f"{SHEET_NAME}!E2:E2500"
 
     try:
         print("Fetching sheet data...")
