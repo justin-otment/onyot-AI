@@ -67,7 +67,7 @@ jobs:
 
       - name: Remove expired OAuth token
         run: |
-          if (Test-Path "Skip Tracing/token.json")) {
+          if (Test-Path "Skip Tracing/token.json") {
             Remove-Item "Skip Tracing/token.json"
             Write-Output "Removed expired token.json"
           }
