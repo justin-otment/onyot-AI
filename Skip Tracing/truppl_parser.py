@@ -49,9 +49,9 @@ SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "Cape Coral - ArcGIS_LANDonly"  # Ensure exact match with Google Sheets tab
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# Corrected range formatting with single quotes around sheet name
-names_range = f"'{SHEET_NAME}'!A2:A2500"
-dates_range = f"'{SHEET_NAME}'!E2:E2500"
+# Corrected range formatting **without single quotes**
+names_range = f"{SHEET_NAME}!A2:A2500"
+dates_range = f"{SHEET_NAME}!E2:E2500"
 
 # Authenticate with Google Sheets API
 def authenticate_google_sheets():
@@ -140,14 +140,14 @@ def fetch_data_and_update_sheet():
 
             sheet.values().update(
                 spreadsheetId=SHEET_ID,
-                range=f"'{SHEET_NAME}'!E{i}",
+                range=f"{SHEET_NAME}!E{i}",
                 valueInputOption="RAW",
                 body={"values": [[sale_date]]}
             ).execute()
 
             sheet.values().update(
                 spreadsheetId=SHEET_ID,
-                range=f"'{SHEET_NAME}'!F{i}",
+                range=f"{SHEET_NAME}!F{i}",
                 valueInputOption="RAW",
                 body={"values": [[sale_amount]]}
             ).execute()
