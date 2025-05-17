@@ -26,8 +26,8 @@ try:
     with open(ENCODED_JSON_PATH, "r") as file:
         encoded_json = file.read().strip()
 
-    if not encoded_json or not all(c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=" for c in encoded_json):
-        raise Exception("Error: service-account_base64.txt contains invalid base64 characters!")
+    if not encoded_json:
+        raise Exception("Error: service-account_base64.txt is empty!")
 
     SERVICE_ACCOUNT_JSON = base64.b64decode(encoded_json).decode("utf-8")
 except FileNotFoundError:
@@ -46,10 +46,10 @@ except json.JSONDecodeError:
 
 # Google Sheets setup
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
-SHEET_NAME = "Cape Coral - ArcGIS_LANDonly"  # Ensure this matches exactly in Google Sheets
+SHEET_NAME = "Cape Coral - ArcGIS_LANDonly"  # Ensure exact match with the Google Sheets tab name
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# Corrected range formatting WITHOUT extra quotes or modifications
+# Corrected range formatting with single quotes around sheet name
 names_range = f"'{SHEET_NAME}'!A2:A2500"
 dates_range = f"'{SHEET_NAME}'!E2:E2500"
 
@@ -71,9 +71,8 @@ def fetch_data_and_update_sheet():
     if not SHEET_ID or not SHEET_NAME:
         raise Exception("Error: SHEET_ID or SHEET_NAME is not defined!")
 
-    # Corrected range formatting for Google Sheets API
-    names_range = f"'{SHEET_NAME}'!A2:A2500"
-    dates_range = f"'{SHEET_NAME}'!E2:E2500"
+    print(f"Using range for names: {names_range}")  # Debugging output
+    print(f"Using range for dates: {dates_range}")  # Debugging output
 
     try:
         print("Fetching sheet data...")
@@ -141,14 +140,14 @@ def fetch_data_and_update_sheet():
 
             sheet.values().update(
                 spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME_QUOTED}!E{i}",
+                range=f"'{SHEET_NAME}'!E{i}",
                 valueInputOption="RAW",
                 body={"values": [[sale_date]]}
             ).execute()
 
             sheet.values().update(
                 spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME_QUOTED}!F{i}",
+                range=f"'{SHEET_NAME}'!F{i}",
                 valueInputOption="RAW",
                 body={"values": [[sale_amount]]}
             ).execute()
