@@ -59,9 +59,9 @@ jobs:
             exit 1
           fi
 
-          # Validate if file contains valid base64 format before decoding
+          # Validate the encoding before decoding
           if ! base64 --decode "service-account_base64.txt" > "Skip Tracing/service-account.json"; then
-            echo "ERROR: Failed to decode service-account_base64.txt. Verify it is correctly base64-encoded!"
+            echo "ERROR: Failed to decode service-account_base64.txt. Verify that it is correctly base64-encoded!"
             exit 1
           fi
 
@@ -71,14 +71,6 @@ jobs:
             exit 1
           fi
         shell: bash
-
-      - name: Verify service account credentials
-        run: |
-          if (!(Test-Path "Skip Tracing/service-account.json")) {
-            Write-Output "ERROR: service-account.json is missing! Ensure it exists in the project root."
-            exit 1
-          }
-        shell: powershell
 
       - name: Remove expired OAuth token
         run: |
