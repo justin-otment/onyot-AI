@@ -52,6 +52,14 @@ jobs:
         run: mkdir -p "Skip Tracing"
         shell: bash
 
+      - name: Verify `SERVICE_ACCOUNT_JSON` Secret Exists
+        run: |
+          if [[ -z "${{ secrets.SERVICE_ACCOUNT_JSON }}" ]]; then
+            echo "ERROR: SERVICE_ACCOUNT_JSON secret is missing in GitHub Actions!"
+            exit 1
+          fi
+        shell: bash
+
       - name: Write service account JSON secret to file
         run: |
           echo '${{ secrets.SERVICE_ACCOUNT_JSON }}' > "Skip Tracing/service-account.json"
