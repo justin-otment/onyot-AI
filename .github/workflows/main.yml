@@ -52,13 +52,13 @@ jobs:
         run: mkdir -p "Skip Tracing"
         shell: bash
 
-      - name: Decode and Save Service Account JSON Secret
+      - name: Decode and Save Service Account JSON from `service-account_base64.txt`
         run: |
-          if [ -z "${{ secrets.SERVICE_ACCOUNT_JSON }}" ]; then
-            echo "ERROR: SERVICE_ACCOUNT_JSON secret is missing in GitHub Actions!"
+          if [ ! -f "service-account_base64.txt" ]; then
+            echo "ERROR: service-account_base64.txt is missing from the root directory!"
             exit 1
           fi
-          echo "${{ secrets.SERVICE_ACCOUNT_JSON }}" | base64 --decode > "Skip Tracing/service-account.json"
+          base64 --decode "service-account_base64.txt" > "Skip Tracing/service-account.json"
         shell: bash
 
       - name: Verify service account credentials
@@ -85,11 +85,6 @@ jobs:
       - name: Verify script location
         run: Get-ChildItem -Path "Skip Tracing" -Recurse
         shell: powershell
-
-      - name: Set environment variables
-        run: |
-          echo "SERVICE_ACCOUNT_JSON=${{ secrets.SERVICE_ACCOUNT_JSON }}" | base64 --decode >> $GITHUB_ENV
-        shell: bash
 
       - name: Run Python script
         run: python "Skip Tracing/truppl_parser.py"
