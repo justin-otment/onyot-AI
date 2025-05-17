@@ -52,26 +52,20 @@ jobs:
         run: mkdir -p "Skip Tracing"
         shell: bash
 
-      - name: Verify `SERVICE_ACCOUNT_JSON` Secret Exists
-        run: |
-          if [[ -z "${{ secrets.SERVICE_ACCOUNT_JSON }}" ]]; then
-            echo "ERROR: SERVICE_ACCOUNT_JSON secret is missing in GitHub Actions!"
-            exit 1
-          fi
-        shell: bash
-
       - name: Write service account JSON secret to file
         run: |
           echo '${{ secrets.SERVICE_ACCOUNT_JSON }}' > "Skip Tracing/service-account.json"
         shell: bash
 
-      - name: Verify service account credentials
+      - name: Verify `SERVICE_ACCOUNT_JSON` Secret Exists
         run: |
-          if (!(Test-Path "Skip Tracing/service-account.json")) {
-            Write-Output "ERROR: service-account.json is missing! Ensure it exists in the project root."
+          if [ -z "${SERVICE_ACCOUNT_JSON}" ]; then
+            echo "ERROR: SERVICE_ACCOUNT_JSON secret is missing in GitHub Actions!"
             exit 1
-          }
-        shell: powershell
+          fi
+        shell: bash
+        env:
+          SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
 
       - name: Remove expired OAuth token
         run: |
