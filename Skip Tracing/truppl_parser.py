@@ -50,16 +50,13 @@ SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "Cape Coral - ArcGIS_LANDonly"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# Authenticate with Google Sheets API
 def authenticate_google_sheets():
     try:
-        with open(SERVICE_ACCOUNT_PATH, "r") as f:
-            json.load(f)  # Validate JSON integrity
+        json_data = json.loads(SERVICE_ACCOUNT_JSON)  # Load JSON from environment
+        creds = Credentials.from_service_account_info(json_data, scopes=SCOPES)
+        return build("sheets", "v4", credentials=creds)
     except json.JSONDecodeError:
-        raise Exception("Error: service-account.json is corrupted or improperly formatted.")
-
-    creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_PATH, scopes=SCOPES)
-    return build("sheets", "v4", credentials=creds)
+        raise Exception("Error: SERVICE_ACCOUNT_JSON is corrupted or improperly formatted.")
 
 # Fetch and update data in Google Sheets
 def fetch_data_and_update_sheet():
