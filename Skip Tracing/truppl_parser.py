@@ -20,17 +20,27 @@ load_dotenv()
 
 # Define constants
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Load secret from environment
 SERVICE_ACCOUNT_JSON = os.getenv("SERVICE_ACCOUNT_JSON")
 
 if not SERVICE_ACCOUNT_JSON or SERVICE_ACCOUNT_JSON.strip() == "":
     raise Exception("Error: SERVICE_ACCOUNT_JSON is missing or empty!")
 
-print(f"DEBUG: Loaded SERVICE_ACCOUNT_JSON (first 100 chars): {SERVICE_ACCOUNT_JSON[:100]}...")  # Debugging output
+print(f"DEBUG: Loaded SERVICE_ACCOUNT_JSON (first 100 chars): {SERVICE_ACCOUNT_JSON[:100]}...")
 
 try:
-    creds = Credentials.from_service_account_info(json.loads(SERVICE_ACCOUNT_JSON), scopes=SCOPES)
-except json.JSONDecodeError:
-    raise Exception("Error: SERVICE_ACCOUNT_JSON is improperly formatted or corrupted!")
+    # Ensure valid JSON
+    json_data = json.loads(SERVICE_ACCOUNT_JSON)
+    if not isinstance(json_data, dict):
+        raise Exception("Error: SERVICE_ACCOUNT_JSON is not a valid dictionary structure!")
+
+    creds = Credentials.from_service_account_info(json_data, scopes=["https://www.googleapis.com/auth/spreadsheets"])
+    sheets_service = build("sheets", "v4", credentials=creds)
+
+except json.JSONDecodeError as e:
+    raise Exception(f"Error: SERVICE_ACCOUNT_JSON is improperly formatted or corrupted! Details: {e}")
+except Exception as e:
+    raise Exception(f"Unexpected error loading SERVICE_ACCOUNT_JSON: {e}")
     
 sheets_service = build("sheets", "v4", credentials=creds)
 GECKODRIVER_PATH = "C:\\GeckoDriver\\geckodriver.exe"
