@@ -22,13 +22,16 @@ load_dotenv()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SERVICE_ACCOUNT_JSON = os.getenv("SERVICE_ACCOUNT_JSON")
 
-if not SERVICE_ACCOUNT_JSON:
-    raise Exception("Error: SERVICE_ACCOUNT_JSON is missing or not set in GitHub Actions!")
+if not SERVICE_ACCOUNT_JSON or SERVICE_ACCOUNT_JSON.strip() == "":
+    raise Exception("Error: SERVICE_ACCOUNT_JSON is missing or empty!")
 
-    try:
-        creds = Credentials.from_service_account_info(json.loads(SERVICE_ACCOUNT_JSON), scopes=SCOPES)
-    except json.JSONDecodeError:
-        raise Exception("Error: SERVICE_ACCOUNT_JSON is improperly formatted or corrupted!")
+print(f"DEBUG: Loaded SERVICE_ACCOUNT_JSON (first 100 chars): {SERVICE_ACCOUNT_JSON[:100]}...")  # Debugging output
+
+try:
+    creds = Credentials.from_service_account_info(json.loads(SERVICE_ACCOUNT_JSON), scopes=SCOPES)
+except json.JSONDecodeError:
+    raise Exception("Error: SERVICE_ACCOUNT_JSON is improperly formatted or corrupted!")
+    
 sheets_service = build("sheets", "v4", credentials=creds)
 GECKODRIVER_PATH = "C:\\GeckoDriver\\geckodriver.exe"
 
