@@ -1,5 +1,6 @@
 import os
 import json
+import base64
 import time
 import requests
 import urllib3
@@ -14,41 +15,42 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
-from dotenv import load_dotenv
-
-
 
 # Define constants
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ENCODED_JSON_PATH = os.path.join(BASE_DIR, "service-account_base64.txt")
+GECKODRIVER_PATH = "C:\\GeckoDriver\\geckodriver.exe"
 
-load_dotenv()
-
-SERVICE_ACCOUNT_JSON = os.getenv("SERVICE_ACCOUNT_JSON")
-if not SERVICE_ACCOUNT_JSON or SERVICE_ACCOUNT_JSON.strip() == "":
-    raise Exception("Error: SERVICE_ACCOUNT_JSON is missing or empty!")
+# Read and decode service account JSON
+try:
+    with open(ENCODED_JSON_PATH, "r") as file:
+        encoded_json = file.read().strip()
+        SERVICE_ACCOUNT_JSON = base64.b64decode(encoded_json).decode("utf-8")
+except FileNotFoundError:
+    raise Exception("Error: service-account_base64.txt is missing!")
+except Exception as e:
+    raise Exception(f"Error reading service-account JSON: {e}")
 
 # Validate JSON structure
 try:
     json_data = json.loads(SERVICE_ACCOUNT_JSON)
     if not isinstance(json_data, dict):
-        raise Exception("Error: SERVICE_ACCOUNT_JSON is not a valid dictionary structure!")
-except json.JSONDecodeError as e:
-    raise Exception(f"Error: SERVICE_ACCOUNT_JSON is improperly formatted or corrupted! Details: {e}")
-    
-GECKODRIVER_PATH = "C:\\GeckoDriver\\geckodriver.exe"
+        raise Exception("Error: Decoded SERVICE_ACCOUNT_JSON is not a valid dictionary!")
+except json.JSONDecodeError:
+    raise Exception("Error: Decoded SERVICE_ACCOUNT_JSON is corrupted or improperly formatted!")
 
 # Google Sheets setup
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "Cape Coral - ArcGIS_LANDonly"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
+# Authenticate with Google Sheets API
 def authenticate_google_sheets():
     try:
-        json_data = json.loads(SERVICE_ACCOUNT_JSON)  # Load JSON from environment
         creds = Credentials.from_service_account_info(json_data, scopes=SCOPES)
         return build("sheets", "v4", credentials=creds)
-    except json.JSONDecodeError:
-        raise Exception("Error: SERVICE_ACCOUNT_JSON is corrupted or improperly formatted.")
+    except Exception as e:
+        raise Exception(f"Error authenticating Google Sheets API: {e}")
 
 # Fetch and update data in Google Sheets
 def fetch_data_and_update_sheet():
