@@ -46,12 +46,12 @@ except json.JSONDecodeError:
 
 # Google Sheets setup
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
-SHEET_NAME = "Cape Coral - ArcGIS_LANDonly"  # No need for additional quoting
+SHEET_NAME = "Cape Coral - ArcGIS_LANDonly"  # Ensure this matches exactly in Google Sheets
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# Corrected range formatting
-names_range = f"{SHEET_NAME}!A2:A2500"
-dates_range = f"{SHEET_NAME}!E2:E2500"
+# Corrected range formatting WITHOUT extra quotes or modifications
+names_range = f"'{SHEET_NAME}'!A2:A2500"
+dates_range = f"'{SHEET_NAME}'!E2:E2500"
 
 # Authenticate with Google Sheets API
 def authenticate_google_sheets():
