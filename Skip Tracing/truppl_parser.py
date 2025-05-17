@@ -26,7 +26,7 @@ SERVICE_ACCOUNT_JSON = os.getenv("SERVICE_ACCOUNT_JSON")
 if not SERVICE_ACCOUNT_JSON or SERVICE_ACCOUNT_JSON.strip() == "":
     raise Exception("Error: SERVICE_ACCOUNT_JSON is missing or empty!")
 
-print(f"DEBUG: Loaded SERVICE_ACCOUNT_JSON (first 100 chars): {SERVICE_ACCOUNT_JSON[:100]}...")
+print(f"DEBUG: Loaded SERVICE_ACCOUNT_JSON (first 200 chars): {SERVICE_ACCOUNT_JSON[:200]}...")  # Debugging output
 
 try:
     # Ensure valid JSON
