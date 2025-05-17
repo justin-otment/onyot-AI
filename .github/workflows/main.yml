@@ -59,16 +59,13 @@ jobs:
             exit 1
           fi
 
-          # Remove any unexpected whitespace/newlines before decoding
-          cat service-account_base64.txt | tr -d '\n' > clean_base64.txt
-
-          # Decode and verify JSON format
-          if ! base64 --decode "clean_base64.txt" > "Skip Tracing/service-account.json"; then
-            echo "ERROR: Failed to decode service-account_base64.txt. Ensure it is correctly encoded!"
+          # Read file without modifications and ensure it is correctly formatted
+          base64 --decode < service-account_base64.txt > "Skip Tracing/service-account.json" || {
+            echo "ERROR: Failed to decode service-account_base64.txt! Verify it is base64-encoded correctly."
             exit 1
-          fi
+          }
 
-          # Verify JSON integrity
+          # Validate JSON integrity
           if ! cat "Skip Tracing/service-account.json" | jq . > /dev/null 2>&1; then
             echo "ERROR: Decoded service-account.json is invalid JSON!"
             exit 1
