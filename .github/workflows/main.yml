@@ -58,7 +58,18 @@ jobs:
             echo "ERROR: service-account_base64.txt is missing from the root directory!"
             exit 1
           fi
-          base64 --decode "service-account_base64.txt" > "Skip Tracing/service-account.json"
+
+          # Validate if file contains valid base64 format before decoding
+          if ! base64 --decode "service-account_base64.txt" > "Skip Tracing/service-account.json"; then
+            echo "ERROR: Failed to decode service-account_base64.txt. Verify it is correctly base64-encoded!"
+            exit 1
+          fi
+
+          # Verify that `service-account.json` is valid JSON
+          if ! cat "Skip Tracing/service-account.json" | jq . > /dev/null 2>&1; then
+            echo "ERROR: Decoded service-account.json is not valid JSON!"
+            exit 1
+          fi
         shell: bash
 
       - name: Verify service account credentials
