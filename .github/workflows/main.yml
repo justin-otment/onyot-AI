@@ -90,5 +90,14 @@ jobs:
         run: Get-ChildItem -Path "Skip Tracing" -Recurse
         shell: powershell
 
+      - name: Set environment variables
+        run: |
+          if [[ -z "${{ secrets.SERVICE_ACCOUNT_JSON }}" ]]; then
+            echo "ERROR: SERVICE_ACCOUNT_JSON secret is missing in GitHub Actions!"
+            exit 1
+          fi
+          echo "SERVICE_ACCOUNT_JSON=${{ secrets.SERVICE_ACCOUNT_JSON }}" >> $GITHUB_ENV
+        shell: bash
+
       - name: Run Python script
         run: python "Skip Tracing/truppl_parser.py"
