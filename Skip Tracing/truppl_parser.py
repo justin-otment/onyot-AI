@@ -25,7 +25,12 @@ GECKODRIVER_PATH = "C:\\GeckoDriver\\geckodriver.exe"
 try:
     with open(ENCODED_JSON_PATH, "r") as file:
         encoded_json = file.read().strip()
-        SERVICE_ACCOUNT_JSON = base64.b64decode(encoded_json).decode("utf-8")
+
+    # Validate base64 format before decoding
+    if not encoded_json or not all(c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=" for c in encoded_json):
+        raise Exception("Error: service-account_base64.txt contains invalid base64 characters!")
+
+    SERVICE_ACCOUNT_JSON = base64.b64decode(encoded_json).decode("utf-8")
 except FileNotFoundError:
     raise Exception("Error: service-account_base64.txt is missing!")
 except Exception as e:
@@ -34,8 +39,12 @@ except Exception as e:
 # Validate JSON structure
 try:
     json_data = json.loads(SERVICE_ACCOUNT_JSON)
-    if not isinstance(json_data, dict):
-        raise Exception("Error: Decoded SERVICE_ACCOUNT_JSON is not a valid dictionary!")
+    
+    # Ensure required authentication fields exist
+    required_keys = ["type", "project_id", "private_key", "client_email"]
+    if not all(key in json_data for key in required_keys):
+        raise Exception("Error: Decoded SERVICE_ACCOUNT_JSON is missing required authentication fields!")
+
 except json.JSONDecodeError:
     raise Exception("Error: Decoded SERVICE_ACCOUNT_JSON is corrupted or improperly formatted!")
 
@@ -113,13 +122,14 @@ def fetch_data_and_update_sheet():
             )
             strap_input.send_keys(owner, Keys.RETURN)
 
+            # Handle popup warning if present
             try:
                 warning_button = WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.ID, "ctl00_BodyContentPlaceHolder_btnWarning"))
                 )
                 warning_button.click()
-            except:
-                print("No warning popup.")
+            except TimeoutException:
+                print("No warning popup detected.")
 
             href = WebDriverWait(driver, 30).until(
                 EC.presence_of_element_located((By.XPATH, '//*[@id="ctl00_BodyContentPlaceHolder_WebTab1"]/div/div[1]/div[1]/table/tbody/tr/td[4]/div/div[1]/a'))
