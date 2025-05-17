@@ -16,33 +16,25 @@ from googleapiclient.errors import HttpError
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from dotenv import load_dotenv
 
-load_dotenv()
+
 
 # Define constants
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# Load secret from environment
-SERVICE_ACCOUNT_JSON = os.getenv("SERVICE_ACCOUNT_JSON")
 
+load_dotenv()
+
+SERVICE_ACCOUNT_JSON = os.getenv("SERVICE_ACCOUNT_JSON")
 if not SERVICE_ACCOUNT_JSON or SERVICE_ACCOUNT_JSON.strip() == "":
     raise Exception("Error: SERVICE_ACCOUNT_JSON is missing or empty!")
 
-print(f"DEBUG: Loaded SERVICE_ACCOUNT_JSON (first 200 chars): {SERVICE_ACCOUNT_JSON[:200]}...")  # Debugging output
-
+# Validate JSON structure
 try:
-    # Ensure valid JSON
     json_data = json.loads(SERVICE_ACCOUNT_JSON)
     if not isinstance(json_data, dict):
         raise Exception("Error: SERVICE_ACCOUNT_JSON is not a valid dictionary structure!")
-
-    creds = Credentials.from_service_account_info(json_data, scopes=["https://www.googleapis.com/auth/spreadsheets"])
-    sheets_service = build("sheets", "v4", credentials=creds)
-
 except json.JSONDecodeError as e:
     raise Exception(f"Error: SERVICE_ACCOUNT_JSON is improperly formatted or corrupted! Details: {e}")
-except Exception as e:
-    raise Exception(f"Unexpected error loading SERVICE_ACCOUNT_JSON: {e}")
     
-sheets_service = build("sheets", "v4", credentials=creds)
 GECKODRIVER_PATH = "C:\\GeckoDriver\\geckodriver.exe"
 
 # Google Sheets setup
