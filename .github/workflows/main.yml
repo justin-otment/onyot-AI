@@ -54,13 +54,16 @@ jobs:
 
       - name: Decode and Save Service Account JSON from `service-account_base64.txt`
         run: |
-          if [ ! -f "service-account_base64.txt" ]; then
-            echo "ERROR: service-account_base64.txt is missing from the root directory!"
+          if [ ! -s "service-account_base64.txt" ]; then
+            echo "ERROR: service-account_base64.txt is missing or empty!"
             exit 1
           fi
 
-          # Validate base64 encoding before decoding
-          if ! base64 --decode "service-account_base64.txt" > "Skip Tracing/service-account.json"; then
+          # Remove any unexpected whitespace/newlines before decoding
+          cat service-account_base64.txt | tr -d '\n' > clean_base64.txt
+
+          # Decode and verify JSON format
+          if ! base64 --decode "clean_base64.txt" > "Skip Tracing/service-account.json"; then
             echo "ERROR: Failed to decode service-account_base64.txt. Ensure it is correctly encoded!"
             exit 1
           fi
