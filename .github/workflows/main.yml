@@ -52,25 +52,18 @@ jobs:
         run: mkdir -p "Skip Tracing"
         shell: bash
 
-      - name: Decode and Save Service Account JSON from `service-account_base64.txt`
+      - name: Decode service account from GitHub Secret
         run: |
-          if [ ! -s "service-account_base64.txt" ]; then
-            echo "ERROR: service-account_base64.txt is missing or empty!"
+          echo "${{ secrets.SERVICE_ACCOUNT_BASE64 }}" | base64 --decode > "Skip Tracing/service-account.json" || {
+            echo "ERROR: Failed to decode SERVICE_ACCOUNT_BASE64!"
             exit 1
-          fi
-
-          # Read file without modifications and ensure it is correctly formatted
-          base64 --decode < service-account_base64.txt > "Skip Tracing/service-account.json" || {
-            echo "ERROR: Failed to decode service-account_base64.txt! Verify it is base64-encoded correctly."
+          }
+      
+          jq . "Skip Tracing/service-account.json" > /dev/null 2>&1 || {
+            echo "ERROR: Decoded service-account.json is not valid JSON!"
             exit 1
           }
 
-          # Validate JSON integrity
-          if ! cat "Skip Tracing/service-account.json" | jq . > /dev/null 2>&1; then
-            echo "ERROR: Decoded service-account.json is invalid JSON!"
-            exit 1
-          fi
-        shell: bash
 
       - name: Remove expired OAuth token
         run: |
