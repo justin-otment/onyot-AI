@@ -49,9 +49,9 @@ SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "Cape Coral - ArcGIS_LANDonly"  # Ensure exact match with Google Sheets tab
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# Corrected range formatting **without single quotes**
-names_range = f"{SHEET_NAME}!A2:A2500"
-dates_range = f"{SHEET_NAME}!E2:E2500"
+# Corrected range formatting with single quotes around sheet name
+names_range = f"'{SHEET_NAME}'!A2:A2500"
+dates_range = f"'{SHEET_NAME}'!E2:E2500"
 
 # Authenticate with Google Sheets API
 def authenticate_google_sheets():
@@ -127,6 +127,11 @@ def fetch_data_and_update_sheet():
                 print("No warning popup detected.")
 
             href = WebDriverWait(driver, 30).until(
+                EC.presence_of_element_located((By.XPATH, '//*[@id="ctl00_BodyContentPlaceHolder_WebTab1"]/div/div[1]/div[1]/table/tbody/tr/td[4]/div/div[1]/a'))
+            ).get_attribute('href')
+            driver.get(href)
+
+            sale_date = WebDriverWait(driver, 30).until(
                 EC.presence_of_element_located((By.XPATH, '//*[@id="SalesDetails"]/div[3]/table/tbody/tr[2]/td[2]'))
             ).text
             sale_amount = WebDriverWait(driver, 30).until(
@@ -135,14 +140,14 @@ def fetch_data_and_update_sheet():
 
             sheet.values().update(
                 spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!E{i}",
+                range=f"'{SHEET_NAME}'!E{i}",
                 valueInputOption="RAW",
                 body={"values": [[sale_date]]}
             ).execute()
 
             sheet.values().update(
                 spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!F{i}",
+                range=f"'{SHEET_NAME}'!F{i}",
                 valueInputOption="RAW",
                 body={"values": [[sale_amount]]}
             ).execute()
