@@ -59,13 +59,13 @@ jobs:
             exit 1
           fi
 
-          # Check for valid base64 content before decoding
+          # Validate base64 encoding before decoding
           if ! base64 --decode "service-account_base64.txt" > "Skip Tracing/service-account.json"; then
             echo "ERROR: Failed to decode service-account_base64.txt. Ensure it is correctly encoded!"
             exit 1
           fi
 
-          # Validate JSON integrity
+          # Verify JSON integrity
           if ! cat "Skip Tracing/service-account.json" | jq . > /dev/null 2>&1; then
             echo "ERROR: Decoded service-account.json is invalid JSON!"
             exit 1
