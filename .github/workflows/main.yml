@@ -52,15 +52,22 @@ jobs:
         run: mkdir -p "Skip Tracing"
         shell: bash
 
-      - name: Decode service account from GitHub Secret
+      - name: Decode service-account_base64.txt to service-account.json
+        shell: pwsh
         run: |
-          echo "${{ secrets.SERVICE_ACCOUNT_BASE64 }}" | base64 --decode > "Skip Tracing/service-account.json" || {
-            echo "ERROR: Failed to decode SERVICE_ACCOUNT_BASE64!"
+          $base64Content = Get-Content "Skip Tracing/service-account_base64.txt" -Raw
+          if (-not $base64Content) {
+            Write-Error "ERROR: service-account_base64.txt is empty or missing!"
             exit 1
           }
       
-          jq . "Skip Tracing/service-account.json" > /dev/null 2>&1 || {
-            echo "ERROR: Decoded service-account.json is not valid JSON!"
+          [System.IO.File]::WriteAllBytes("Skip Tracing/service-account.json", [System.Convert]::FromBase64String($base64Content))
+      
+          # Validate JSON
+          try {
+            Get-Content "Skip Tracing/service-account.json" | ConvertFrom-Json | Out-Null
+          } catch {
+            Write-Error "ERROR: Decoded service-account.json is not valid JSON!"
             exit 1
           }
 
