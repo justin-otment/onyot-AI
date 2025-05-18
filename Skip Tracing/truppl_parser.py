@@ -13,8 +13,6 @@ from urllib3.exceptions import ProtocolError
 import sys
 import ssl
 from selenium import webdriver
-from selenium.webdriver.firefox.service import Service
-from selenium.webdriver.firefox.options import Options
 import random
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -25,6 +23,8 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from bs4 import BeautifulSoup
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.chrome.options import Options
 from selenium_stealth import stealth
 
 from nordvpn import handle_rate_limit, verify_vpn_connection
@@ -560,14 +560,13 @@ def main():
     logging.info(f"Processing {len(valid_entries)} total entries.")
 
     # Initialize browser options (properly indented)
-    options = webdriver.FirefoxOptions()
+    options = Options()
     options.headless = True
-    options.set_preference("general.useragent.override", random.choice(user_agents))
-
-    service = Service()
-    driver = webdriver.Firefox(service=service, options=options)
-
-    # Stealth Mode Activation
+    # (Add any additional Chrome options as needed)
+    service = ChromeService()  # Chromedriver installed via Chocolatey will be available in PATH
+    driver = webdriver.Chrome(service=service, options=options)
+    
+    # Optionally, call selenium-stealth:
     stealth(driver,
             languages=["en-US", "en"],
             vendor="Google Inc.",
