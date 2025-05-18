@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 import requests
 import urllib3
 from urllib3.exceptions import ProtocolError
+import sys
 import ssl
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -43,7 +44,7 @@ def make_request_with_retries(url, retries=3, backoff_factor=1):
     raise Exception(f"Failed to fetch {url} after {retries} attempts.")
 
 # Example usage:
-url = 'https://www.leepa.org/Search/PropertySearch.aspx'
+url = 'https://www.truepeoplesearch.com'
 response = make_request_with_retries(url)
 print(response.data)
 
