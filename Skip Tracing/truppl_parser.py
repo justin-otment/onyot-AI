@@ -617,7 +617,7 @@ async def process_batch(driver, batch):
 
 async def main():
     """Main execution function."""
-    valid_entries = fetch_sheet_data()
+    valid_entries = get_sheet_data(sheet_id, range_name)
     if not valid_entries:
         logging.warning("[!] No valid entries to process. Exiting...")
         return
