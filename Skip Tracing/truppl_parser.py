@@ -80,6 +80,7 @@ SHEET_NAME_2 = "For REI Upload"
 START_ROW = 2
 BATCH_SIZE = 10
 MAX_RETRIES = 2
+MAX_CAPTCHA_RETRIES = 2
 BACKOFF_FACTOR = 2  # Exponential backoff factor
 
 # Define constants
