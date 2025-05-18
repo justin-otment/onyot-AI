@@ -638,19 +638,77 @@ async def main():
         return
 
     logging.info(f"Processing {len(valid_entries)} total entries.")
-    options = webdriver.FirefoxOptions()
-    options.add_argument("--headless")
-    service = Service(GECKODRIVER_PATH)
-    driver = webdriver.Firefox(service=service, options=options)
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
 
-    try:
-        for batch_start in range(0, len(valid_entries), BATCH_SIZE):
-            batch = valid_entries[batch_start:batch_start + BATCH_SIZE]
-            logging.info(f"Processing batch {batch_start // BATCH_SIZE + 1} with {len(batch)} entries...")
-            await process_batch(driver, batch, site_dict)
+    for batch_start in range(0, len(valid_entries), BATCH_SIZE):
+        batch = valid_entries[batch_start:batch_start + BATCH_SIZE]
+        print(f"[→] Processing batch {batch_start // BATCH_SIZE + 1} with {len(batch)} entries...")
 
-    finally:
-        driver.quit()
+        for row_index, mailing_street, zip_code in batch:
+            print(f"\n[→] Processing Row {row_index}: {mailing_street}, {zip_code}")
+            try:
+                captcha_retries = 0
+                html_content = None
+
+                while captcha_retries < MAX_CAPTCHA_RETRIES:
+                    html_content = await fetch_truepeoplesearch_data(row_index, mailing_street, zip_code)
+                    if html_content:
+                        break
+                    captcha_retries += 1
+                    print(f"[!] CAPTCHA retry {captcha_retries}/{MAX_CAPTCHA_RETRIES}...")
+
+                if not html_content:
+                    print("[!] Skipping row due to repeated CAPTCHA failures.")
+                    continue
+
+                extracted_links = extract_links(html_content)
+                if not extracted_links:
+                    print("[DEBUG] Extracted 0 links.")
+                    await handle_rate_limit()
+                    continue
+
+                ref_names = extract_reference_names(SHEET_ID, row_index)
+                matched_results = match_entries(extracted_links, ref_names)
+                if not matched_results:
+                    print(f"[!] No match found for row {row_index}.")
+                    continue
+
+                for matched_entry in matched_results:
+                    matched_url = matched_entry["link"]
+                    matched_name = matched_entry["text"]
+                    print(f"[→] Visiting profile: {matched_url}")
+
+                    matched_html = await navigate_to_profile(matched_name, mailing_street, matched_url)
+                    if not matched_html:
+                        print(f"[!] CAPTCHA blocked: {matched_url}")
+                        continue
+
+                    phone_numbers, phone_types, emails = parse_contact_info(matched_html)
+                    if not phone_numbers:
+                        print(f"[!] No phone numbers found for row {row_index}")
+                        continue
+
+                    name_parts = matched_name.strip().split()
+                    first_name = name_parts[0]
+                    last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
+
+                    site_data = get_sheet_data(SHEET_ID, SITE_RANGE, START_ROW)
+                    site_dict = {idx: value for idx, value in site_data}
+                    site_value = site_dict.get(row_index, None)
+
+                    if site_value is None:
+                        print(f"[!] No Site value found for row {row_index}")
+                        continue
+
+                    phone_data = list(zip(phone_numbers, phone_types))
+                    append_to_google_sheet(first_name, last_name, phone_data, emails, site_value)
+
+            except Exception as e:
+                print(f"[!] Error processing row {row_index}: {e}")
+                continue
 
 if __name__ == "__main__":
     asyncio.run(main())
