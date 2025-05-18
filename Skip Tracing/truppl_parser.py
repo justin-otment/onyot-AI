@@ -610,9 +610,7 @@ async def process_batch(driver, batch):
 
 async def main():
     """Main execution function."""
-    sheets_service = authenticate_google_sheets()
-    sheet = sheets_service.spreadsheets()
-    
+
     # Define sheet data ranges before calling get_sheet_data()
     MAILING_STREETS_RANGE = f"{SHEET_NAME}!P2:P"
     ZIPCODE_RANGE = f"{SHEET_NAME}!Q2:Q"
@@ -627,8 +625,19 @@ async def main():
         logging.warning("[!] Missing data in one or both ranges. Skipping processing...")
         return
 
-    logging.info(f"Processing {len(valid_entries)} total entries.")
+    # Convert to dictionaries for structured processing
+    street_dict = dict(mailing_streets)
+    zip_dict = dict(zip_codes)
+    site_dict = dict(site_data)
 
+    # Define valid entries
+    valid_entries = [(idx, street_dict[idx], zip_dict[idx]) for idx in street_dict.keys() & zip_dict.keys()]
+
+    if not valid_entries:
+        logging.warning("[!] No valid entries to process. Exiting...")
+        return
+
+    logging.info(f"Processing {len(valid_entries)} total entries.")
     options = webdriver.FirefoxOptions()
     options.add_argument("--headless")
     service = Service(GECKODRIVER_PATH)
