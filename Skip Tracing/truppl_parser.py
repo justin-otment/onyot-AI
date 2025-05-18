@@ -84,29 +84,16 @@ def authenticate_google_sheets():
     except Exception as e:
         raise Exception(f"Error authenticating Google Sheets API: {e}")
 
-# Replace with your Google Sheets integration
-def get_sheet_data(sheet_id, range_name):
-    """
-    Fetches data from Google Sheets for a given range.
-    Returns list of (row_index, value) tuples for non-empty first-column values.
-    """
-    try:
-        service = authenticate_google_sheets()
-        result = service.spreadsheets().values().get(
-            spreadsheetId=sheet_id,
-            range=range_name
-        ).execute()
-        values = result.get("values", [])
-        base_row = int(re.search(r"(\d+):", range_name).group(1))
-
-        return [
-            (i + base_row, row[0])
-            for i, row in enumerate(values)
-            if row and len(row) > 0 and row[0].strip()
-        ]
-    except Exception as e:
-        logging.error(f"Error fetching data from Google Sheets range '{range_name}': {e}")
-        return []
+def get_sheet_data(sheet_id, range_name, start_row=2):
+    """Fetch data from the specified Google Sheet range."""
+    service = authenticate_google_sheets()
+    result = service.spreadsheets().values().get(
+        spreadsheetId=sheet_id,
+        range=range_name
+    ).execute()
+    values = result.get('values', [])
+    print(f"[DEBUG] Retrieved {len(values)} rows from range {range_name}")
+    return [(start_row + i, row[0]) for i, row in enumerate(values) if row and len(row) > 0]
 
 def extract_reference_names(sheet_id, row_index):
     """Extract B:H values on the given row index from the first sheet."""
