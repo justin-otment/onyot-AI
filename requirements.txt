@@ -24,10 +24,11 @@ python-dotenv==1.0.1  # Load secrets from .env files
 
 # Dependency Management
 setuptools>=69.5.1
+undetected-chromedriver==3.5.4
+fake-useragent==1.5.1
 
 # CAPTCHA Handling & Anti-Bot Measures
 selenium-stealth==1.0.6  # Evade bot detection
-undetected-chromedriver==3.5.2  # Helps bypass bot protections
 
 # Proxy Management (For Web Scraping)
 # proxybroker==0.3.2  # Removed due to dependency conflicts (requires attrs==19.1.0)
