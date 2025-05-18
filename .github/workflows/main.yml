@@ -78,23 +78,35 @@ jobs:
           echo "AUTH_PATH=$authPath" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
         shell: powershell
 
-      - name: Start OpenVPN Connection
+      - name: Start OpenVPN with random config
         run: |
-          if (Test-Path "C:\Program Files\OpenVPN\bin\openvpn.exe") {
-              Write-Output "Starting OpenVPN..."
-
-              if ((Test-Path "$env:CONFIG_PATH") -and (Test-Path "$env:AUTH_PATH")) {
-                  & "C:\Program Files\OpenVPN\bin\openvpn.exe" --config "$env:CONFIG_PATH" --auth-user-pass "$env:AUTH_PATH" --daemon
-                  Write-Output "OpenVPN started successfully."
-              } else {
-                  Write-Error "OpenVPN configuration or authentication file missing!"
-                  exit 1
-              }
+          $vpnFolder = "D:\a\onyot-AI\onyot-AI\externals\VPNs"
+          $configs = Get-ChildItem -Path $vpnFolder -Filter *.ovpn
+          if ($configs.Count -eq 0) {
+            Write-Error "No .ovpn files found in $vpnFolder"
+            exit 1
+          }
+      
+          $selectedConfig = Get-Random -InputObject $configs
+          $configPath = $selectedConfig.FullName
+          Write-Output "Selected VPN config: $configPath"
+      
+          $authPath = Join-Path $vpnFolder "auth.txt"
+      
+          if ((Test-Path "C:\Program Files\OpenVPN\bin\openvpn.exe") -and
+              (Test-Path $configPath) -and
+              (Test-Path $authPath)) {
+      
+              Start-Process -FilePath "C:\Program Files\OpenVPN\bin\openvpn.exe" `
+                            -ArgumentList "--config `"$configPath`" --auth-user-pass `"$authPath`""
+      
+              Write-Output "OpenVPN launched with $($selectedConfig.Name)"
           } else {
-              Write-Error "OpenVPN executable not found!"
+              Write-Error "Missing OpenVPN executable or config/auth files!"
               exit 1
           }
         shell: powershell
+
 
       - name: Verify OpenVPN Connection
         run: |
