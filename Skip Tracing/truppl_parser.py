@@ -26,10 +26,13 @@ from googleapiclient.errors import HttpError
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
+from selenium_stealth import stealth
 
 from nordvpn import handle_rate_limit, verify_vpn_connection
 from captcha import get_site_key, solve_turnstile_captcha, inject_token
 import json
+
+load_dotenv()
 
 # Request with retries
 def make_request_with_retries(url, retries=3, backoff_factor=1):
@@ -68,10 +71,32 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-load_dotenv()
-executor = ThreadPoolExecutor()
-
 sys.stdout.reconfigure(encoding='utf-8')
+
+# === Global Configurations ===
+CAPTCHA_CONFIG = {
+    "max_retries": 5,
+    "wait_time_ms": 7000,
+    "poll_interval_seconds": 5,
+    "captcha_timeout_seconds": 75,
+}
+API_KEY = os.getenv("TWO_CAPTCHA_API_KEY")
+CAPTCHA_API_URL = "http://2captcha.com"
+LOGGING_FORMAT = "[%(asctime)s] %(levelname)s: %(message)s"
+logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
+
+MAX_RETRIES = 5  # Maximum retry attempts for main function
+BACKOFF_FACTOR = 2  # Exponential backoff factor
+
+vpn_username =   os.getenv("VPN_USERNAME")
+vpn_password = os.getenv("VPN_PASSWORD")
+
+if not vpn_username or not vpn_password:
+    print("[!] Failed to load VPN credentials!")
+else:
+    print("VPN Username:", vpn_username)
+    print("VPN Password: Loaded successfully")
+
 
 # === Constants ===
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
@@ -536,14 +561,21 @@ def main():
 
     logging.info(f"Processing {len(valid_entries)} total entries.")
     
-    # Initialize browser and options
-    options = Options()
-    options.headless = True  # Run in headless mode
-    options.set_preference("general.useragent.override", random.choice(user_agents))  # Randomized user-agent
-    
-    # Launch Firefox browser
-    service = Service()
-    driver = webdriver.Firefox(service=service, options=options)
+    options = webdriver.FirefoxOptions()
+options.headless = True
+options.set_preference("general.useragent.override", random.choice(user_agents))
+
+service = Service()
+driver = webdriver.Firefox(service=service, options=options)
+
+# Stealth Mode Activation
+stealth(driver,
+        languages=["en-US", "en"],
+        vendor="Google Inc.",
+        platform="Win32",
+        webgl_vendor="Intel Inc.",
+        renderer="Intel Iris OpenGL Engine",
+        fix_hairline=True)
 
     try:
         for batch_start in range(0, len(valid_entries), BATCH_SIZE):
