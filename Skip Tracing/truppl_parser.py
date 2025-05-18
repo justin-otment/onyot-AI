@@ -28,7 +28,7 @@ from selenium_stealth import stealth
 from nordvpn import handle_rate_limit, verify_vpn_connection
 from captcha import get_site_key, solve_turnstile_captcha, inject_token
 import json
-import undetected_chromedriver.v2 as uc
+import undetected_chromedriver as uc
 from fake_useragent import UserAgent
 ua = UserAgent()
 
