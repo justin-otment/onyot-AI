@@ -83,7 +83,7 @@ jobs:
           if (Test-Path "C:\Program Files\OpenVPN\bin\openvpn.exe") {
               Write-Output "Starting OpenVPN..."
 
-              if (Test-Path "$env:CONFIG_PATH" -And Test-Path "$env:AUTH_PATH") {
+              if ((Test-Path "$env:CONFIG_PATH") -and (Test-Path "$env:AUTH_PATH")) {
                   & "C:\Program Files\OpenVPN\bin\openvpn.exe" --config "$env:CONFIG_PATH" --auth-user-pass "$env:AUTH_PATH" --daemon
                   Write-Output "OpenVPN started successfully."
               } else {
