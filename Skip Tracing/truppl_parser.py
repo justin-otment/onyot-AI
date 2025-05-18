@@ -8,6 +8,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 import requests
 import urllib3
+import sys
 import ssl
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -36,6 +37,8 @@ logging.basicConfig(
 
 load_dotenv()
 executor = ThreadPoolExecutor()
+
+sys.stdout.reconfigure(encoding='utf-8')
 
 # === Constants ===
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
