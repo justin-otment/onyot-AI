@@ -24,7 +24,6 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
-from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 from selenium_stealth import stealth
 
@@ -32,7 +31,6 @@ from nordvpn import handle_rate_limit, verify_vpn_connection
 from captcha import get_site_key, solve_turnstile_captcha, inject_token
 import json
 
-load_dotenv()
 
 # Request with retries
 def make_request_with_retries(url, retries=3, backoff_factor=1):
