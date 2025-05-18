@@ -37,3 +37,4 @@ ratelimit==2.2.1              # Implements rate-limiting to prevent API bans
 
 # Logging & Debugging
 loguru==0.7.2                 # Improved logging for error tracking
+beautifulsoup4
