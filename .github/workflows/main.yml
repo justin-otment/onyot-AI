@@ -13,7 +13,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # Ensures full history is cloned
 
       - name: Set up Python
         uses: actions/setup-python@v2
@@ -28,17 +28,28 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - name: Install dependencies
+      - name: Install dependencies from requirements.txt
         run: |
           python -m pip install --upgrade pip
-          if (Test-Path requirements.txt) { pip install -r requirements.txt }
+          pip install -r requirements.txt
+          # Debug: list installed packages to verify installation
+          pip list
+        shell: powershell
+
+      - name: Ensure BeautifulSoup is installed
+        run: python -m pip install beautifulsoup4
+        shell: powershell
+
+      - name: Install additional Python packages
+        run: |
+          python -m pip install nest_asyncio google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client selenium selenium-stealth loguru
         shell: powershell
 
       - name: Install Firefox
         run: choco install firefox -y
         shell: powershell
 
-      - name: Install Geckodriver
+      - name: Install Geckodriver (Stable Version)
         run: |
           $GECKO_URL = "https://github.com/mozilla/geckodriver/releases/download/v0.34.0/geckodriver-v0.34.0-win64.zip"
           Invoke-WebRequest -Uri $GECKO_URL -OutFile geckodriver.zip
@@ -57,45 +68,54 @@ jobs:
           Get-ChildItem -Path "${{ github.workspace }}" -Recurse
         shell: powershell
 
-      - name: Select Random OpenVPN Configuration
+      - name: Set OpenVPN Configuration Paths
         run: |
-          $vpnDir = "${{ github.workspace }}\externals\VPNs"
-          $authPath = Join-Path $vpnDir "auth.txt"
-          $configs = Get-ChildItem $vpnDir -Filter *.ovpn | Select-Object -ExpandProperty FullName
-          
-          if ($configs.Count -eq 0) {
-            Write-Error "No .ovpn config files found in $vpnDir"
-            exit 1
+          $configPath = "${{ github.workspace }}\externals\VPNs\us11597.nordvpn.com.tcp.ovpn"
+          $authPath = "${{ github.workspace }}\externals\VPNs\auth.txt"
+
+          if (-Not (Test-Path $configPath)) {
+              Write-Error "ERROR: OpenVPN configuration file not found at $configPath!"
+              exit 1
           }
 
-          $selectedConfig = Get-Random -InputObject $configs
-          echo "Selected VPN config: $selectedConfig"
+          if (-Not (Test-Path $authPath)) {
+              Write-Error "ERROR: OpenVPN authentication file not found at $authPath!"
+              exit 1
+          }
 
-          echo "CONFIG_PATH=$selectedConfig" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
+          echo "CONFIG_PATH=$configPath" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
           echo "AUTH_PATH=$authPath" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
         shell: powershell
 
-      - name: Start OpenVPN
+      - name: Start OpenVPN Connection
         run: |
-          if ((Test-Path "$env:CONFIG_PATH") -and (Test-Path "$env:AUTH_PATH")) {
+          if (Test-Path "C:\Program Files\OpenVPN\bin\openvpn.exe") {
               Write-Output "Starting OpenVPN..."
-              Start-Process -FilePath "C:\Program Files\OpenVPN\bin\openvpn.exe" -ArgumentList "--config `"$env:CONFIG_PATH`" --auth-user-pass `"$env:AUTH_PATH`"" -NoNewWindow
-              Write-Output "OpenVPN started."
+              
+              if ((Test-Path "$env:CONFIG_PATH") -and (Test-Path "$env:AUTH_PATH")) {
+                  # Use Start-Process to run OpenVPN without the unsupported --daemon flag
+                  Start-Process -FilePath "C:\Program Files\OpenVPN\bin\openvpn.exe" -ArgumentList "--config $env:CONFIG_PATH --auth-user-pass $env:AUTH_PATH" -NoNewWindow
+                  Write-Output "OpenVPN started successfully."
+              } else {
+                  Write-Error "OpenVPN configuration or authentication file missing!"
+                  exit 1
+              }
           } else {
-              Write-Error "VPN config or auth file not found!"
+              Write-Error "OpenVPN executable not found!"
               exit 1
           }
         shell: powershell
 
-      - name: Verify VPN Connection
-        run: ipconfig | Select-String "VPN"
+      - name: Verify OpenVPN Connection
+        run: |
+          ipconfig | Select-String "VPN"
         shell: powershell
 
       - name: Create directory for service account file
         run: mkdir -p "Skip Tracing"
         shell: bash
 
-      - name: Decode service-account_base64.txt to JSON
+      - name: Decode service-account_base64.txt to service-account.json
         shell: pwsh
         run: |
           $base64Content = Get-Content "Skip Tracing/service-account_base64.txt" -Raw
@@ -103,13 +123,11 @@ jobs:
             Write-Error "ERROR: service-account_base64.txt is empty or missing!"
             exit 1
           }
-
           [System.IO.File]::WriteAllBytes("Skip Tracing/service-account.json", [System.Convert]::FromBase64String($base64Content))
-
           try {
             Get-Content "Skip Tracing/service-account.json" | ConvertFrom-Json | Out-Null
           } catch {
-            Write-Error "Decoded service-account.json is not valid JSON!"
+            Write-Error "ERROR: Decoded service-account.json is not valid JSON!"
             exit 1
           }
 
@@ -121,7 +139,11 @@ jobs:
           }
         shell: powershell
 
-      - name: Verify script and files
+      - name: Debug logs
+        run: echo "Starting script execution at $(Get-Date)"
+        shell: powershell
+
+      - name: Verify script location
         run: Get-ChildItem -Path "Skip Tracing" -Recurse
         shell: powershell
 
@@ -129,4 +151,3 @@ jobs:
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: python "Skip Tracing/truppl_parser.py"
-        shell: powershell
