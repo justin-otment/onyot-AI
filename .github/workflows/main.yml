@@ -83,7 +83,7 @@ jobs:
               Write-Output "Starting OpenVPN..."
               
               if ((Test-Path "$env:CONFIG_PATH") -and (Test-Path "$env:AUTH_PATH")) {
-                  & "C:\Program Files\OpenVPN\bin\openvpn.exe" --config "$env:CONFIG_PATH" --auth-user-pass "$env:AUTH_PATH" --daemon
+                  Start-Process -FilePath "C:\Program Files\OpenVPN\bin\openvpn.exe" -ArgumentList "--config $env:CONFIG_PATH --auth-user-pass $env:AUTH_PATH" -NoNewWindow
                   Write-Output "OpenVPN started successfully."
               } else {
                   Write-Error "OpenVPN configuration or authentication file missing!"
