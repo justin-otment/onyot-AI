@@ -1,4 +1,3 @@
-import json
 import base64
 import re
 import os
@@ -26,10 +25,12 @@ from bs4 import BeautifulSoup
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.chrome.options import Options
 from selenium_stealth import stealth
-
 from nordvpn import handle_rate_limit, verify_vpn_connection
 from captcha import get_site_key, solve_turnstile_captcha, inject_token
 import json
+import undetected_chromedriver.v2 as uc
+from fake_useragent import UserAgent
+ua = UserAgent()
 
 
 # Request with retries
@@ -389,11 +390,19 @@ def fetch_truepeoplesearch_data(driver, row_index, mailing_street, zip_code):
 
             # CAPTCHA handling logic
             page_content = driver.page_source
-            if any(captcha_word in page_content.lower() for captcha_word in ["captcha", "are you a human"]):
-                logging.warning("[!] CAPTCHA detected. Retrying after backoff...")
+
+            # Handle CAPTCHA or Cloudflare challenge
+            if any(word in page_content.lower() for word in ["captcha", "are you a human", "just a moment"]):
+                logging.warning("[!] CAPTCHA or Cloudflare challenge detected. Retrying after backoff...")
+                
+                # Save the challenge page for debugging
+                with open(f"cf_challenge_row{row_index}.html", "w", encoding="utf-8") as f:
+                    f.write(page_content)
+                
                 time.sleep(BACKOFF_FACTOR ** attempt)
                 driver.refresh()
                 continue
+
 
             logging.debug(f"[DEBUG] Page content snippet: {page_content[:1000]}")
             return page_content
@@ -465,24 +474,26 @@ def navigate_to_profile(driver, matched_url):
             # Check for specific keywords ("Death Record" or "Deceased")
             time.sleep(random.uniform(2, 4))  # Simulating human interaction delay
             page_content = driver.page_source
-            
+
+            # Check for death indicators
             if any(keyword in page_content.lower() for keyword in ["death record", "deceased"]):
                 logging.warning("[!] Profile indicates 'Death Record' or 'Deceased'. Skipping...")
                 driver.close()
-                driver.switch_to.window(driver.window_handles[0])  # Return to the main tab
+                driver.switch_to.window(driver.window_handles[0])
                 return None  
-
-            # Human-like interactions (mimic scrolling & cursor movement)
-            ActionChains(driver).move_by_offset(random.randint(100, 400), random.randint(100, 400)).perform()
-            driver.execute_script("window.scrollBy(0, arguments[0]);", random.randint(400, 800))
-            time.sleep(random.uniform(3, 5))
-
-            # CAPTCHA Handling
-            if any(captcha_word in page_content.lower() for captcha_word in ["captcha", "are you a human"]):
-                logging.warning("[!] CAPTCHA detected. Retrying...")
+            
+            # Handle CAPTCHA or Cloudflare challenge
+            if any(word in page_content.lower() for word in ["captcha", "are you a human", "just a moment"]):
+                logging.warning("[!] CAPTCHA or Cloudflare challenge detected. Retrying...")
+                
+                # Save the challenge page for debugging
+                with open(f"cf_challenge_profile_row{attempt}.html", "w", encoding="utf-8") as f:
+                    f.write(page_content)
+            
                 time.sleep(BACKOFF_FACTOR ** attempt)
                 driver.refresh()
                 continue
+
             
             logging.debug(f"[DEBUG] Page content: {page_content[:1000]}")  # Logs a snippet of content
             driver.close()
@@ -559,21 +570,26 @@ def main():
 
     logging.info(f"Processing {len(valid_entries)} total entries.")
 
-    # Initialize browser options (properly indented)
-    options = Options()
+    # -------------------------------
+    # Setup Undetected Chrome Driver
+    # -------------------------------
+    ua = UserAgent()
+    options = uc.ChromeOptions()
     options.headless = True
-    # (Add any additional Chrome options as needed)
-    service = ChromeService()  # Chromedriver installed via Chocolatey will be available in PATH
-    driver = webdriver.Chrome(service=service, options=options)
-    
-    # Optionally, call selenium-stealth:
-    stealth(driver,
-            languages=["en-US", "en"],
-            vendor="Google Inc.",
-            platform="Win32",
-            webgl_vendor="Intel Inc.",
-            renderer="Intel Iris OpenGL Engine",
-            fix_hairline=True)
+    options.add_argument(f"user-agent={ua.random}")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-infobars")
+    options.add_argument("--lang=en-US")
+
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option('useAutomationExtension', False)
+
+    driver = uc.Chrome(options=options)
 
     try:
         for batch_start in range(0, len(valid_entries), BATCH_SIZE):
@@ -617,6 +633,10 @@ def main():
                         matched_html = navigate_to_profile(driver, matched_url)
                         if not matched_html:
                             print(f"[!] CAPTCHA blocked: {matched_url}")
+
+                            # Save blocked page for debugging
+                            with open(f"cf_blocked_row{row_index}.html", "w", encoding="utf-8") as f:
+                                f.write(driver.page_source)
                             continue
 
                         phone_numbers, phone_types, emails = parse_contact_info(matched_html)
