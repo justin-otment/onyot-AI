@@ -28,10 +28,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - name: Install dependencies
+      - name: Install dependencies from requirements.txt
         run: |
           python -m pip install --upgrade pip
-          if (Test-Path requirements.txt) { pip install -r requirements.txt }
+          pip install -r requirements.txt
+          # Debug: list installed packages to verify python-dotenv installs as "dotenv"
+          pip list
+        shell: powershell
+
+      - name: Install additional Python packages (if needed)
+        run: |
           python -m pip install nest_asyncio google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client selenium selenium-stealth loguru
         shell: powershell
 
@@ -83,7 +89,7 @@ jobs:
               Write-Output "Starting OpenVPN..."
               
               if ((Test-Path "$env:CONFIG_PATH") -and (Test-Path "$env:AUTH_PATH")) {
-                  # Using Start-Process to launch OpenVPN without the unsupported --daemon flag.
+                  # Start OpenVPN without the unsupported --daemon flag
                   Start-Process -FilePath "C:\Program Files\OpenVPN\bin\openvpn.exe" -ArgumentList "--config $env:CONFIG_PATH --auth-user-pass $env:AUTH_PATH" -NoNewWindow
                   Write-Output "OpenVPN started successfully."
               } else {
@@ -113,9 +119,7 @@ jobs:
             Write-Error "ERROR: service-account_base64.txt is empty or missing!"
             exit 1
           }
-
           [System.IO.File]::WriteAllBytes("Skip Tracing/service-account.json", [System.Convert]::FromBase64String($base64Content))
-
           try {
             Get-Content "Skip Tracing/service-account.json" | ConvertFrom-Json | Out-Null
           } catch {
