@@ -30,14 +30,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if (Test-Path requirements.txt) { pip install -r requirements.txt }
-          python -m pip install nest_asyncio google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client selenium
+          python -m pip install nest_asyncio google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client selenium selenium-stealth loguru
         shell: powershell
 
       - name: Install Firefox and Geckodriver
         run: |
           choco install firefox -y
           
-          # Fetch latest Geckodriver release dynamically using authenticated API call
           $headers = @{"Authorization"="token ${{ secrets.GH_PAT }}"}
           $response = Invoke-RestMethod -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest" -Headers $headers
           $GECKO_VERSION = $response.tag_name -replace "v", ""
@@ -54,19 +53,23 @@ jobs:
           choco install openvpn -y
           echo "OpenVPN installed successfully."
         shell: powershell
-      
+
+      - name: Set OpenVPN Configuration Paths
+        run: |
+          $configPath = "${{ github.workspace }}\externals\VPNs\client.ovpn"
+          $authPath = "${{ github.workspace }}\externals\VPNs\auth.txt"
+          
+          echo "CONFIG_PATH=$configPath" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
+          echo "AUTH_PATH=$authPath" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
+        shell: powershell
+
       - name: Start OpenVPN Connection
         run: |
-          # Check if OpenVPN executable exists
           if (Test-Path "C:\Program Files\OpenVPN\bin\openvpn.exe") {
               Write-Output "Starting OpenVPN..."
               
-              # Ensure correct path to configuration files
-              $configPath = "${{ github.workspace }}\externals\VPNs\client.ovpn"
-              $authPath = "${{ github.workspace }}\externals\VPNs\auth.txt"
-      
-              if (Test-Path $configPath) {
-                  & "C:\Program Files\OpenVPN\bin\openvpn.exe" --config "$configPath" --auth-user-pass "$authPath" --daemon
+              if (Test-Path "$env:CONFIG_PATH") {
+                  & "C:\Program Files\OpenVPN\bin\openvpn.exe" --config "$env:CONFIG_PATH" --auth-user-pass "$env:AUTH_PATH" --daemon
                   Write-Output "OpenVPN started successfully."
               } else {
                   Write-Error "OpenVPN configuration file not found!"
@@ -76,6 +79,11 @@ jobs:
               Write-Error "OpenVPN executable not found!"
               exit 1
           }
+        shell: powershell
+
+      - name: Verify OpenVPN Connection
+        run: |
+          ipconfig | Select-String "VPN"
         shell: powershell
 
       - name: Create directory for service account file
@@ -93,7 +101,6 @@ jobs:
       
           [System.IO.File]::WriteAllBytes("Skip Tracing/service-account.json", [System.Convert]::FromBase64String($base64Content))
       
-          # Validate JSON
           try {
             Get-Content "Skip Tracing/service-account.json" | ConvertFrom-Json | Out-Null
           } catch {
