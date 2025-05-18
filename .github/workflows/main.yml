@@ -11,7 +11,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Set up Python
         uses: actions/setup-python@v2
@@ -37,8 +37,9 @@ jobs:
         run: |
           choco install firefox -y
           
-          # Fetch latest Geckodriver release dynamically
-          $response = Invoke-RestMethod -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest"
+          # Fetch latest Geckodriver release dynamically using authenticated API call
+          $headers = @{"Authorization"="token ${{ secrets.GH_PAT }}"}
+          $response = Invoke-RestMethod -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest" -Headers $headers
           $GECKO_VERSION = $response.tag_name -replace "v", ""
           $GECKO_URL = "https://github.com/mozilla/geckodriver/releases/download/v$GECKO_VERSION/geckodriver-v$GECKO_VERSION-win64.zip"
           
@@ -71,7 +72,6 @@ jobs:
             exit 1
           }
 
-
       - name: Remove expired OAuth token
         run: |
           if (Test-Path "Skip Tracing/token.json") {
@@ -90,4 +90,6 @@ jobs:
         shell: powershell
 
       - name: Run Python script
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: python "Skip Tracing/truppl_parser.py"
