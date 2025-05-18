@@ -280,6 +280,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 # === Constants ===
 MAX_RETRIES = 5
+BACKOFF_FACTOR = 2  # Exponential backoff factor
 
 # === Rate-Limit Detection ===
 async def detect_rate_limit(content):
