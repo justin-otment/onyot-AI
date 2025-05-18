@@ -20,7 +20,7 @@ beautifulsoup4==4.13.4
 lxml==5.2.1  # Faster XML/HTML parsing than BeautifulSoup
 
 # Environment Variables & Security
-python-dotenv==1.0.1  # Load secrets from .env files
+python-dotenv # Load secrets from .env files
 
 # Dependency Management
 setuptools>=69.5.1
