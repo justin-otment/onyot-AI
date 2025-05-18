@@ -1,6 +1,6 @@
 # Web Scraping & Automation
 selenium==4.21.0
-urllib3>=1.26.18,<2.0        # Compatible with Selenium
+urllib3>=1.26.18,<2.0  # Compatible with Selenium
 requests==2.32.3
 
 # Google Sheets API & Authentication
@@ -17,24 +17,23 @@ cachetools==5.5.2
 
 # HTML Parsing
 beautifulsoup4==4.13.4
-lxml==5.2.1                   # Faster XML/HTML parsing than BeautifulSoup
+lxml==5.2.1  # Faster XML/HTML parsing than BeautifulSoup
 
 # Environment Variables & Security
-python-dotenv==1.0.1          # Load secrets from .env files
+python-dotenv==1.0.1  # Load secrets from .env files
 
 # Dependency Management
 setuptools>=69.5.1
 
 # CAPTCHA Handling & Anti-Bot Measures
-selenium-stealth==1.0.6       # Evade bot detection
-undetected-chromedriver==3.5.2
+selenium-stealth==1.0.6  # Evade bot detection
+undetected-chromedriver==3.5.2  # Helps bypass bot protections
 
 # Proxy Management (For Web Scraping)
-proxybroker==0.3.2            # Manage and rotate proxies dynamically
+# proxybroker==0.3.2  # Removed due to dependency conflicts (requires attrs==19.1.0)
 
 # Rate-Limit Handling
-ratelimit==2.2.1              # Implements rate-limiting to prevent API bans
+ratelimit==2.2.1  # Implements rate-limiting to prevent API bans
 
 # Logging & Debugging
-loguru==0.7.2                 # Improved logging for error tracking
-beautifulsoup4
+loguru==0.7.2  # Improved logging for error tracking
