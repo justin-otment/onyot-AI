@@ -60,8 +60,18 @@ jobs:
           # Check if OpenVPN executable exists
           if (Test-Path "C:\Program Files\OpenVPN\bin\openvpn.exe") {
               Write-Output "Starting OpenVPN..."
-              & "C:\Program Files\OpenVPN\bin\openvpn.exe" --config "C:\Program Files\OpenVPN\config\client.ovpn" --daemon
-              Write-Output "OpenVPN started with client.ovpn configuration."
+              
+              # Ensure correct path to configuration files
+              $configPath = "${{ github.workspace }}\externals\VPNs\client.ovpn"
+              $authPath = "${{ github.workspace }}\externals\VPNs\auth.txt"
+      
+              if (Test-Path $configPath) {
+                  & "C:\Program Files\OpenVPN\bin\openvpn.exe" --config "$configPath" --auth-user-pass "$authPath" --daemon
+                  Write-Output "OpenVPN started successfully."
+              } else {
+                  Write-Error "OpenVPN configuration file not found!"
+                  exit 1
+              }
           } else {
               Write-Error "OpenVPN executable not found!"
               exit 1
