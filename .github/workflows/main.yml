@@ -57,15 +57,13 @@ jobs:
       
       - name: Start OpenVPN Connection
         run: |
-          # Ensure OpenVPN service is running
-          Start-Service OpenVPNService
-          
-          # Check if OpenVPN configuration exists
-          if (Test-Path "C:\Program Files\OpenVPN\config\client.ovpn") {
+          # Check if OpenVPN executable exists
+          if (Test-Path "C:\Program Files\OpenVPN\bin\openvpn.exe") {
+              Write-Output "Starting OpenVPN..."
               & "C:\Program Files\OpenVPN\bin\openvpn.exe" --config "C:\Program Files\OpenVPN\config\client.ovpn" --daemon
               Write-Output "OpenVPN started with client.ovpn configuration."
           } else {
-              Write-Error "OpenVPN configuration file not found!"
+              Write-Error "OpenVPN executable not found!"
               exit 1
           }
         shell: powershell
