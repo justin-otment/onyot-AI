@@ -560,22 +560,23 @@ def main():
         return
 
     logging.info(f"Processing {len(valid_entries)} total entries.")
-    
+
+    # Initialize browser options (properly indented)
     options = webdriver.FirefoxOptions()
-options.headless = True
-options.set_preference("general.useragent.override", random.choice(user_agents))
+    options.headless = True
+    options.set_preference("general.useragent.override", random.choice(user_agents))
 
-service = Service()
-driver = webdriver.Firefox(service=service, options=options)
+    service = Service()
+    driver = webdriver.Firefox(service=service, options=options)
 
-# Stealth Mode Activation
-stealth(driver,
-        languages=["en-US", "en"],
-        vendor="Google Inc.",
-        platform="Win32",
-        webgl_vendor="Intel Inc.",
-        renderer="Intel Iris OpenGL Engine",
-        fix_hairline=True)
+    # Stealth Mode Activation
+    stealth(driver,
+            languages=["en-US", "en"],
+            vendor="Google Inc.",
+            platform="Win32",
+            webgl_vendor="Intel Inc.",
+            renderer="Intel Iris OpenGL Engine",
+            fix_hairline=True)
 
     try:
         for batch_start in range(0, len(valid_entries), BATCH_SIZE):
