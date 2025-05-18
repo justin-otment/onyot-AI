@@ -638,10 +638,11 @@ async def main():
         return
 
     logging.info(f"Processing {len(valid_entries)} total entries.")
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
+    
+    options = webdriver.FirefoxOptions()
+    options.add_argument("--headless")
+    service = Service()
+    driver = webdriver.Firefox(service=service, options=options)
 
     for batch_start in range(0, len(valid_entries), BATCH_SIZE):
         batch = valid_entries[batch_start:batch_start + BATCH_SIZE]
