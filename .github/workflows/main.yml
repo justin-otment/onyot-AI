@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Ensures full history is cloned
 
       - name: Set up Python
         uses: actions/setup-python@v2
@@ -54,11 +56,18 @@ jobs:
           echo "OpenVPN installed successfully."
         shell: powershell
 
+      - name: Debug Repository Structure
+        run: |
+          Write-Output "Listing repository files..."
+          Get-ChildItem -Path "${{ github.workspace }}" -Recurse
+        shell: powershell
+
       - name: Set OpenVPN Configuration Paths
         run: |
           $configPath = "${{ github.workspace }}\externals\VPNs\client.ovpn"
           $authPath = "${{ github.workspace }}\externals\VPNs\auth.txt"
 
+          # Validate configuration file existence
           if (-Not (Test-Path $configPath)) {
               Write-Error "ERROR: OpenVPN configuration file not found at $configPath!"
               exit 1
