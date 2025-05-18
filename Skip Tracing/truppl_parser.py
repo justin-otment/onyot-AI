@@ -546,7 +546,7 @@ def extract_sitekey(response_body):
         return None
 
 
-async def process_batch(driver, batch):
+async def process_batch(driver, batch, site_dict):
     """Processes each batch and appends results to Google Sheets."""
     for row_index, mailing_street, zip_code in batch:
         logging.info(f"Processing Row {row_index}: {mailing_street}, {zip_code}")
