@@ -30,14 +30,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if (Test-Path requirements.txt) { pip install -r requirements.txt }
-          python -m pip install nest_asyncio google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client selenium
+          python -m pip install nest_asyncio google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client selenium selenium-stealth nordvpn captcha loguru
         shell: powershell
 
       - name: Install Firefox and Geckodriver
         run: |
           choco install firefox -y
           
-          # Fetch latest Geckodriver release dynamically using authenticated API call
           $headers = @{"Authorization"="token ${{ secrets.GH_PAT }}"}
           $response = Invoke-RestMethod -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest" -Headers $headers
           $GECKO_VERSION = $response.tag_name -replace "v", ""
@@ -47,6 +46,27 @@ jobs:
           Expand-Archive geckodriver.zip -DestinationPath C:\GeckoDriver
           echo "C:\GeckoDriver" | Out-File -Encoding utf8 -Append $env:GITHUB_PATH
           C:\GeckoDriver\geckodriver.exe --version
+        shell: powershell
+
+      - name: Install OpenVPN
+        run: |
+          choco install openvpn -y
+          echo "OpenVPN installed successfully."
+        shell: powershell
+
+      - name: Start OpenVPN Connection
+        run: |
+          # Ensure OpenVPN service is running
+          Start-Service OpenVPNService
+          
+          # Check if configuration file exists
+          if (Test-Path "C:\Program Files\OpenVPN\config\client.ovpn") {
+              & "C:\Program Files\OpenVPN\bin\openvpn.exe" --config "C:\Program Files\OpenVPN\config\client.ovpn" --daemon
+              Write-Output "OpenVPN started with client.ovpn configuration."
+          } else {
+              Write-Error "OpenVPN configuration file not found!"
+              exit 1
+          }
         shell: powershell
 
       - name: Create directory for service account file
@@ -64,7 +84,6 @@ jobs:
       
           [System.IO.File]::WriteAllBytes("Skip Tracing/service-account.json", [System.Convert]::FromBase64String($base64Content))
       
-          # Validate JSON
           try {
             Get-Content "Skip Tracing/service-account.json" | ConvertFrom-Json | Out-Null
           } catch {
@@ -78,6 +97,10 @@ jobs:
             Remove-Item "Skip Tracing/token.json"
             Write-Output "Removed expired token.json"
           }
+        shell: powershell
+
+      - name: Verify VPN connection
+        run: python -c "from nordvpn import verify_vpn_connection; verify_vpn_connection()"
         shell: powershell
 
       - name: Debug logs
