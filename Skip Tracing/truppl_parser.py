@@ -617,7 +617,8 @@ async def main():
     
     # Launch Firefox browser
     service = Service()
-    driver = webdriver.Firefox(service=service, options=options)
+    driver = webdriver.Firefox(service=Service(), options=options)
+    page = driver  # Assign the Selenium driver instance to `page`
 
     for batch_start in range(0, len(valid_entries), BATCH_SIZE):
         batch = valid_entries[batch_start:batch_start + BATCH_SIZE]
@@ -630,7 +631,7 @@ async def main():
                 html_content = None
 
                 while captcha_retries < MAX_CAPTCHA_RETRIES:
-                    html_content = await fetch_truepeoplesearch_data(driver, context, page, row_index, mailing_street, zip_code)
+                    html_content = await fetch_truepeoplesearch_data(driver, row_index, mailing_street, zip_code)
                     if html_content:
                         break
                     captcha_retries += 1
