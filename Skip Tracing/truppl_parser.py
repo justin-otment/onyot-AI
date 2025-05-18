@@ -8,7 +8,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 import requests
 import urllib3
-import sys
+from urllib3.exceptions 
+import ProtocolError
 import ssl
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -25,6 +26,34 @@ from dotenv import load_dotenv
 from nordvpn import handle_rate_limit, verify_vpn_connection
 from captcha import get_site_key, solve_turnstile_captcha, inject_token
 import json
+
+# Request with retries
+def make_request_with_retries(url, retries=3, backoff_factor=1):
+    http = urllib3.PoolManager()
+    attempt = 0
+    while attempt < retries:
+        try:
+            response = http.request('GET', url)
+            return response
+        except ProtocolError as e:
+            print(f"Attempt {attempt + 1} failed: {e}")
+            attempt += 1
+            sleep_time = backoff_factor * (2 ** attempt)  # Exponential backoff
+            print(f"Retrying in {sleep_time} seconds...")
+            time.sleep(sleep_time)
+    raise Exception(f"Failed to fetch {url} after {retries} attempts.")
+
+# Example usage:
+url = 'https://www.leepa.org/Search/PropertySearch.aspx'
+response = make_request_with_retries(url)
+print(response.data)
+
+# Disable SSL verification temporarily (use only for testing)
+os.environ['NO_PROXY'] = 'localhost,127.0.0.1'
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+context = ssl.create_default_context()
+context.check_hostname = False
+context.verify_mode = ssl.CERT_NONE
 
 
 # === Setup ===
@@ -547,69 +576,6 @@ def extract_sitekey(response_body):
     except Exception as e:
         logging.error(f"[!] Error extracting sitekey: {e}")
         return None
-
-
-async def process_batch(driver, batch, site_dict):
-    """Processes each batch and appends results to Google Sheets."""
-    for row_index, mailing_street, zip_code in batch:
-        logging.info(f"Processing Row {row_index}: {mailing_street}, {zip_code}")
-
-        try:
-            html_content = await asyncio.to_thread(fetch_truepeoplesearch_data, driver, row_index, mailing_street, zip_code)
-            if not html_content:
-                logging.warning("[!] Skipping row due to repeated CAPTCHA failures.")
-                continue
-
-            extracted_links = extract_links(html_content)
-            if not extracted_links:
-                logging.info("[DEBUG] Extracted 0 links.")
-                await handle_rate_limit(driver)
-                continue
-
-            ref_names = extract_reference_names(SHEET_ID, row_index)
-            matched_results = match_entries(extracted_links, ref_names)
-
-            if not matched_results:
-                logging.warning(f"[!] No match found for row {row_index}.")
-                continue
-
-            for matched_entry in matched_results:
-                matched_url = matched_entry["link"]
-                matched_name = matched_entry["text"]
-                logging.info(f"Visiting profile: {matched_url}")
-
-                try:
-                    matched_html = await asyncio.to_thread(navigate_to_profile, driver, matched_url)
-                    if not matched_html:
-                        logging.warning(f"[!] CAPTCHA blocked: {matched_url}")
-                        continue
-                except Exception as e:
-                    logging.error(f"[!] Selenium error navigating to profile {matched_url}: {e}")
-                    continue
-
-                phone_numbers, phone_types, emails = parse_contact_info(matched_html)
-                if not phone_numbers:
-                    logging.warning(f"[!] No phone numbers found for row {row_index}")
-                    continue
-
-                name_parts = matched_name.strip().split()
-                first_name = name_parts[0]
-                last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
-
-                site_data = get_sheet_data(SHEET_ID, SITE_RANGE)
-                site_dict = dict(site_data)
-                site_value = site_dict.get(row_index)
-
-                if site_value is None:
-                    logging.warning(f"[!] No Site value found for row {row_index}")
-                    continue
-
-                phone_data = list(zip(phone_numbers, phone_types))
-                append_to_google_sheet(first_name, last_name, phone_data, emails, site_value)
-
-        except Exception as e:
-            logging.error(f"[!] Error processing row {row_index}: {traceback.format_exc()}")
-            continue
 
 async def main():
     """Main execution function."""
