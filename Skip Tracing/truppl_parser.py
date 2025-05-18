@@ -631,7 +631,7 @@ async def main():
                 html_content = None
 
                 while captcha_retries < MAX_CAPTCHA_RETRIES:
-                    html_content = await fetch_truepeoplesearch_data(driver, row_index, mailing_street, zip_code)
+                    html_content = await fetch_truepeoplesearch_data(driver, context, page, row_index, mailing_street, zip_code)
                     if html_content:
                         break
                     captcha_retries += 1
