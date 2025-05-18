@@ -576,7 +576,6 @@ def main():
     ua = UserAgent()
     options = uc.ChromeOptions()
     options.headless = True
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
     options.add_argument(f"user-agent={ua.random}")
     options.add_argument("--window-size=1920,1080")
