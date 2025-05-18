@@ -16,11 +16,11 @@ jobs:
           fetch-depth: 0  # Clone full history
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      - name: Upgrade pip and Install dependencies from requirements.txt
+      - name: Upgrade pip and install dependencies from requirements.txt
         run: |
           python -m pip install --upgrade pip setuptools
           pip install -r requirements.txt
@@ -60,23 +60,25 @@ jobs:
               exit 1
           }
 
-          echo "CONFIG_PATH=$configPath" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
-          echo "AUTH_PATH=$authPath" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
+          "CONFIG_PATH=$configPath" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
+          "AUTH_PATH=$authPath" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
         shell: powershell
 
       - name: Start OpenVPN Connection
         run: |
-          if (Test-Path "C:\Program Files\OpenVPN\bin\openvpn.exe") {
+          $openvpnExe = "C:\Program Files\OpenVPN\bin\openvpn.exe"
+          if (Test-Path $openvpnExe) {
               Write-Output "Starting OpenVPN..."
-
               if ((Test-Path "$env:CONFIG_PATH") -and (Test-Path "$env:AUTH_PATH")) {
-                  Start-Process -FilePath "C:\Program Files\OpenVPN\bin\openvpn.exe" -ArgumentList "--config $env:CONFIG_PATH --auth-user-pass $env:AUTH_PATH" -NoNewWindow
+                  Start-Process -FilePath $openvpnExe -ArgumentList "--config `"$env:CONFIG_PATH`" --auth-user-pass `"$env:AUTH_PATH`"" -NoNewWindow
                   Write-Output "OpenVPN started successfully."
-              } else {
+              }
+              else {
                   Write-Error "OpenVPN configuration or authentication file missing!"
                   exit 1
               }
-          } else {
+          }
+          else {
               Write-Error "OpenVPN executable not found!"
               exit 1
           }
@@ -88,8 +90,8 @@ jobs:
         shell: powershell
 
       - name: Create directory for service account file
-        run: mkdir -p "Skip Tracing"
-        shell: bash
+        run: New-Item -ItemType Directory -Force -Path "Skip Tracing"
+        shell: powershell
 
       - name: Decode service-account_base64.txt to service-account.json
         shell: pwsh
@@ -116,7 +118,7 @@ jobs:
         shell: powershell
 
       - name: Debug logs
-        run: echo "Starting script execution at $(Get-Date)"
+        run: Write-Output "Starting script execution at $(Get-Date)"
         shell: powershell
 
       - name: Verify script location
@@ -127,6 +129,7 @@ jobs:
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: python "Skip Tracing/truppl_parser.py"
+        shell: powershell
 
       - name: Upload Cloudflare/CAPTCHA logs (optional)
         if: always()
