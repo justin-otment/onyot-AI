@@ -12,9 +12,11 @@ from urllib3.exceptions import ProtocolError
 import sys
 import ssl
 from selenium import webdriver
+from selenium.webdriver.firefox.service import Service
+from selenium.webdriver.firefox.options import Options
+import random
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from google.oauth2.service_account import Credentials
@@ -608,8 +610,12 @@ async def main():
 
     logging.info(f"Processing {len(valid_entries)} total entries.")
     
-    options = webdriver.FirefoxOptions()
-    options.add_argument("--headless")
+    # Initialize browser and options
+    options = Options()
+    options.headless = True  # Run in headless mode
+    options.set_preference("general.useragent.override", random.choice(user_agents))  # Randomized user-agent
+    
+    # Launch Firefox browser
     service = Service()
     driver = webdriver.Firefox(service=service, options=options)
 
@@ -624,7 +630,7 @@ async def main():
                 html_content = None
 
                 while captcha_retries < MAX_CAPTCHA_RETRIES:
-                    html_content = await fetch_truepeoplesearch_data(row_index, mailing_street, zip_code)
+                    html_content = await fetch_truepeoplesearch_data(driver, context, page, row_index, mailing_street, zip_code)
                     if html_content:
                         break
                     captcha_retries += 1
