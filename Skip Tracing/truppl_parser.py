@@ -612,7 +612,9 @@ async def process_batch(driver, batch):
 
 async def main():
     """Main execution function."""
-
+    sheets_service = authenticate_google_sheets()
+    sheet = sheets_service.spreadsheets()
+    
     # Define sheet data ranges before calling get_sheet_data()
     MAILING_STREETS_RANGE = f"{SHEET_NAME}!P2:P"
     ZIPCODE_RANGE = f"{SHEET_NAME}!Q2:Q"
