@@ -84,18 +84,29 @@ def authenticate_google_sheets():
     except Exception as e:
         raise Exception(f"Error authenticating Google Sheets API: {e}")
 
+# Replace with your Google Sheets integration
 def get_sheet_data(sheet_id, range_name):
-    """Fetch mailing streets and zip codes from Google Sheets."""
-    mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE)
-    zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE)
+    """
+    Fetches data from Google Sheets for a given range.
+    Returns list of (row_index, value) tuples for non-empty first-column values.
+    """
+    try:
+        service = authenticate_google_sheets()
+        result = service.spreadsheets().values().get(
+            spreadsheetId=sheet_id,
+            range=range_name
+        ).execute()
+        values = result.get("values", [])
+        base_row = int(re.search(r"(\d+):", range_name).group(1))
 
-    if not mailing_streets or not zip_codes:
-        logging.warning("[!] Missing data in one or both ranges. Skipping processing...")
+        return [
+            (i + base_row, row[0])
+            for i, row in enumerate(values)
+            if row and len(row) > 0 and row[0].strip()
+        ]
+    except Exception as e:
+        logging.error(f"Error fetching data from Google Sheets range '{range_name}': {e}")
         return []
-
-    street_dict = dict(mailing_streets)
-    zip_dict = dict(zip_codes)
-    return [(idx, street_dict[idx], zip_dict[idx]) for idx in street_dict.keys() & zip_dict.keys()]
 
 def extract_reference_names(sheet_id, row_index):
     """Extract B:H values on the given row index from the first sheet."""
