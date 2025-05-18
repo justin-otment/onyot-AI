@@ -8,8 +8,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 import requests
 import urllib3
-from urllib3.exceptions 
-import ProtocolError
+from urllib3.exceptions import ProtocolError
 import ssl
 from selenium import webdriver
 from selenium.webdriver.common.by import By
