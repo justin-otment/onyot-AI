@@ -35,15 +35,13 @@ jobs:
           python -m pip install nest_asyncio google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client selenium selenium-stealth loguru
         shell: powershell
 
-      - name: Install Firefox and Geckodriver
+      - name: Install Firefox
+        run: choco install firefox -y
+        shell: powershell
+
+      - name: Install Geckodriver (Stable Version)
         run: |
-          choco install firefox -y
-          
-          $headers = @{"Authorization"="token ${{ secrets.GH_PAT }}"}
-          $response = Invoke-RestMethod -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest" -Headers $headers
-          $GECKO_VERSION = $response.tag_name -replace "v", ""
-          $GECKO_URL = "https://github.com/mozilla/geckodriver/releases/download/v$GECKO_VERSION/geckodriver-v$GECKO_VERSION-win64.zip"
-          
+          $GECKO_URL = "https://github.com/mozilla/geckodriver/releases/download/v0.34.0/geckodriver-v0.34.0-win64.zip"
           Invoke-WebRequest -Uri $GECKO_URL -OutFile geckodriver.zip
           Expand-Archive geckodriver.zip -DestinationPath C:\GeckoDriver
           echo "C:\GeckoDriver" | Out-File -Encoding utf8 -Append $env:GITHUB_PATH
@@ -51,9 +49,7 @@ jobs:
         shell: powershell
 
       - name: Install OpenVPN
-        run: |
-          choco install openvpn -y
-          echo "OpenVPN installed successfully."
+        run: choco install openvpn -y
         shell: powershell
 
       - name: Debug Repository Structure
@@ -67,7 +63,6 @@ jobs:
           $configPath = "${{ github.workspace }}\externals\VPNs\client.ovpn"
           $authPath = "${{ github.workspace }}\externals\VPNs\auth.txt"
 
-          # Validate configuration file existence
           if (-Not (Test-Path $configPath)) {
               Write-Error "ERROR: OpenVPN configuration file not found at $configPath!"
               exit 1
