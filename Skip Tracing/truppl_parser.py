@@ -50,11 +50,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ENCODED_JSON_PATH = os.path.join(BASE_DIR, "service-account_base64.txt")
 GECKODRIVER_PATH = "C:\\GeckoDriver\\geckodriver.exe"
 
-# === Constants ===
-MAILING_STREETS_RANGE = f"{SHEET_NAME}!P2:P"
-ZIPCODE_RANGE = f"{SHEET_NAME}!Q2:Q"
-SITE_RANGE = f"{SHEET_NAME}!B{START_ROW}:B"
-
 # Read and decode service account JSON
 try:
     with open(ENCODED_JSON_PATH, "r") as file:
@@ -617,7 +612,28 @@ async def process_batch(driver, batch):
 
 async def main():
     """Main execution function."""
-    valid_entries = get_sheet_data(sheet_id, range_name)
+
+    # Define sheet data ranges before calling get_sheet_data()
+    MAILING_STREETS_RANGE = f"{SHEET_NAME}!P2:P"
+    ZIPCODE_RANGE = f"{SHEET_NAME}!Q2:Q"
+    SITE_RANGE = f"{SHEET_NAME}!B{START_ROW}:B"
+
+    # Retrieve sheet data
+    mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE)
+    zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE)
+    site_data = get_sheet_data(SHEET_ID, SITE_RANGE)
+
+    if not mailing_streets or not zip_codes:
+        logging.warning("[!] Missing data in one or both ranges. Skipping processing...")
+        return
+
+    # Convert to dictionaries for structured processing
+    street_dict = dict(mailing_streets)
+    zip_dict = dict(zip_codes)
+    site_dict = dict(site_data)
+
+    valid_entries = [(idx, street_dict[idx], zip_dict[idx]) for idx in street_dict.keys() & zip_dict.keys()]
+    
     if not valid_entries:
         logging.warning("[!] No valid entries to process. Exiting...")
         return
@@ -633,7 +649,7 @@ async def main():
         for batch_start in range(0, len(valid_entries), BATCH_SIZE):
             batch = valid_entries[batch_start:batch_start + BATCH_SIZE]
             logging.info(f"Processing batch {batch_start // BATCH_SIZE + 1} with {len(batch)} entries...")
-            await process_batch(driver, batch)
+            await process_batch(driver, batch, site_dict)
 
     finally:
         driver.quit()
