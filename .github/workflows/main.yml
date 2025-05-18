@@ -13,7 +13,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Ensures full history is cloned
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v2
@@ -58,22 +58,23 @@ jobs:
           Get-ChildItem -Path "${{ github.workspace }}" -Recurse
         shell: powershell
 
-      - name: Set OpenVPN Configuration Paths
+      - name: Find and set OpenVPN config/auth paths
         run: |
-          $configPath = "${{ github.workspace }}\externals\VPNs\client.ovpn"
-          $authPath = "${{ github.workspace }}\externals\VPNs\auth.txt"
+          $vpnDir = "${{ github.workspace }}\externals\VPNs"
+          $configFile = Get-ChildItem -Path $vpnDir -Filter "*.ovpn" | Select-Object -First 1
 
-          if (-Not (Test-Path $configPath)) {
-              Write-Error "ERROR: OpenVPN configuration file not found at $configPath!"
+          if (-not $configFile) {
+              Write-Error "No .ovpn config file found in $vpnDir!"
               exit 1
           }
 
-          if (-Not (Test-Path $authPath)) {
-              Write-Error "ERROR: OpenVPN authentication file not found at $authPath!"
+          $authPath = Join-Path $vpnDir "auth.txt"
+          if (-not (Test-Path $authPath)) {
+              Write-Error "auth.txt not found in $vpnDir!"
               exit 1
           }
 
-          echo "CONFIG_PATH=$configPath" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
+          echo "CONFIG_PATH=$($configFile.FullName)" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
           echo "AUTH_PATH=$authPath" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
         shell: powershell
 
@@ -81,7 +82,7 @@ jobs:
         run: |
           if (Test-Path "C:\Program Files\OpenVPN\bin\openvpn.exe") {
               Write-Output "Starting OpenVPN..."
-              
+
               if (Test-Path "$env:CONFIG_PATH" -And Test-Path "$env:AUTH_PATH") {
                   & "C:\Program Files\OpenVPN\bin\openvpn.exe" --config "$env:CONFIG_PATH" --auth-user-pass "$env:AUTH_PATH" --daemon
                   Write-Output "OpenVPN started successfully."
