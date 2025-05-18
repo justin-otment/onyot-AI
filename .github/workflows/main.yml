@@ -13,49 +13,27 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Ensures full history is cloned
+          fetch-depth: 0  # Clone full history
 
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
           python-version: '3.10'
 
-      - name: Cache Python dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~\AppData\Local\pip\Cache
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install dependencies from requirements.txt
+      - name: Upgrade pip and Install dependencies from requirements.txt
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools
           pip install -r requirements.txt
-          # Debug: list installed packages to verify installation
+          # Debug: list installed packages to verify installation of key dependencies
           pip list
         shell: powershell
 
-      - name: Ensure BeautifulSoup is installed
-        run: python -m pip install beautifulsoup4
+      - name: Install Google Chrome
+        run: choco install googlechrome -y
         shell: powershell
 
-      - name: Install additional Python packages
-        run: |
-          python -m pip install nest_asyncio google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client selenium selenium-stealth loguru
-        shell: powershell
-
-      - name: Install Firefox
-        run: choco install firefox -y
-        shell: powershell
-
-      - name: Install Geckodriver (Stable Version)
-        run: |
-          $GECKO_URL = "https://github.com/mozilla/geckodriver/releases/download/v0.34.0/geckodriver-v0.34.0-win64.zip"
-          Invoke-WebRequest -Uri $GECKO_URL -OutFile geckodriver.zip
-          Expand-Archive geckodriver.zip -DestinationPath C:\GeckoDriver
-          echo "C:\GeckoDriver" | Out-File -Encoding utf8 -Append $env:GITHUB_PATH
-          C:\GeckoDriver\geckodriver.exe --version
+      - name: Install ChromeDriver
+        run: choco install chromedriver -y
         shell: powershell
 
       - name: Install OpenVPN
@@ -72,17 +50,17 @@ jobs:
         run: |
           $configPath = "${{ github.workspace }}\externals\VPNs\us11597.nordvpn.com.tcp.ovpn"
           $authPath = "${{ github.workspace }}\externals\VPNs\auth.txt"
-
+          
           if (-Not (Test-Path $configPath)) {
               Write-Error "ERROR: OpenVPN configuration file not found at $configPath!"
               exit 1
           }
-
+          
           if (-Not (Test-Path $authPath)) {
               Write-Error "ERROR: OpenVPN authentication file not found at $authPath!"
               exit 1
           }
-
+          
           echo "CONFIG_PATH=$configPath" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
           echo "AUTH_PATH=$authPath" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
         shell: powershell
@@ -93,7 +71,7 @@ jobs:
               Write-Output "Starting OpenVPN..."
               
               if ((Test-Path "$env:CONFIG_PATH") -and (Test-Path "$env:AUTH_PATH")) {
-                  # Use Start-Process to run OpenVPN without the unsupported --daemon flag
+                  # Use Start-Process so OpenVPN runs in the background on Windows (do not use --daemon)
                   Start-Process -FilePath "C:\Program Files\OpenVPN\bin\openvpn.exe" -ArgumentList "--config $env:CONFIG_PATH --auth-user-pass $env:AUTH_PATH" -NoNewWindow
                   Write-Output "OpenVPN started successfully."
               } else {
@@ -120,22 +98,22 @@ jobs:
         run: |
           $base64Content = Get-Content "Skip Tracing/service-account_base64.txt" -Raw
           if (-not $base64Content) {
-            Write-Error "ERROR: service-account_base64.txt is empty or missing!"
-            exit 1
+              Write-Error "ERROR: service-account_base64.txt is empty or missing!"
+              exit 1
           }
           [System.IO.File]::WriteAllBytes("Skip Tracing/service-account.json", [System.Convert]::FromBase64String($base64Content))
           try {
-            Get-Content "Skip Tracing/service-account.json" | ConvertFrom-Json | Out-Null
+              Get-Content "Skip Tracing/service-account.json" | ConvertFrom-Json | Out-Null
           } catch {
-            Write-Error "ERROR: Decoded service-account.json is not valid JSON!"
-            exit 1
+              Write-Error "ERROR: Decoded service-account.json is not valid JSON!"
+              exit 1
           }
 
       - name: Remove expired OAuth token
         run: |
           if (Test-Path "Skip Tracing/token.json") {
-            Remove-Item "Skip Tracing/token.json"
-            Write-Output "Removed expired token.json"
+              Remove-Item "Skip Tracing/token.json"
+              Write-Output "Removed expired token.json"
           }
         shell: powershell
 
