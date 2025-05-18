@@ -84,7 +84,7 @@ def authenticate_google_sheets():
     except Exception as e:
         raise Exception(f"Error authenticating Google Sheets API: {e}")
 
-def get_sheet_data(sheet_id, range_name):
+def get_sheet_data(SHEET_ID, range_name):
     """Fetch mailing streets and zip codes from Google Sheets."""
     mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE)
     zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE)
