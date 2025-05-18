@@ -627,17 +627,6 @@ async def main():
         logging.warning("[!] Missing data in one or both ranges. Skipping processing...")
         return
 
-    # Convert to dictionaries for structured processing
-    street_dict = dict(mailing_streets)
-    zip_dict = dict(zip_codes)
-    site_dict = dict(site_data)
-
-    valid_entries = [(idx, street_dict[idx], zip_dict[idx]) for idx in street_dict.keys() & zip_dict.keys()]
-    
-    if not valid_entries:
-        logging.warning("[!] No valid entries to process. Exiting...")
-        return
-
     logging.info(f"Processing {len(valid_entries)} total entries.")
 
     options = webdriver.FirefoxOptions()
