@@ -86,7 +86,7 @@ def solve_turnstile_captcha(sitekey, page_url):
     """
     Solves the Turnstile CAPTCHA using the 2Captcha API.
     Submits a CAPTCHA task and then polls for the result until either solved or a timeout occurs.
-    
+
     :param sitekey: The CAPTCHA sitekey extracted from the page.
     :param page_url: The URL of the page where the CAPTCHA is located.
     :return: The CAPTCHA token if solved successfully, or None if an error occurs.
@@ -149,7 +149,7 @@ def solve_turnstile_captcha(sitekey, page_url):
 async def inject_token(driver, token):
     """
     Injects the solved CAPTCHA token into a hidden form field on the page and submits the form.
-    
+
     :param driver: Selenium WebDriver instance.
     :param token: The solved CAPTCHA token.
     :return: True if the token was successfully injected and submitted, False otherwise.
@@ -193,4 +193,36 @@ async def inject_token(driver, token):
 
     except Exception as e:
         logging.error(f"[!] inject_token error: {e}")
+        return False
+
+
+def solve_captcha(driver, row_index):
+    """
+    Wrapper function so that your main script can call `solve_captcha(driver, row_index)`
+    without needing to know the underlying implementation. This function extracts the CAPTCHA sitekey 
+    using get_site_key() and then tries to solve the CAPTCHA using solve_turnstile_captcha().
+    
+    :param driver: Selenium WebDriver instance.
+    :param row_index: The current row index (used for logging only).
+    :return: True if the CAPTCHA solving process returns a valid token; False otherwise.
+    """
+    try:
+        # Extract the sitekey asynchronously (this call blocks until complete)
+        sitekey = asyncio.run(get_site_key(driver))
+        if not sitekey:
+            logging.error("[!] Could not find CAPTCHA sitekey, cannot proceed.")
+            return False
+        
+        # Use the current URL of the driver as page_url
+        page_url = driver.current_url
+        
+        token = solve_turnstile_captcha(sitekey, page_url)
+        if token:
+            logging.info("[✓] CAPTCHA solved; token received.")
+            return True
+        else:
+            logging.error("[!] CAPTCHA could not be solved.")
+            return False
+    except Exception as e:
+        logging.error(f"[!] solve_captcha error: {e}")
         return False
