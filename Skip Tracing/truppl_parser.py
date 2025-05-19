@@ -136,8 +136,6 @@ except json.JSONDecodeError:
     raise Exception("Error: Decoded SERVICE_ACCOUNT_JSON is corrupted or improperly formatted!")
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-creds = Credentials.from_service_account_file("credentials.json", scopes=["https://www.googleapis.com/auth/spreadsheets"])
-sheets_service = build("sheets", "v4", credentials=creds)
 
 
 # Authenticate with Google Sheets API
