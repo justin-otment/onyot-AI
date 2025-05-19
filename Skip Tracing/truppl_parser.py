@@ -608,6 +608,9 @@ def main():
 
     driver = uc.Chrome(options=options)
 
+    # Inject stealth script so that every new page gets the modifications
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": stealth_js})
+
     try:
         for batch_start in range(0, len(valid_entries), BATCH_SIZE):
             batch = valid_entries[batch_start: batch_start + BATCH_SIZE]
