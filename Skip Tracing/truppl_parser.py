@@ -30,12 +30,6 @@ import string
 import undetected_chromedriver as uc
 import os
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-
-if os.name == "posix" and os.path.exists("/usr/local/bin/chromedriver"):
-    service = Service("/usr/local/bin/chromedriver")
-else:
-    service = Service(ChromeDriverManager().install())
 
 # Request with retries
 def make_request_with_retries(url, retries=3, backoff_factor=1):
@@ -615,15 +609,9 @@ def main():
 
     logging.info(f"Processing {len(valid_entries)} total entries.")
 
-    chrome_options = Options()
-    chrome_options.add_argument("--headless=new")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
+    service = Service("C:\\ChromeDriver\\chromedriver.exe")
+    driver = webdriver.Chrome(service=service)
     
-    # ✅ Dynamically resolve driver path
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=chrome_options)
-
     # Inject stealth script so that every new page gets the modifications
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": stealth_js})
 
