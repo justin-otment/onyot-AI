@@ -1,6 +1,5 @@
 import base64
 import re
-import os
 import logging
 import traceback
 import time
@@ -11,8 +10,6 @@ from urllib3.exceptions import ProtocolError
 import sys
 import ssl
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.options import Options
 import random
 from selenium.webdriver.common.by import By
@@ -31,9 +28,14 @@ from captcha import solve_captcha
 import json
 import string
 import undetected_chromedriver as uc
-from fake_useragent import UserAgent
-ua = UserAgent()
+import os
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
+if os.name == "posix" and os.path.exists("/usr/local/bin/chromedriver"):
+    service = Service("/usr/local/bin/chromedriver")
+else:
+    service = Service(ChromeDriverManager().install())
 
 # Request with retries
 def make_request_with_retries(url, retries=3, backoff_factor=1):
