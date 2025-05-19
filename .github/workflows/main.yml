@@ -86,6 +86,8 @@ jobs:
 
       - name: Verify OpenVPN Connection
         run: |
+          # Optionally pause briefly to allow OpenVPN to establish connection
+          Start-Sleep -Seconds 10
           ipconfig | Select-String "VPN"
         shell: powershell
 
