@@ -1,17 +1,13 @@
-version: '3.8'
+version: "3.9"
 
 services:
-  onyot-ai:
-    build:
-      context: .
+  scraper:
+    build: .
+    volumes:
+      - ./Skip Tracing:/app/Skip Tracing
+      - ./externals/VPNs:/vpn/externals/VPNs
     cap_add:
       - NET_ADMIN
     devices:
       - /dev/net/tun
-    environment:
-      - TWO_CAPTCHA_API_KEY=${TWO_CAPTCHA_API_KEY}
-      - VPN_USERNAME=${VPN_USERNAME}
-      - VPN_PASSWORD=${VPN_PASSWORD}
-      - GOOGLE_CREDENTIALS_JSON=${GOOGLE_CREDENTIALS_JSON}
-      - GOOGLE_TOKEN_JSON=${GOOGLE_TOKEN_JSON}
-    command: ["xvfb-run", "python", "Skip Tracing/truppl_parser.py"]
+    restart: unless-stopped
