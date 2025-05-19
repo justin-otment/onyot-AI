@@ -50,8 +50,8 @@ SHEET_NAME = "CAPE CORAL FINAL"  # Ensure exact match with Google Sheets tab
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # Corrected range formatting **without single quotes**
-names_range = f"{SHEET_NAME}!A2:A"
-dates_range = f"{SHEET_NAME}!E2:E"
+names_range = f"{SHEET_NAME}!P2:P"
+dates_range = f"{SHEET_NAME}!Q2:Q"
 
 # Authenticate with Google Sheets API
 def authenticate_google_sheets():
@@ -86,7 +86,7 @@ def fetch_data_and_update_sheet():
 
     print(f"Fetched {len(names_data)} names and {len(dates_data)} date cells.")
 
-    url = "https://www.leepa.org/Search/PropertySearch.aspx"
+    url = "https://www.truepeoplesearch.com/"
 
     try:
         response = requests.get(url, timeout=15)
