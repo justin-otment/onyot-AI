@@ -9,6 +9,12 @@ on:
 jobs:
   run-python-script:
     runs-on: windows-latest
+    
+    env:
+      TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
+      VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
+      VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
+      
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
