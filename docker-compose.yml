@@ -11,3 +11,4 @@ services:
     devices:
       - /dev/net/tun
     restart: unless-stopped
+    entrypoint: ["/app/vpn-entrypoint.sh"]
