@@ -29,11 +29,14 @@ import json
 import string
 import undetected_chromedriver as uc
 import os
-from selenium.webdriver.chrome.service import Service
+os.environ["PATH"] += os.pathsep + "C:/ChromeDriver"
 import chromedriver_autoinstaller
-from fake_useragent import UserAgent
-ua = UserAgent()
-chromedriver_autoinstaller.install()
+chromedriver_autoinstaller.install()  # Installs the correct ChromeDriver version
+
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+
+
 
 # Request with retries
 def make_request_with_retries(url, retries=3, backoff_factor=1):
@@ -622,7 +625,7 @@ def main():
     chrome_options.add_argument('--window-size=1920,1080')
     
     service = Service("/usr/local/bin/chromedriver")
-    driver = webdriver.Chrome(service=service, options=chrome_options)
+    driver = webdriver.Chrome()  # No need for manual path settings
     
     # Inject stealth script so that every new page gets the modifications
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": stealth_js})
