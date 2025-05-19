@@ -44,6 +44,18 @@ try:
 except json.JSONDecodeError:
     raise Exception("Error: Decoded SERVICE_ACCOUNT_JSON is corrupted or improperly formatted!")
 
+# Example usage:
+url = 'https://www.truepeoplesearch.com/'
+response = make_request_with_retries(url)
+print(response.data)
+
+# Disable SSL verification temporarily (use only for testing)
+os.environ['NO_PROXY'] = 'localhost,127.0.0.1'
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+context = ssl.create_default_context()
+context.check_hostname = False
+context.verify_mode = ssl.CERT_NONE
+
 # Google Sheets setup
 SHEET_ID = "1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A"
 SHEET_NAME = "CAPE CORAL FINAL"  # Ensure exact match with Google Sheets tab
