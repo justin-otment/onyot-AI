@@ -1,46 +1,57 @@
-name: Deploy to AWS Lambda
+name: Run Multiple Python Scripts
 
 on:
   push:
     branches:
-      - main  # Trigger deployment on push to 'main'
+      - main
+  workflow_dispatch:
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
-
+  rapid-api-script:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        script:
+          - "Skip Tracing/truppl_parser.py"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
 
-      - name: Install AWS CLI (Update if Needed)
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.10'
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Set Python UTF-8 Encoding
+        run: echo "PYTHONIOENCODING=UTF-8" >> $GITHUB_ENV
+
+      - name: Install dependencies
         run: |
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-          unzip awscliv2.zip
-          sudo ./aws/install --update
-          echo "AWS CLI installed successfully."
+          python -m pip install --upgrade pip
+          if (Test-Path requirements.txt) { pip install -r requirements.txt }
+          python -m pip install nest_asyncio
+        shell: powershell
 
-      - name: Verify AWS CLI Installation
-        run: aws --version
-
-      - name: Package Lambda Function
+      - name: Install Chrome and ChromeDriver
         run: |
-          zip -r lambda_function.zip .
-          echo "Packaged Python script successfully."
+          choco install firefox -y
+          $response = Invoke-WebRequest -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest" | ConvertFrom-Json
+          $GECKO_VERSION = $response.tag_name -replace "v", ""
+          $GECKO_URL = "https://github.com/mozilla/geckodriver/releases/download/v$GECKO_VERSION/geckodriver-v$GECKO_VERSION-win64.zip"
+          Invoke-WebRequest -Uri $GECKO_URL -OutFile geckodriver.zip
+          Expand-Archive geckodriver.zip -DestinationPath C:\GeckoDriver
+          $env:PATH += ";C:\GeckoDriver"
+          C:\GeckoDriver\geckodriver.exe --version
+        shell: powershell
 
-      - name: Check Existing Lambda Function
-        continue-on-error: true
-        run: aws lambda get-function --function-name my-lambda-function || echo "Lambda function doesn't exist yet."
-
-      - name: Deploy to AWS Lambda
-        run: |
-          aws lambda update-function-code \
-          --function-name my-lambda-function \
-          --zip-file fileb://lambda_function.zip \
-          --region us-east-1
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-      - name: Confirm Lambda Deployment
-        run: aws lambda get-function --function-name my-lambda-function
+      - name: Run Python script
+        run: python "${{ matrix.script }}"
+        shell: powershell 
