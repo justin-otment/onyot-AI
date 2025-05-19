@@ -30,6 +30,8 @@ import string
 import undetected_chromedriver as uc
 import os
 from selenium.webdriver.chrome.service import Service
+import chromedriver_autoinstaller
+chromedriver_autoinstaller.install()
 
 # Request with retries
 def make_request_with_retries(url, retries=3, backoff_factor=1):
