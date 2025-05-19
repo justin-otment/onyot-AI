@@ -597,8 +597,7 @@ def main():
     # Setup Undetected Chrome Driver with options to mimic human behavior
     ua = UserAgent()
     options = uc.ChromeOptions()
-    options.headless = False  # Consider temporarily disabling headless for debugging CAPTCHA issues
-    # Removed problematic experimental option
+    options.add_argument("--headless=new")    # Removed problematic experimental option
     options.add_argument(f"user-agent={random.choice(user_agents)}")
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--disable-blink-features=AutomationControlled")
