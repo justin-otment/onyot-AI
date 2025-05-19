@@ -39,14 +39,9 @@ jobs:
           python -m pip install nest_asyncio google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client selenium
         shell: powershell
 
-      - name: Install Google Chrome and Chromedriver
+      - name: Install Chromedriver (Hardcoded Version)
         run: |
-          choco install googlechrome -y
-
-          # Fetch latest Chromedriver release dynamically
-          $CHROME_VERSION = (Get-Command "C:\Program Files\Google\Chrome\Application\chrome.exe").VersionInfo.FileVersion.Split('.')[0]
-          $CHROMEDRIVER_URL = "https://chromedriver.storage.googleapis.com/$CHROME_VERSION/chromedriver_win32.zip"
-
+          $CHROMEDRIVER_URL = "https://chromedriver.storage.googleapis.com/136.0.7103.93/chromedriver_win32.zip"
           Invoke-WebRequest -Uri $CHROMEDRIVER_URL -OutFile chromedriver.zip
           Expand-Archive chromedriver.zip -DestinationPath C:\ChromeDriver
           echo "C:\ChromeDriver" | Out-File -Encoding utf8 -Append $env:GITHUB_PATH
