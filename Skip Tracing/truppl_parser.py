@@ -31,6 +31,8 @@ import undetected_chromedriver as uc
 import os
 from selenium.webdriver.chrome.service import Service
 import chromedriver_autoinstaller
+from fake_useragent import UserAgent
+ua = UserAgent()
 chromedriver_autoinstaller.install()
 
 # Request with retries
@@ -611,8 +613,16 @@ def main():
 
     logging.info(f"Processing {len(valid_entries)} total entries.")
 
-    service = Service("C:\\ChromeDriver\\chromedriver.exe")
-    driver = webdriver.Chrome(service=service)
+    # Setup Undetected Chrome Driver with options to mimic human behavior
+    chrome_options = Options()
+    chrome_options.add_argument('--headless')
+    chrome_options.add_argument('--disable-gpu')
+    chrome_options.add_argument('--no-sandbox')
+    chrome_options.add_argument('--disable-dev-shm-usage')
+    chrome_options.add_argument('--window-size=1920,1080')
+    
+    service = Service("/usr/local/bin/chromedriver")
+    driver = webdriver.Chrome(service=service, options=chrome_options)
     
     # Inject stealth script so that every new page gets the modifications
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": stealth_js})
