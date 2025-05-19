@@ -8,8 +8,7 @@ on:
 
 jobs:
   run-python-script:
-    runs-on: self-hosted
-    labels: [windows]  # 💡 Make sure this matches the label used during runner config
+    runs-on: [self-hosted, windows]  # ✅ Correct way to target your labeled runner
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
