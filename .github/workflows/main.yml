@@ -36,12 +36,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if (Test-Path requirements.txt) { pip install -r requirements.txt }
-          python -m pip install nest_asyncio google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client selenium
+          python -m pip install nest_asyncio google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client selenium chromedriver-autoinstaller
         shell: powershell
 
-      - name: Install Chromedriver (Hardcoded Version)
+      - name: Install Chrome and ChromeDriver (Dynamically)
         run: |
-          $CHROMEDRIVER_URL = "https://chromedriver.storage.googleapis.com/136.0.7103.93/chromedriver_win32.zip"
+          $LATEST_VERSION = Invoke-WebRequest -Uri "https://chromedriver.storage.googleapis.com/LATEST_RELEASE" | Select-Object -ExpandProperty Content
+          $CHROMEDRIVER_URL = "https://chromedriver.storage.googleapis.com/$LATEST_VERSION/chromedriver_win32.zip"
+
           Invoke-WebRequest -Uri $CHROMEDRIVER_URL -OutFile chromedriver.zip
           Expand-Archive chromedriver.zip -DestinationPath C:\ChromeDriver
           echo "C:\ChromeDriver" | Out-File -Encoding utf8 -Append $env:GITHUB_PATH
@@ -157,4 +159,3 @@ jobs:
 
       - name: Run Python script
         run: python "Skip Tracing/truppl_parser.py"
-      
