@@ -215,6 +215,8 @@ def append_to_google_sheet(first_name, last_name, phones, emails, site):
     except Exception as e:
         logging.error(f"[!] Unexpected failure: {traceback.format_exc()}")
     
+# A selection of current, commonly used user agent strings.
+# These can be randomly chosen at runtime to diversify fingerprinting.
 user_agents = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -228,13 +230,35 @@ user_agents = [
     "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.141 Safari/537.36",
 ]
 
+# JavaScript snippet to override specific navigator properties
+# This helps mimic a real browser environment and avoid detection due to automation flags.
 stealth_js = """
+// Remove the "webdriver" flag (commonly used to detect automation).
 Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+
+// Define 'languages' to represent a typical user configuration.
 Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-Object.defineProperty(navigator, 'plugins', { get: () => [1,2,3,4,5] });
+
+// Spoof 'plugins' to simulate the presence of common browser plugins.
+Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+
+// Override the 'platform' property to mimic a standard Windows environment.
 Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
-window.chrome = { runtime: {} };
-window.navigator.chrome = { runtime: {} };
+
+// Create/overwrite the 'chrome' property to mimic a genuine Chrome instance.
+window.chrome = {
+    runtime: {},
+    // Optionally, add further properties (e.g., loadTimes, csi) if needed.
+};
+navigator.chrome = window.chrome;
+
+// (Optional) Overwrite permissions query to avoid detection when notifications are checked.
+const originalQuery = window.navigator.permissions.query;
+window.navigator.permissions.query = (parameters) => (
+    parameters.name === 'notifications'
+        ? Promise.resolve({ state: Notification.permission })
+        : originalQuery(parameters)
+);
 """
 
 def extract_links(html):
