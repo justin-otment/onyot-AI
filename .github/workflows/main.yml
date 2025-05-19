@@ -8,12 +8,13 @@ on:
 
 jobs:
   run-python-script:
-    runs-on: windows-latest
+    runs-on: self-hosted
+    labels: [windows]  # 💡 Make sure this matches the label used during runner config
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Clone full history
+          fetch-depth: 0
 
       - name: List current directory contents
         run: |
@@ -26,24 +27,15 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Upgrade pip and install dependencies from requirements.txt
+      - name: Upgrade pip and install dependencies
         run: |
           python -m pip install --upgrade pip setuptools
           pip install -r requirements.txt
           pip list
         shell: powershell
 
-      - name: Install Google Chrome
-        run: choco install googlechrome -y
-        shell: powershell
-
-      - name: Install ChromeDriver
-        run: choco install chromedriver -y
-        shell: powershell
-
-      - name: Install OpenVPN
-        run: choco install openvpn -y
-        shell: powershell
+      # 💡 These installs (Chrome, ChromeDriver, OpenVPN) are unnecessary if already on the self-hosted runner
+      # You may remove them if pre-installed
 
       - name: Debug Repository Structure
         run: |
@@ -92,7 +84,6 @@ jobs:
 
       - name: Verify OpenVPN Connection
         run: |
-          # Pause briefly to allow OpenVPN to establish connection
           Start-Sleep -Seconds 10
           ipconfig | Select-String "VPN"
         shell: powershell
