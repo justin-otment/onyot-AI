@@ -44,13 +44,28 @@ try:
 except json.JSONDecodeError:
     raise Exception("Error: Decoded SERVICE_ACCOUNT_JSON is corrupted or improperly formatted!")
 
+# Request with retries
+def make_request_with_retries(url, retries=3, backoff_factor=1):
+    http = urllib3.PoolManager()
+    attempt = 0
+    while attempt < retries:
+        try:
+            response = http.request('GET', url)
+            return response
+        except ProtocolError as e:
+            print(f"Attempt {attempt + 1} failed: {e}")
+            attempt += 1
+            sleep_time = backoff_factor * (2 ** attempt)  # Exponential backoff
+            print(f"Retrying in {sleep_time} seconds...")
+            time.sleep(sleep_time)
+    raise Exception(f"Failed to fetch {url} after {retries} attempts.")
+
 # Example usage:
 url = 'https://www.truepeoplesearch.com/'
 response = make_request_with_retries(url)
 print(response.data)
 
 # Disable SSL verification temporarily (use only for testing)
-os.environ['NO_PROXY'] = 'localhost,127.0.0.1'
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 context = ssl.create_default_context()
 context.check_hostname = False
