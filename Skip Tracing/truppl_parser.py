@@ -350,22 +350,20 @@ def fetch_truepeoplesearch_data(driver, row_index, mailing_street, zip_code):
     :param zip_code: ZIP code to input in the form.
     :return: Page content or None if retries fail.
     """
-
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             logging.info(f"[!] Navigating to TruePeopleSearch for row {row_index} (Attempt {attempt}/{MAX_RETRIES})")
-
             driver.get("https://www.truepeoplesearch.com")
             time.sleep(random.uniform(2, 5))  # Mimic human behavior with random delays
-            
-            # Check for rate-limit or blocked message
+
+            # Early check for generic rate-limit/block indicators
             if any(block_word in driver.page_source.lower() for block_word in ["rate limit", "blocked", "challenge"]):
                 logging.warning("[!] Rate limit detected. Retrying after backoff...")
                 time.sleep(BACKOFF_FACTOR ** attempt)
                 driver.refresh()
                 continue
 
-            # Fill the form with the mailing street
+            # Fill the form for mailing street
             WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, 'id-d-n')))
             input_field = driver.find_element(By.ID, 'id-d-n')
             input_field.clear()
@@ -388,21 +386,17 @@ def fetch_truepeoplesearch_data(driver, row_index, mailing_street, zip_code):
             driver.execute_script("window.scrollBy(0, arguments[0]);", random.randint(400, 800))
             time.sleep(random.uniform(3, 5))
 
-            # CAPTCHA handling logic
             page_content = driver.page_source
 
-            # Handle CAPTCHA or Cloudflare challenge
+            # Check if the page content indicates a CAPTCHA challenge or Cloudflare interstitial
             if any(word in page_content.lower() for word in ["captcha", "are you a human", "just a moment"]):
                 logging.warning("[!] CAPTCHA or Cloudflare challenge detected. Retrying after backoff...")
-                
                 # Save the challenge page for debugging
                 with open(f"cf_challenge_row{row_index}.html", "w", encoding="utf-8") as f:
                     f.write(page_content)
-                
                 time.sleep(BACKOFF_FACTOR ** attempt)
                 driver.refresh()
                 continue
-
 
             logging.debug(f"[DEBUG] Page content snippet: {page_content[:1000]}")
             return page_content
@@ -456,53 +450,60 @@ def navigate_to_profile(driver, matched_url):
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             logging.info(f"[!] Attempt {attempt} to fetch: {matched_url}")
-            
+
             # Open a new tab and switch to it
             driver.execute_script(f"window.open('{matched_url}', '_blank');")
             driver.switch_to.window(driver.window_handles[-1])
-            
-            # Wait for network activity to stabilize
+
+            # Wait for a bit to let the page load—consider using explicit wait if a unique element is known
             time.sleep(random.uniform(3, 5))
-            
-            # Detect rate-limiting
-            if "ratelimited" in driver.current_url:
+
+            # Detect rate-limiting by checking the URL or content
+            if "ratelimited" in driver.current_url.lower():
                 logging.warning("[!] Rate limit detected. Retrying after backoff...")
                 time.sleep(BACKOFF_FACTOR ** attempt)
                 driver.refresh()
+                # Optionally close the tab and switch back before retrying:
+                driver.close()
+                driver.switch_to.window(driver.window_handles[0])
                 continue
-            
-            # Check for specific keywords ("Death Record" or "Deceased")
-            time.sleep(random.uniform(2, 4))  # Simulating human interaction delay
+
+            # Simulate human interaction by waiting a little more
+            time.sleep(random.uniform(2, 4))
             page_content = driver.page_source
 
-            # Check for death indicators
+            # If the content signals death record information, skip processing this profile
             if any(keyword in page_content.lower() for keyword in ["death record", "deceased"]):
                 logging.warning("[!] Profile indicates 'Death Record' or 'Deceased'. Skipping...")
                 driver.close()
                 driver.switch_to.window(driver.window_handles[0])
-                return None  
-            
-            # Handle CAPTCHA or Cloudflare challenge
+                return None
+
+            # Detect CAPTCHA or Cloudflare challenges
             if any(word in page_content.lower() for word in ["captcha", "are you a human", "just a moment"]):
                 logging.warning("[!] CAPTCHA or Cloudflare challenge detected. Retrying...")
-                
                 # Save the challenge page for debugging
                 with open(f"cf_challenge_profile_row{attempt}.html", "w", encoding="utf-8") as f:
                     f.write(page_content)
-            
                 time.sleep(BACKOFF_FACTOR ** attempt)
                 driver.refresh()
+                # Close current tab (so that it does not accumulate) and go back to the main window
+                driver.close()
+                driver.switch_to.window(driver.window_handles[0])
                 continue
 
-            
-            logging.debug(f"[DEBUG] Page content: {page_content[:1000]}")  # Logs a snippet of content
+            logging.debug(f"[DEBUG] Page content: {page_content[:1000]}")
             driver.close()
-            driver.switch_to.window(driver.window_handles[0])  # Switch back to main tab
+            driver.switch_to.window(driver.window_handles[0])
             return page_content
 
         except Exception as e:
             logging.error(f"[!] Error during attempt {attempt}: {str(e)}")
             time.sleep(BACKOFF_FACTOR ** attempt)
+            # Ensure we close any extra tabs if an error occurs
+            if len(driver.window_handles) > 1:
+                driver.close()
+                driver.switch_to.window(driver.window_handles[0])
             continue
 
     logging.error(f"[!] Maximum retries reached. Failed to fetch data from {matched_url}.")
@@ -556,12 +557,12 @@ def main():
         logging.warning("[!] Missing data in one or both ranges. Skipping processing...")
         return
 
-    # Convert data into dictionaries
+    # Convert data into dictionaries for structured access
     street_dict = dict(mailing_streets)
     zip_dict = dict(zip_codes)
     site_dict = dict(site_data)
 
-    # Build list of valid entries
+    # Build list of valid entries (intersection of keys)
     valid_entries = [(idx, street_dict[idx], zip_dict[idx]) for idx in street_dict.keys() & zip_dict.keys()]
     if not valid_entries:
         logging.warning("[!] No valid entries to process. Exiting...")
@@ -569,10 +570,10 @@ def main():
 
     logging.info(f"Processing {len(valid_entries)} total entries.")
 
-    # Setup Undetected Chrome Driver
+    # Setup Undetected Chrome Driver with options to mimic human behavior
     ua = UserAgent()
     options = uc.ChromeOptions()
-    options.headless = True
+    options.headless = True  # Consider temporarily disabling headless for debugging CAPTCHA issues
     # Removed problematic experimental option
     options.add_argument(f"user-agent={ua.random}")
     options.add_argument("--window-size=1920,1080")
@@ -584,7 +585,7 @@ def main():
         for batch_start in range(0, len(valid_entries), BATCH_SIZE):
             batch = valid_entries[batch_start: batch_start + BATCH_SIZE]
             logging.info(f"[→] Processing batch {batch_start // BATCH_SIZE + 1} with {len(batch)} entries...")
-            
+
             for row_index, mailing_street, zip_code in batch:
                 logging.info(f"[→] Processing Row {row_index}: {mailing_street}, {zip_code}")
                 try:
@@ -597,7 +598,7 @@ def main():
                             break
                         captcha_retries += 1
                         logging.info(f"[!] CAPTCHA retry {captcha_retries}/{MAX_CAPTCHA_RETRIES}...")
-                        time.sleep(5)
+                        time.sleep(5)  # Consider using an explicit wait for specific elements in future iterations
                     
                     if not html_content:
                         logging.warning("[!] Skipping row due to repeated CAPTCHA failures.")
@@ -651,6 +652,7 @@ def main():
     finally:
         driver.quit()
         logging.info("[✓] Browser session closed.")
+
 
 if __name__ == "__main__":
     main()
