@@ -39,7 +39,7 @@ jobs:
           python -m pip install nest_asyncio google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client selenium chromedriver-autoinstaller
         shell: powershell
 
-      - name: Install Chrome and ChromeDriver (Dynamically)
+      - name: Install Chrome and ChromeDriver (Latest)
         run: |
           $LATEST_VERSION = Invoke-WebRequest -Uri "https://chromedriver.storage.googleapis.com/LATEST_RELEASE" | Select-Object -ExpandProperty Content
           $CHROMEDRIVER_URL = "https://chromedriver.storage.googleapis.com/$LATEST_VERSION/chromedriver_win32.zip"
