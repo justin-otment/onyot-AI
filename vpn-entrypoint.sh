@@ -1,7 +1,9 @@
 #!/bin/bash
 set -e
 
-# Find a random .ovpn config from the mounted folder
+echo "📁 Listing available VPN files..."
+find /vpn/externals/VPNs -type f
+
 CONFIG=$(find /vpn/externals/VPNs -type f -name "*.tcp" | shuf -n 1)
 
 if [[ -z "$CONFIG" ]]; then
