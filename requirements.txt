@@ -26,6 +26,7 @@ python-dotenv==1.0.1  # Load secrets from .env files
 setuptools>=69.5.1
 undetected-chromedriver==3.5.4
 fake-useragent==1.5.1
+webdriver-manager>=3.8.6
 
 # CAPTCHA Handling & Anti-Bot Measures
 selenium-stealth==1.0.6  # Evade bot detection
