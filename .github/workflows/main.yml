@@ -1,23 +1,93 @@
-name: Run Scraper via Docker
+name: Run Python Automation Script
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
-  run-scraper:
-    runs-on: ubuntu-latest
-
+  run-python-script:
+    runs-on: windows-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.10'
 
-      - name: Set up Docker Compose
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
         run: |
-          docker compose version
+          python -m pip install --upgrade pip
+          if (Test-Path requirements.txt) { pip install -r requirements.txt }
+          python -m pip install nest_asyncio google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client selenium
+        shell: powershell
 
-      - name: Build and run container
+      - name: Install Firefox and Geckodriver
         run: |
-          docker compose up --build --abort-on-container-exit
+          choco install firefox -y
+          
+          # Fetch latest Geckodriver release dynamically
+          $response = Invoke-RestMethod -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest"
+          $GECKO_VERSION = $response.tag_name -replace "v", ""
+          $GECKO_URL = "https://github.com/mozilla/geckodriver/releases/download/v$GECKO_VERSION/geckodriver-v$GECKO_VERSION-win64.zip"
+          
+          Invoke-WebRequest -Uri $GECKO_URL -OutFile geckodriver.zip
+          Expand-Archive geckodriver.zip -DestinationPath C:\GeckoDriver
+          echo "C:\GeckoDriver" | Out-File -Encoding utf8 -Append $env:GITHUB_PATH
+          C:\GeckoDriver\geckodriver.exe --version
+        shell: powershell
+
+      - name: Create directory for service account file
+        run: mkdir -p "Skip Tracing"
+        shell: bash
+
+      - name: Decode service-account_base64.txt to service-account.json
+        shell: pwsh
+        run: |
+          $base64Content = Get-Content "Skip Tracing/service-account_base64.txt" -Raw
+          if (-not $base64Content) {
+            Write-Error "ERROR: service-account_base64.txt is empty or missing!"
+            exit 1
+          }
+      
+          [System.IO.File]::WriteAllBytes("Skip Tracing/service-account.json", [System.Convert]::FromBase64String($base64Content))
+      
+          # Validate JSON
+          try {
+            Get-Content "Skip Tracing/service-account.json" | ConvertFrom-Json | Out-Null
+          } catch {
+            Write-Error "ERROR: Decoded service-account.json is not valid JSON!"
+            exit 1
+          }
+
+
+      - name: Remove expired OAuth token
+        run: |
+          if (Test-Path "Skip Tracing/token.json") {
+            Remove-Item "Skip Tracing/token.json"
+            Write-Output "Removed expired token.json"
+          }
+        shell: powershell
+
+      - name: Debug logs
+        run: |
+          echo "Starting script execution at $(Get-Date)"
+        shell: powershell
+
+      - name: Verify script location
+        run: Get-ChildItem -Path "Skip Tracing" -Recurse
+        shell: powershell
+
+      - name: Run Python script
+        run: python "Skip Tracing/truppl_parser.py"
