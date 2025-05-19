@@ -615,16 +615,11 @@ def main():
 
     # Setup Undetected Chrome Driver with options to mimic human behavior
     ua = UserAgent()
-    options = uc.ChromeOptions()
-    options.add_argument("--headless=new")    # Removed problematic experimental option
-    options.add_argument(f"user-agent={random.choice(user_agents)}")
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument("--disable-infobars")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-
-    driver = uc.Chrome(options=options)
+    options = Options()
+    options.add_argument('--headless')
+    options.add_argument('--disable-gpu')
+    driver = webdriver.Chrome(options=options)
+    driver.get('https://www.truepeoplesearch.com')
 
     # Inject stealth script so that every new page gets the modifications
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": stealth_js})
