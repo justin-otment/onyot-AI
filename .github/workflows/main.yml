@@ -8,7 +8,7 @@ on:
 
 jobs:
   run-python-script:
-    runs-on: [self-hosted, windows]  # ✅ Correct way to target your labeled runner
+    runs-on: [self-hosted]  # ✅ Correct way to target your labeled runner
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
