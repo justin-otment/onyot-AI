@@ -541,13 +541,13 @@ def extract_sitekey(page_source):
 
 def main():
     """Main execution function."""
-
-    # Define sheet data ranges before calling get_sheet_data()
+    
+    # Define sheet data ranges
     MAILING_STREETS_RANGE = f"{SHEET_NAME}!P2:P"
     ZIPCODE_RANGE = f"{SHEET_NAME}!Q2:Q"
     SITE_RANGE = f"{SHEET_NAME}!B{START_ROW}:B"
 
-    # Retrieve sheet data
+    # Retrieve sheet data from Google Sheets
     mailing_streets = get_sheet_data(SHEET_ID, MAILING_STREETS_RANGE)
     zip_codes = get_sheet_data(SHEET_ID, ZIPCODE_RANGE)
     site_data = get_sheet_data(SHEET_ID, SITE_RANGE)
@@ -556,14 +556,13 @@ def main():
         logging.warning("[!] Missing data in one or both ranges. Skipping processing...")
         return
 
-    # Convert to dictionaries for structured processing
+    # Convert sheet data to dictionaries for structured processing
     street_dict = dict(mailing_streets)
     zip_dict = dict(zip_codes)
     site_dict = dict(site_data)
 
-    # Define valid entries
+    # Build valid entries using the intersection of keys from both dictionaries
     valid_entries = [(idx, street_dict[idx], zip_dict[idx]) for idx in street_dict.keys() & zip_dict.keys()]
-
     if not valid_entries:
         logging.warning("[!] No valid entries to process. Exiting...")
         return
@@ -576,87 +575,91 @@ def main():
     ua = UserAgent()
     options = uc.ChromeOptions()
     options.headless = True
-    options.add_experimental_option('useAutomationExtension', False)
+    # Removed problematic experimental option:
+    # options.add_experimental_option('useAutomationExtension', False)
     options.add_argument(f"user-agent={ua.random}")
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--disable-blink-features=AutomationControlled")
+
     driver = uc.Chrome(options=options)
 
     try:
         for batch_start in range(0, len(valid_entries), BATCH_SIZE):
             batch = valid_entries[batch_start:batch_start + BATCH_SIZE]
-            print(f"[→] Processing batch {batch_start // BATCH_SIZE + 1} with {len(batch)} entries...")
+            logging.info(f"[→] Processing batch {batch_start // BATCH_SIZE + 1} with {len(batch)} entries...")
 
             for row_index, mailing_street, zip_code in batch:
-                print(f"\n[→] Processing Row {row_index}: {mailing_street}, {zip_code}")
+                logging.info(f"[→] Processing Row {row_index}: {mailing_street}, {zip_code}")
                 try:
                     captcha_retries = 0
                     html_content = None
 
+                    # Attempt to retrieve HTML content with CAPTCHA retry handling
                     while captcha_retries < MAX_CAPTCHA_RETRIES:
                         html_content = fetch_truepeoplesearch_data(driver, row_index, mailing_street, zip_code)
                         if html_content:
                             break
                         captcha_retries += 1
-                        print(f"[!] CAPTCHA retry {captcha_retries}/{MAX_CAPTCHA_RETRIES}...")
+                        logging.info(f"[!] CAPTCHA retry {captcha_retries}/{MAX_CAPTCHA_RETRIES}...")
 
                     if not html_content:
-                        print("[!] Skipping row due to repeated CAPTCHA failures.")
+                        logging.warning("[!] Skipping row due to repeated CAPTCHA failures.")
                         continue
 
+                    # Extract links and handle cases with no links
                     extracted_links = extract_links(html_content)
                     if not extracted_links:
-                        print("[DEBUG] Extracted 0 links.")
-                        handle_rate_limit()
+                        logging.debug("[DEBUG] Extracted 0 links.")
+                        handle_rate_limit()  # Pause or change behavior when rate limiting
                         continue
 
+                    # Extract reference names and match with found links
                     ref_names = extract_reference_names(SHEET_ID, row_index)
                     matched_results = match_entries(extracted_links, ref_names)
                     if not matched_results:
-                        print(f"[!] No match found for row {row_index}.")
+                        logging.warning(f"[!] No match found for row {row_index}.")
                         continue
 
                     for matched_entry in matched_results:
                         matched_url = matched_entry["link"]
                         matched_name = matched_entry["text"]
-                        print(f"[→] Visiting profile: {matched_url}")
+                        logging.info(f"[→] Visiting profile: {matched_url}")
 
                         matched_html = navigate_to_profile(driver, matched_url)
                         if not matched_html:
-                            print(f"[!] CAPTCHA blocked: {matched_url}")
-
-                            # Save blocked page for debugging
+                            logging.warning(f"[!] CAPTCHA blocked: {matched_url}")
+                            # Save the blocked page for debugging purposes
                             with open(f"cf_blocked_row{row_index}.html", "w", encoding="utf-8") as f:
                                 f.write(driver.page_source)
                             continue
 
                         phone_numbers, phone_types, emails = parse_contact_info(matched_html)
                         if not phone_numbers:
-                            print(f"[!] No phone numbers found for row {row_index}")
+                            logging.warning(f"[!] No phone numbers found for row {row_index}")
                             continue
 
+                        # Process name to get first and last names
                         name_parts = matched_name.strip().split()
                         first_name = name_parts[0]
                         last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
 
-                        site_data = get_sheet_data(SHEET_ID, SITE_RANGE, START_ROW)
-                        site_dict = {idx: value for idx, value in site_data}
-                        site_value = site_dict.get(row_index, None)
-
+                        # Get site value directly from the pre-fetched site_dict
+                        site_value = site_dict.get(row_index)
                         if site_value is None:
-                            print(f"[!] No Site value found for row {row_index}")
+                            logging.warning(f"[!] No Site value found for row {row_index}")
                             continue
 
                         phone_data = list(zip(phone_numbers, phone_types))
                         append_to_google_sheet(first_name, last_name, phone_data, emails, site_value)
 
                 except Exception as e:
-                    print(f"[!] Error processing row {row_index}: {e}")
+                    logging.error(f"[!] Error processing row {row_index}: {e}")
                     continue
 
     finally:
         driver.quit()
-        print("[✓] Browser session closed.")
+        logging.info("[✓] Browser session closed.")
+
 
 if __name__ == "__main__":
     main()
