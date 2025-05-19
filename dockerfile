@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# System dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     curl unzip wget gnupg ca-certificates lsb-release openvpn \
     xvfb libxi6 libnss3 libxss1 libdbus-glib-1-2 libgtk-3-0 \
@@ -15,14 +15,14 @@ RUN apt-get update && apt-get install -y \
     libgbm1 libxshmfence1 libu2f-udev libvulkan1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Chrome
+# Install Google Chrome
 RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-linux.gpg && \
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
     > /etc/apt/sources.list.d/google-chrome.list && \
     apt-get update && apt-get install -y google-chrome-stable && \
     rm -rf /var/lib/apt/lists/*
 
-# Install matching ChromeDriver with robust fallback logic
+# Install matching ChromeDriver
 RUN set -e && \
     CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+' || echo "114.0.5735.90") && \
     CHROME_MAJOR=$(echo $CHROME_VERSION | cut -d. -f1) && \
@@ -38,11 +38,11 @@ RUN set -e && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy project files
+# Copy application code
 COPY ["Skip Tracing", "/app/Skip Tracing"]
-COPY ["externals/VPNs", "/vpn/externals/VPNs"]
 COPY vpn-entrypoint.sh /app/vpn-entrypoint.sh
 
+# Ensure entrypoint script is executable
 RUN chmod +x /app/vpn-entrypoint.sh
 
 ENTRYPOINT ["/app/vpn-entrypoint.sh"]
