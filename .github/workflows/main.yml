@@ -1,23 +1,35 @@
-name: Run Scraper via Docker
+name: Deploy to AWS Lambda
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main  # Trigger deployment on push to 'main'
 
 jobs:
-  run-scraper:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Install AWS CLI
+        run: sudo apt-get install -y awscli
 
-      - name: Set up Docker Compose
+      - name: Package Lambda Function
         run: |
-          docker compose version
+          zip -r lambda_function.zip .
+          echo "Packaged Python script successfully."
 
-      - name: Build and run container
+      - name: Deploy to AWS Lambda
         run: |
-          docker compose up --build --abort-on-container-exit
+          aws lambda update-function-code \
+          --function-name my-lambda-function \
+          --zip-file fileb://lambda_function.zip \
+          --region us-east-1
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Confirm Lambda Deployment
+        run: aws lambda get-function --function-name my-lambda-function
