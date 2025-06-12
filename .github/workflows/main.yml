@@ -31,6 +31,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install --upgrade --force-reinstall setuptools wheel
+
+      - name: Install specific dependencies (Avoid Conflicts)
+        run: |
+          pip install attrs==19.1.0 proxybroker==0.3.2 --no-cache-dir
           pip install --upgrade --force-reinstall --no-cache-dir -r requirements.txt
           pip list  # Debug installed dependencies
 
