@@ -20,23 +20,35 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.x'
+          python-version: '3.8'  # Explicitly define version for compatibility
 
-      - name: Install dependencies
+      - name: Check Python version & dependencies
+        run: |
+          python --version
+          pip --version
+
+      - name: Install dependencies (Force reinstall)
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install --upgrade --force-reinstall -r requirements.txt
+          pip list  # Debug installed dependencies
 
       - name: Debug Directory Structure
-        run: ls -R
+        run: |
+          echo "Listing available files..."
+          ls -R
+
+      - name: Validate Script Path
+        run: |
+          script_path="${{ matrix.script }}"
+          if [ ! -f "$script_path" ]; then
+            echo "Error: Script $script_path not found! Available files:"
+            ls -R
+            exit 1
+          fi
 
       - name: Run Python script
         run: |
           script_path="${{ matrix.script }}"
-          if [ -f "$script_path" ]; then
-            echo "Running: $script_path"
-            python "$script_path"
-          else
-            echo "Error: Script $script_path not found!"
-            exit 1
-          fi
+          echo "Running: $script_path"
+          python "$script_path"
