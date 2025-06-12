@@ -13,6 +13,7 @@ import gspread
 import time
 import os
 import sys
+sys.stdout.reconfigure(encoding='utf-8')
 
 # Constants
 SHEET_ID = "1IckEBCfyh-o0q7kTPBwU0Ui3eMYJNwOQOmyAysm6W5E"
