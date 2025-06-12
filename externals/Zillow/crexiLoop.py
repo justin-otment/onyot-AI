@@ -96,7 +96,8 @@ def upload_to_google_sheets(data, sheet_id, sheet_name):
     sheet.clear()
     sheet.append_row(["Address", "URL"])
 
-    rows = [[row["Address"], row["URL"]] for row in data]
+    rows = [[row["Address"], row["URL"]] for row in dat
+            a]
     sheet.append_rows(rows)
     print("[✓] Data uploaded to Google Sheets.")
 
