@@ -1,45 +1,45 @@
 # Web Scraping & Automation
-selenium==4.27.1  # Latest available version
-urllib3==2.4.0  # Required for Selenium 4.33.0
-requests==2.32.3
+selenium
+urllib3
+requests
 
 # Google Sheets API & Authentication
-google-api-python-client==2.167.0
-google-auth==2.39.0
-google-auth-httplib2==0.2.0
-google-auth-oauthlib==1.2.1
+google-api-python-client
+google-auth
+google-auth-httplib2
+google-auth-oauthlib
 
 # Authentication Handling
-httplib2==0.22.0
-oauthlib==3.2.2
-requests-oauthlib==2.0.0
-cachetools==5.5.2
+httplib2
+oauthlib
+requests-oauthlib
+cachetools
 
 # HTML Parsing
-beautifulsoup4==4.13.4
-lxml==5.2.1  # Faster XML/HTML parsing than BeautifulSoup
+beautifulsoup4
+lxml
 
 # Environment Variables & Security
-python-dotenv==1.0.1  # Load secrets from .env files
+python-dotenv
 
 # Dependency Management
-setuptools>=69.5.1
-undetected-chromedriver==3.5.4
-fake-useragent==1.5.1
-webdriver-manager>=3.8.6
+setuptools
+undetected-chromedriver
+fake-useragent
+webdriver-manager
 
 # CAPTCHA Handling & Anti-Bot Measures
-selenium-stealth==1.0.6  # Evade bot detection
+selenium-stealth
 
 # Proxy Management (For Web Scraping)
-proxybroker==0.3.2  # Restored, but ensure attrs==19.1.0 is manually installed if needed
+proxybroker
 
 # Rate-Limit Handling
-ratelimit==2.2.1  # Implements rate-limiting to prevent API bans
+ratelimit
 
 # Logging & Debugging
-loguru==0.7.2  # Improved logging for error tracking
+loguru
 
 # Fix Dependency Conflicts
-pyppeteer==2.0.0  # Requires urllib3<2.0.0, but using Selenium-compatible version
-attrs==19.1.0  # Required for proxybroker compatibility
+pyppeteer
+attrs
