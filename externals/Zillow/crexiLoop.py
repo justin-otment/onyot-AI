@@ -2,6 +2,7 @@ import os
 import time
 import logging
 import json
+import base64
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
@@ -14,6 +15,44 @@ from google.oauth2.credentials import Credentials as OAuthCredentials
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
+def load_json_file(file_path):
+    """
+    Load JSON content from a file. First attempts to decode as raw JSON.
+    If that fails, it attempts to base64-decode the file content and then load as JSON.
+    """
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
+    with open(file_path, "r") as f:
+        content = f.read().strip()
+        if not content:
+            raise ValueError(f"{file_path} is empty. Ensure it contains valid JSON or a base64 encoded JSON string.")
+        # Attempt raw JSON load
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError as json_err:
+            # Try applying base64 decoding first
+            try:
+                decoded = base64.b64decode(content).decode("utf-8")
+                return json.loads(decoded)
+            except Exception as b64_err:
+                raise ValueError(
+                    f"Failed to parse {file_path} as JSON. Original JSON error: {json_err}. "
+                    f"Additionally, base64 decoding failed: {b64_err}"
+                )
+
+# Setup Google Sheets API using OAuth token
+def setup_gspread():
+    scope = ["https://www.googleapis.com/auth/spreadsheets"]
+    token_path = os.path.join("gcreds", "token.json")
+    creds_path = os.path.join("gcreds", "credentials.json")
+    
+    # Load token file using the helper function
+    token_info = load_json_file(token_path)
+    # We load credentials if needed later; in this example, gspread uses token_info
+    creds = OAuthCredentials.from_authorized_user_info(token_info, scopes=scope)
+    client = gspread.authorize(creds)
+    return client
+
 # Setup Firefox WebDriver
 def setup_firefox_driver():
     options = FirefoxOptions()
@@ -25,33 +64,11 @@ def setup_firefox_driver():
     logging.info("Firefox driver initialized.")
     return driver
 
-# Setup Google Sheets API using OAuth token
-def setup_gspread():
-    scope = ['https://www.googleapis.com/auth/spreadsheets']
-    token_path = os.path.join("gcreds", "token.json")
-    creds_path = os.path.join("gcreds", "credentials.json")
-
-    if not os.path.exists(token_path):
-        raise FileNotFoundError(f"token.json not found at {token_path}")
-
-    with open(token_path, "r") as token_file:
-        token_content = token_file.read().strip()
-        if not token_content:
-            raise ValueError("token.json is empty. Ensure it contains valid JSON credentials.")
-        try:
-            token_info = json.loads(token_content)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Error decoding JSON from token.json: {e}")
-
-    creds = OAuthCredentials.from_authorized_user_info(token_info, scopes=scope)
-    client = gspread.authorize(creds)
-    return client
-
 # Main scraping logic
 def run_scraper():
-    SHEET_NAME_RAW = 'raw'
-    SHEET_NAME_LHF = 'low hanging fruit'
-    SPREADSHEET_ID = '1IckEBCfyh-o0q7kTPBwU0Ui3eMYJNwOQOmyAysm6W5E'
+    SHEET_NAME_RAW = "raw"
+    SHEET_NAME_LHF = "low hanging fruit"
+    SPREADSHEET_ID = "1IckEBCfyh-o0q7kTPBwU0Ui3eMYJNwOQOmyAysm6W5E"
 
     client = setup_gspread()
     sheet_raw = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME_RAW)
