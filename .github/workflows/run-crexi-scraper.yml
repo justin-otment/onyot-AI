@@ -37,7 +37,8 @@ jobs:
       - name: Set up Google credentials
         run: |
           mkdir gcreds
-          echo "${{ secrets.GCP_CREDS }}" > gcreds/credentials.json
+          echo "${{ secrets.SERVICE_ACCOUNT_JSON }}" > gcreds/credentials.json
+
 
       - name: Run CREXi scraper with Firefox
         env:
