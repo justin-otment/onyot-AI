@@ -1,0 +1,17 @@
+# --- Browser automation ---
+undetected-chromedriver==3.5.5
+selenium==4.19.0
+
+# --- User-Agent spoofing ---
+fake-useragent==1.5.1
+
+# --- Google Sheets integration ---
+gspread==6.0.2
+google-auth==2.29.0
+
+# --- Networking ---
+urllib3==2.2.1
+
+# --- Optional: For structured logging or retries (recommended for production) ---
+# tenacity==8.2.3         # Add if you'd like retry support later
+# rich==13.7.0            # Add for nice terminal output/logs (optional)
