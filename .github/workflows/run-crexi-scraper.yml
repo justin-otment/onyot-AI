@@ -3,7 +3,7 @@ name: Run Crexi Scraper
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 14 * * *'  # Every day at 2PM UTC
+    - cron: '0 14 * * *'  # 2PM UTC daily
 
 jobs:
   scrape:
@@ -22,25 +22,27 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install selenium fake_useragent gspread google-auth google-auth-oauthlib google-auth-httplib2
+          pip install selenium gspread google-auth google-auth-oauthlib fake_useragent
 
       - name: Install Firefox & geckodriver
         run: |
           sudo apt-get update
-          sudo apt-get install -y firefox jq
-      
-          GECKO_VERSION=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | jq -r '.tag_name' | sed 's/^v//')
-          wget https://github.com/mozilla/geckodriver/releases/download/v${GECKO_VERSION}/geckodriver-v${GECKO_VERSION}-linux64.tar.gz
-          tar -xzf geckodriver-v${GECKO_VERSION}-linux64.tar.gz
+          sudo apt-get install -y firefox
+          GECKO_VERSION=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | jq -r '.tag_name')
+          wget https://github.com/mozilla/geckodriver/releases/download/${GECKO_VERSION}/geckodriver-${GECKO_VERSION}-linux64.tar.gz
+          tar -xzf geckodriver-${GECKO_VERSION}-linux64.tar.gz
           chmod +x geckodriver
           sudo mv geckodriver /usr/local/bin/
-
 
       - name: Set up Google OAuth credentials
         run: |
           mkdir -p gcreds
-          echo "${{ secrets.GOOGLE_CREDENTIALS_JSON_BASE64 }}" | base64 -d > gcreds/credentials.json
-          echo "${{ secrets.GOOGLE_OAUTH_TOKEN_JSON_BASE64 }}" | base64 -d > gcreds/token.json
+          echo '${{ secrets.GOOGLE_OAUTH_CREDENTIALS_JSON }}' > gcreds/credentials.json
+          echo '${{ secrets.GOOGLE_OAUTH_TOKEN_JSON }}' > gcreds/token.json
+
+          # Optional validation - remove echo if sensitive
+          jq empty gcreds/credentials.json
+          jq empty gcreds/token.json
 
       - name: Run CREXi scraper
         run: python externals/Zillow/crexiLoop.py
