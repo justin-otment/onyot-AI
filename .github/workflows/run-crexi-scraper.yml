@@ -37,11 +37,21 @@ jobs:
       - name: Set up Google OAuth credentials
         run: |
           mkdir -p gcreds
-          # Use printf to preserve multi-line JSON formatting
-          printf '%s' "${{ secrets.GOOGLE_OAUTH_CREDENTIALS_JSON }}" > gcreds/credentials.json
-          printf '%s' "${{ secrets.GOOGLE_OAUTH_TOKEN_JSON }}" > gcreds/token.json
+          # For credentials.json: prefer raw JSON; if not present try the base64 version.
+          if [ -n "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" ]; then
+            printf '%s' "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" > gcreds/credentials.json
+          else
+            printf '%s' "$(echo "${{ secrets.GOOGLE_CREDENTIALS_JSON_BASE64 }}" | base64 -d)" > gcreds/credentials.json
+          fi
 
-          # Optional validation - remove these lines if exposing sensitive data is a concern
+          # For token.json: similar approach. Prefer raw JSON, else decode base64 if available.
+          if [ -n "${{ secrets.GOOGLE_TOKEN_JSON }}" ]; then
+            printf '%s' "${{ secrets.GOOGLE_TOKEN_JSON }}" > gcreds/token.json
+          else
+            printf '%s' "$(echo "${{ secrets.GOOGLE_TOKEN_JSON_BASE64 }}" | base64 -d)" > gcreds/token.json
+          fi
+
+          # Optional validation: remove if exposing sensitive data is a concern
           jq empty gcreds/credentials.json
           jq empty gcreds/token.json
 
