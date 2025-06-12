@@ -37,11 +37,11 @@ def setup_chrome_driver():
 
 # -------------------------- Page Load and Extraction --------------------------
 def wait_for_results_container(driver, timeout=30):
-    """ Wait until the full results container is loaded. """
+    """ Wait until the full results container (updatable-content-container) is loaded. """
     logging.info("Waiting for property tiles to load...")
     try:
         WebDriverWait(driver, timeout).until(
-            EC.presence_of_all_elements_located((By.CSS_SELECTOR, "#crx-property-tile-aggregate"))
+            EC.presence_of_all_elements_located((By.CLASS_NAME, "updatable-content-container"))
         )
         logging.info("Results container loaded successfully.")
     except TimeoutException as te:
@@ -52,15 +52,14 @@ def wait_for_results_container(driver, timeout=30):
 
 def extract_listing_links(driver):
     """
-    Extract href links from each listing item on the page
-    using the known element structure.
+    Extract href links from each listing item on the page by locating elements with class name 'ng-star-inserted'
+    and filtering for the expected property URL.
     """
-    cards = driver.find_elements(By.CSS_SELECTOR, "#crx-property-tile-aggregate a.cui-card-cover-link")
     hrefs = []
-    for card in cards:
+    for el in driver.find_elements(By.CLASS_NAME, "ng-star-inserted"):
         try:
-            href = card.get_attribute("href")
-            if href:
+            href = el.get_attribute("href")
+            if href and href.startswith("https://www.crexi.com/properties/"):
                 hrefs.append(href)
         except StaleElementReferenceException:
             logging.warning("Encountered a stale element during link extraction. Skipping this element.")
@@ -152,6 +151,7 @@ if __name__ == "__main__":
 
         for page in range(1, 31):
             logging.info(f"--- Scraping page {page} ---")
+            # Ensure we wait for the updated container on each page load.
             wait_for_results_container(driver, timeout=30)
             
             hrefs = extract_listing_links(driver)
