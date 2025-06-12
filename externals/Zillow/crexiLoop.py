@@ -10,7 +10,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import gspread
 from google.oauth2.credentials import Credentials as OAuthCredentials
-from google.auth.transport.requests import Request
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -18,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 # Setup Firefox WebDriver
 def setup_firefox_driver():
     options = FirefoxOptions()
-    options.headless = True  # Run headless for CI
+    options.headless = True
     options.set_preference("dom.webdriver.enabled", False)
     options.set_preference("useAutomationExtension", False)
     service = FirefoxService()
@@ -26,29 +25,16 @@ def setup_firefox_driver():
     logging.info("Firefox driver initialized.")
     return driver
 
-# Setup Google Sheets API using OAuth credentials and token
+# Setup Google Sheets API using OAuth token
 def setup_gspread():
     scope = ['https://www.googleapis.com/auth/spreadsheets']
-    creds_path = os.path.join("gcreds", "credentials.json")
     token_path = os.path.join("gcreds", "token.json")
-    
-    if not os.path.exists(creds_path):
-        raise FileNotFoundError(f"Missing Google credentials file at: {creds_path}")
-    if not os.path.exists(token_path):
-        raise FileNotFoundError(f"Missing Google token file at: {token_path}")
+    creds_path = os.path.join("gcreds", "credentials.json")
 
-    creds = OAuthCredentials.from_authorized_user_file(token_path, scopes=scope)
+    with open(token_path, "r") as token_file:
+        token_info = json.load(token_file)
 
-    if not creds.valid:
-        if creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            raise RuntimeError("Google credentials are invalid and cannot be refreshed automatically in CI.")
-
-        # Save the refreshed token
-        with open(token_path, 'w') as token_file:
-            token_file.write(creds.to_json())
-
+    creds = OAuthCredentials.from_authorized_user_info(token_info, scopes=scope)
     client = gspread.authorize(creds)
     return client
 
@@ -56,7 +42,7 @@ def setup_gspread():
 def run_scraper():
     SHEET_NAME_RAW = 'raw'
     SHEET_NAME_LHF = 'low hanging fruit'
-    SPREADSHEET_ID = '1IckEBCfyh-o0q7kTPBwU0Ui3eMYJNwOQOmyAysm6W5E'  # Replace with your actual sheet ID
+    SPREADSHEET_ID = '1IckEBCfyh-o0q7kTPBwU0Ui3eMYJNwOQOmyAysm6W5E'
 
     client = setup_gspread()
     sheet_raw = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME_RAW)
@@ -67,7 +53,6 @@ def run_scraper():
 
     try:
         driver.get(url)
-
         WebDriverWait(driver, 30).until(
             EC.presence_of_element_located((By.ID, "crx-property-tile-aggregate"))
         )
@@ -79,25 +64,16 @@ def run_scraper():
             driver.get(link)
             time.sleep(2)
 
-            try:
-                address = driver.find_element(By.CSS_SELECTOR, "h2.text").text
-            except:
-                address = "N/A"
+            def safe_text(selector):
+                try:
+                    return driver.find_element(By.CSS_SELECTOR, selector).text
+                except:
+                    return "N/A"
 
-            try:
-                dom = driver.find_element(By.CSS_SELECTOR, ".pdp_updated-date-value span.ng-star-inserted").text
-            except:
-                dom = "N/A"
-
-            try:
-                lot_size = driver.find_element(By.CSS_SELECTOR, "div:nth-of-type(4) span.detail-value").text
-            except:
-                lot_size = "N/A"
-
-            try:
-                price = driver.find_element(By.CSS_SELECTOR, ".term-value span").text
-            except:
-                price = "N/A"
+            address = safe_text("h2.text")
+            dom = safe_text(".pdp_updated-date-value span.ng-star-inserted")
+            lot_size = safe_text("div:nth-of-type(4) span.detail-value")
+            price = safe_text(".term-value span")
 
             try:
                 label_text = driver.find_element(By.CSS_SELECTOR, "div > div.property-info-container:nth-of-type(1)").text
