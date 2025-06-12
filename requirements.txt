@@ -1,6 +1,6 @@
 # Web Scraping & Automation
-selenium==4.21.0
-urllib3>=1.26.18,<2.0  # Compatible with Selenium
+selenium==4.33.0  # Updated for compatibility with latest urllib3
+urllib3==2.4.0  # Required for Selenium 4.33.0
 requests==2.32.3
 
 # Google Sheets API & Authentication
@@ -32,10 +32,14 @@ webdriver-manager>=3.8.6
 selenium-stealth==1.0.6  # Evade bot detection
 
 # Proxy Management (For Web Scraping)
-# proxybroker==0.3.2  # Removed due to dependency conflicts (requires attrs==19.1.0)
+proxybroker==0.3.2  # Restored, but ensure attrs==19.1.0 is manually installed if needed
 
 # Rate-Limit Handling
 ratelimit==2.2.1  # Implements rate-limiting to prevent API bans
 
 # Logging & Debugging
 loguru==0.7.2  # Improved logging for error tracking
+
+# Fix Dependency Conflicts
+pyppeteer==2.0.0  # Requires urllib3<2.0.0, but using Selenium-compatible version
+attrs==19.1.0  # Required for proxybroker compatibility
