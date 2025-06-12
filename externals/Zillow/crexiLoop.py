@@ -36,10 +36,6 @@ def setup_edge_driver():
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument(f"user-agent={ua.random}")
-    # If you need to specify your msedgedriver path:
-    # service = EdgeService(executable_path="path/to/msedgedriver.exe")
-    # return webdriver.Edge(service=service, options=options)
     driver = webdriver.Edge(options=options)
     logging.info("Edge driver initialized.")
     return driver
