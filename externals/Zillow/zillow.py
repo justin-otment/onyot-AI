@@ -14,19 +14,19 @@ import os
 # Initialize the UserAgent object
 ua = UserAgent()
 
-# Constants
-USER_DATA_DIR = "C:\\Users\\DELL\\AppData\\Local\\Google\\Chrome\\User Data"
-PROFILE_DIRECTORY = "Profile 1"
+# Constants - Adjusted for Linux (GitHub CI)
+USER_DATA_DIR = os.path.expanduser("~/.config/google-chrome")  # Linux Chrome profile
+PROFILE_DIRECTORY = "Default"
 
 def setup_chrome_driver():
-    """Set up Chrome driver with custom options."""
+    """Set up Chrome driver with GitHub CI-compatible options."""
     options = ChromeOptions()
     options.add_argument(f"--user-data-dir={USER_DATA_DIR}")
-    options.add_argument(f"--remote-debugging-port=0")
+    options.add_argument(f"--remote-debugging-port=9222")  # Explicit port for stability
     options.add_argument(f"--profile-directory={PROFILE_DIRECTORY}")
-    options.add_argument(f"--start-maximized")
-    options.add_argument('--disable-blink-features=AutomationControlled')
-    options.add_argument(f"user-agent={ua.random}")  # Set a random user agent
+    options.add_argument("--start-maximized")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument(f"user-agent={ua.random if ua.random else 'Mozilla/5.0 (X11; Linux x86_64)'}")  # Prevent SSL issues with fake_useragent
     return Chrome(options=options)
 
 # Function to check if an element has been processed
@@ -101,7 +101,7 @@ try:
     data = scrape_zillow_data(max_pages=30)
     if not data:  # Ensure data is a list before writing to CSV
         data = []
-    csv_file_path = r'C:\Users\DELL\Documents\Onyot.ai\Lead_List-Generator\python tests\externals\zillow_active-listings.csv'
+    csv_file_path = os.path.join(os.getcwd(), "zillow_active_listings.csv")
     with open(csv_file_path, mode='w', newline='', encoding='utf-8') as file:
         writer = csv.DictWriter(file, fieldnames=["Address", "URL"])
         writer.writeheader()
