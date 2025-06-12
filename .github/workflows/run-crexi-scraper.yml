@@ -25,9 +25,16 @@ jobs:
           pip install -r requirements.txt
           pip install selenium fake_useragent gspread google-auth
 
-      - name: Install Edge WebDriver
+      - name: Install Edge WebDriver manually
         run: |
-          choco install msedgedriver --confirm
+          $edgeVersion = (Get-Item "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe").VersionInfo.ProductVersion
+          $versionMajor = $edgeVersion.Split('.')[0]
+          $webDriverUrl = "https://msedgedriver.azureedge.net/${edgeVersion}/edgedriver_win64.zip"
+          Invoke-WebRequest -Uri $webDriverUrl -OutFile "edgedriver.zip"
+          Expand-Archive edgedriver.zip -DestinationPath "."
+          $env:PATH = "${{ github.workspace }};${env:PATH}"
+          echo "${{ github.workspace }}" | Out-File -Append -Encoding ascii $env:GITHUB_PATH
+
 
       - name: Set up Google credentials
         run: |
