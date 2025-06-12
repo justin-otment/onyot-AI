@@ -33,6 +33,12 @@ jobs:
           choco install chromedriver -y
           echo "Chrome and Chromedriver installed successfully"
 
+      - name: Set Working Directory
+        run: |
+          cd $env:GITHUB_WORKSPACE
+          echo "Current working directory:"
+          pwd
+
       - name: Install proxybroker first to resolve attrs conflict
         run: |
           pip install attrs==19.1.0 proxybroker==0.3.2 --no-cache-dir
@@ -47,14 +53,14 @@ jobs:
       - name: Debug Directory Structure
         run: |
           echo "Listing available files..."
-          dir /s /b
+          Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse
 
       - name: Validate Script Path
         run: |
           $script_path = "${{ matrix.script }}"
           if (!(Test-Path $script_path)) {
-            Write-Host "Error: Script $script_path not found! Available files:"
-            dir /s /b
+            Write-Host "Error: Script $script_path not found! Searching workspace..."
+            Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse
             exit 1
           }
 
@@ -67,6 +73,7 @@ jobs:
       - name: Post-Execution Debugging (Capture Logs)
         if: failure()
         run: |
+          echo "Capturing Windows logs after failure..."
           Get-EventLog -LogName Application -Newest 50
           Get-EventLog -LogName System -Newest 50
 
