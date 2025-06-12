@@ -1,4 +1,4 @@
-name: Run Multiple Python Scripts
+name: Run Python Scraping Script
 
 on:
   push:
@@ -20,16 +20,17 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.8'  # Explicitly define version for compatibility
+          python-version: '3.8'  # Explicitly define a stable version
 
-      - name: Check Python version & dependencies
+      - name: Check Python & pip versions
         run: |
           python --version
           pip --version
 
-      - name: Install dependencies (Force reinstall)
+      - name: Fix setuptools issue & upgrade dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install --upgrade --force-reinstall setuptools wheel
           pip install --upgrade --force-reinstall --no-cache-dir -r requirements.txt
           pip list  # Debug installed dependencies
 
@@ -59,3 +60,11 @@ jobs:
           echo "Capturing logs after failure..."
           cat /var/log/syslog | tail -n 50
           dmesg | tail -n 50
+
+      - name: Clean Virtual Environment (Optional Recovery Step)
+        if: failure()
+        run: |
+          python -m venv env
+          source env/bin/activate
+          pip install --upgrade pip setuptools wheel
+          pip install --upgrade --force-reinstall -r requirements.txt
