@@ -1,6 +1,7 @@
 import os
 import time
 import logging
+import json
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
@@ -8,7 +9,8 @@ from selenium.webdriver.firefox.service import Service as FirefoxService
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import gspread
-from google.oauth2.service_account import Credentials
+from google.oauth2.credentials import Credentials as OAuthCredentials
+from google.auth.transport.requests import Request
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -24,12 +26,30 @@ def setup_firefox_driver():
     logging.info("Firefox driver initialized.")
     return driver
 
-# Setup Google Sheets API
+# Setup Google Sheets API using OAuth credentials and token
 def setup_gspread():
     scope = ['https://www.googleapis.com/auth/spreadsheets']
-    creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-    credentials = Credentials.from_service_account_file(creds_path, scopes=scope)
-    client = gspread.authorize(credentials)
+    creds_path = os.path.join("gcreds", "credentials.json")
+    token_path = os.path.join("gcreds", "token.json")
+    
+    if not os.path.exists(creds_path):
+        raise FileNotFoundError(f"Missing Google credentials file at: {creds_path}")
+    if not os.path.exists(token_path):
+        raise FileNotFoundError(f"Missing Google token file at: {token_path}")
+
+    creds = OAuthCredentials.from_authorized_user_file(token_path, scopes=scope)
+
+    if not creds.valid:
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            raise RuntimeError("Google credentials are invalid and cannot be refreshed automatically in CI.")
+
+        # Save the refreshed token
+        with open(token_path, 'w') as token_file:
+            token_file.write(creds.to_json())
+
+    client = gspread.authorize(creds)
     return client
 
 # Main scraping logic
@@ -43,7 +63,6 @@ def run_scraper():
     sheet_lhf = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME_LHF)
 
     url = "https://www.crexi.com/properties"
-
     driver = setup_firefox_driver()
 
     try:
