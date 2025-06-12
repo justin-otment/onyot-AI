@@ -1,5 +1,5 @@
 # Web Scraping & Automation
-selenium==4.33.0  # Updated for compatibility with latest urllib3
+selenium==4.27.1  # Latest available version
 urllib3==2.4.0  # Required for Selenium 4.33.0
 requests==2.32.3
 
