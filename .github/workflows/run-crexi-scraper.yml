@@ -23,13 +23,16 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: 🔐 Write Google credentials
+    - name: 🔐 Decode and write Google credentials from BASE64
       run: |
         New-Item -ItemType Directory -Force -Path "${env:GITHUB_WORKSPACE}\gcreds"
-        "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" | Out-File -Encoding utf8 "${env:GITHUB_WORKSPACE}\gcreds\credentials.json"
+        [System.Text.Encoding]::UTF8.GetString(
+          [System.Convert]::FromBase64String("${{ secrets.GOOGLE_CREDENTIALS_JSON_BASE64 }}")
+        ) | Out-File -Encoding utf8 "${env:GITHUB_WORKSPACE}\gcreds\credentials.json"
       shell: pwsh
 
     - name: 🚀 Run CREXi scraper
       run: |
         $env:GOOGLE_APPLICATION_CREDENTIALS = "${env:GITHUB_WORKSPACE}\gcreds\credentials.json"
         python externals/Zillow/crexiLoop.py
+      shell: pwsh
