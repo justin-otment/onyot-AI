@@ -7,7 +7,7 @@ on:
 
 jobs:
   scrape:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # Switched to Linux for Firefox stability
 
     steps:
       - name: Checkout repository
@@ -20,17 +20,17 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y firefox
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install selenium fake_useragent gspread google-auth
+          pip install selenium fake_useragent gspread google-auth google-auth-oauthlib google-api-python-client
 
-      - name: Install Geckodriver
+      - name: Install Firefox & geckodriver
         run: |
-          GECKO_VERSION=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
-          wget "https://github.com/mozilla/geckodriver/releases/download/v${GECKO_VERSION}/geckodriver-v${GECKO_VERSION}-linux64.tar.gz"
-          tar -xzf "geckodriver-v${GECKO_VERSION}-linux64.tar.gz"
+          sudo apt-get update
+          sudo apt-get install -y firefox
+          GECKO_VERSION=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | jq -r '.tag_name')
+          wget -O geckodriver.tar.gz "https://github.com/mozilla/geckodriver/releases/download/${GECKO_VERSION}/geckodriver-${GECKO_VERSION}-linux64.tar.gz"
+          tar -xzf geckodriver.tar.gz
           chmod +x geckodriver
           sudo mv geckodriver /usr/local/bin/
 
@@ -38,8 +38,6 @@ jobs:
         run: |
           mkdir gcreds
           echo "${{ secrets.GOOGLE_CREDENTIALS_JSON_BASE64 }}" | base64 -d > gcreds/credentials.json
-
-
 
       - name: Run CREXi scraper with Firefox
         env:
