@@ -3,7 +3,7 @@ name: Run Crexi Scraper
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 14 * * *'  # Runs every day at 2 PM UTC
+    - cron: '0 14 * * *'  # Runs every day at 2 PM UTC (9 AM ET)
 
 jobs:
   scrape:
@@ -27,7 +27,7 @@ jobs:
 
       - name: Install Edge WebDriver
         run: |
-          choco install microsoft-edge-webdriver --confirm
+          choco install msedgedriver --confirm
 
       - name: Set up Google credentials
         run: |
