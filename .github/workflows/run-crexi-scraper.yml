@@ -7,7 +7,7 @@ on:
 
 jobs:
   scrape:
-    runs-on: windows-latest
+    runs-on: windows-latest  # Still fine, but could also use ubuntu-latest if desired
 
     steps:
       - name: Checkout repository
@@ -21,27 +21,21 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # Remove undetected-chromedriver since we're using Edge
           pip install -r requirements.txt
           pip install selenium fake_useragent gspread google-auth
 
-      - name: Install Edge WebDriver manually
+      - name: Install Firefox and Geckodriver
         run: |
-          $edgeVersion = (Get-Item "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe").VersionInfo.ProductVersion
-          $versionMajor = $edgeVersion.Split('.')[0]
-          $webDriverUrl = "https://msedgedriver.azureedge.net/${edgeVersion}/edgedriver_win64.zip"
-          Invoke-WebRequest -Uri $webDriverUrl -OutFile "edgedriver.zip"
-          Expand-Archive edgedriver.zip -DestinationPath "."
-          $env:PATH = "${{ github.workspace }};${env:PATH}"
-          echo "${{ github.workspace }}" | Out-File -Append -Encoding ascii $env:GITHUB_PATH
-
+          choco install firefox --no-progress
+          choco install geckodriver --version=0.34.0 --no-progress
+        shell: powershell
 
       - name: Set up Google credentials
         run: |
           mkdir gcreds
           echo "${{ secrets.GCP_CREDS }}" > gcreds/credentials.json
 
-      - name: Run CREXi scraper on Edge
+      - name: Run CREXi scraper with Firefox
         env:
           GOOGLE_APPLICATION_CREDENTIALS: "${{ github.workspace }}\\gcreds\\credentials.json"
         run: |
