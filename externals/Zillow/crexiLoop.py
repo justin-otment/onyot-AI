@@ -30,6 +30,9 @@ def wait_for_results_container(driver):
     )
 
 def extract_listing_links(driver):
+    WebDriverWait(driver, 30).until(
+        EC.presence_of_all_elements_located((By.CSS_SELECTOR, "crx-property-tile-aggregate"))
+    )
     cards = driver.find_elements(By.CSS_SELECTOR, "crx-property-tile-aggregate")
     hrefs = []
     for card in cards:
