@@ -26,7 +26,6 @@ logging.basicConfig(
 # -------------------------- Selenium Driver Setup --------------------------
 def setup_chrome_driver():
     options = ChromeOptions()
-    # Use headless mode with the new headless feature for stability in CI.
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
@@ -37,13 +36,19 @@ def setup_chrome_driver():
     return driver
 
 # -------------------------- Page Load and Extraction --------------------------
-def wait_for_results_container(driver):
+def wait_for_results_container(driver, timeout=30):
     """ Wait until the full results container is loaded. """
     logging.info("Waiting for property tiles to load...")
-    WebDriverWait(driver, 30).until(
-        EC.presence_of_all_elements_located((By.CSS_SELECTOR, "#crx-property-tile-aggregate"))
-    )
-    logging.info("Results container loaded.")
+    try:
+        WebDriverWait(driver, timeout).until(
+            EC.presence_of_all_elements_located((By.CSS_SELECTOR, "#crx-property-tile-aggregate"))
+        )
+        logging.info("Results container loaded successfully.")
+    except TimeoutException as te:
+        logging.error("Timeout waiting for results container on URL: " + driver.current_url)
+        snippet = driver.page_source[:1000] if driver.page_source else "No page source available."
+        logging.error("Page source snippet for debugging:\n" + snippet)
+        raise
 
 def extract_listing_links(driver):
     """
@@ -58,7 +63,7 @@ def extract_listing_links(driver):
             if href:
                 hrefs.append(href)
         except StaleElementReferenceException:
-            logging.warning("Encountered a stale element during link extraction. Skipping one element.")
+            logging.warning("Encountered a stale element during link extraction. Skipping this element.")
             continue
     logging.info(f"Found {len(hrefs)} listing links on page.")
     return hrefs
@@ -77,22 +82,18 @@ def classify_and_scrape_listing(driver, url):
     """
     try:
         driver.get(url)
-        # Wait for the Site Address element to be present.
         WebDriverWait(driver, 15).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "h2.text"))
         )
-        # Extract required elements.
         site_address = driver.find_element(By.CSS_SELECTOR, "h2.text").text.strip()
         days_on_market = driver.find_element(By.CSS_SELECTOR, ".pdp_updated-date-value span.ng-star-inserted").text.strip()
         lot_size = driver.find_element(By.CSS_SELECTOR, "div:nth-of-type(4) span.detail-value").text.strip()
         price = driver.find_element(By.CSS_SELECTOR, ".term-value span").text.strip()
         
-        # Scroll into view and extract the full text from the property info container.
         info_container = driver.find_element(By.CSS_SELECTOR, "div > div.property-info-container:nth-of-type(1)")
         driver.execute_script("arguments[0].scrollIntoView();", info_container)
         info_text = info_container.text
         
-        # Classify the listing based on the presence of the word "Units".
         sheet_name = "raw" if "Units" in info_text else "low hanging fruit"
         logging.info(f"Listing classified as '{sheet_name}' - {site_address}")
         
@@ -104,14 +105,13 @@ def classify_and_scrape_listing(driver, url):
             "URL": url,
             "Sheet": sheet_name
         }
-
     except Exception as e:
         logging.error(f"Error scraping {url}: {e}")
         return None
 
 # -------------------------- Google Sheets Upload --------------------------
 def upload_classified_data_to_sheets(data, sheet_id):
-    """ Upload the data into two separate Google Sheets tabs based on classification. """
+    """ Upload the data into separate Google Sheets tabs based on classification. """
     try:
         credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "gcreds/credentials.json")
         creds = Credentials.from_service_account_file(credentials_path, scopes=["https://www.googleapis.com/auth/spreadsheets"])
@@ -148,21 +148,18 @@ if __name__ == "__main__":
     all_results = []
     try:
         driver.get(URL)
-        wait_for_results_container(driver)
+        wait_for_results_container(driver, timeout=30)
 
-        # Loop though a maximum of 30 pages
         for page in range(1, 31):
             logging.info(f"--- Scraping page {page} ---")
-
-            # Ensure results container is loaded on the current page
-            wait_for_results_container(driver)
+            wait_for_results_container(driver, timeout=30)
+            
             hrefs = extract_listing_links(driver)
             for href in hrefs:
                 listing = classify_and_scrape_listing(driver, href)
                 if listing:
                     all_results.append(listing)
 
-            # Navigate to next page if possible.
             try:
                 next_btn = WebDriverWait(driver, 10).until(
                     EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[aria-label="Next Page"]'))
@@ -170,10 +167,9 @@ if __name__ == "__main__":
                 driver.execute_script("arguments[0].scrollIntoView();", next_btn)
                 current_url = driver.current_url
                 next_btn.click()
-                # Wait for URL change to confirm page navigation.
                 WebDriverWait(driver, 15).until(EC.url_changes(current_url))
                 logging.info(f"Navigated to next page: {driver.current_url}")
-                wait_for_results_container(driver)
+                wait_for_results_container(driver, timeout=30)
             except TimeoutException:
                 logging.info("No more pages or next button not found. Ending pagination.")
                 break
