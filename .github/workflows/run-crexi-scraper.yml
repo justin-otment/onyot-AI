@@ -37,12 +37,19 @@ jobs:
       - name: Set up Google OAuth credentials
         run: |
           mkdir -p gcreds
-          echo '${{ secrets.GOOGLE_OAUTH_CREDENTIALS_JSON }}' > gcreds/credentials.json
-          echo '${{ secrets.GOOGLE_OAUTH_TOKEN_JSON }}' > gcreds/token.json
+          # Use printf to preserve multi-line JSON formatting
+          printf '%s' "${{ secrets.GOOGLE_OAUTH_CREDENTIALS_JSON }}" > gcreds/credentials.json
+          printf '%s' "${{ secrets.GOOGLE_OAUTH_TOKEN_JSON }}" > gcreds/token.json
 
-          # Optional validation - remove echo if sensitive
+          # Optional validation - remove these lines if exposing sensitive data is a concern
           jq empty gcreds/credentials.json
           jq empty gcreds/token.json
+
+      # Optionally, for debugging purposes, print out token.json (remove after validation)
+      # - name: Debug token.json content
+      #   run: |
+      #     echo "Contents of gcreds/token.json:"
+      #     cat gcreds/token.json
 
       - name: Run CREXi scraper
         run: python externals/Zillow/crexiLoop.py
