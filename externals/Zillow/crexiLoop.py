@@ -31,8 +31,17 @@ def setup_gspread():
     token_path = os.path.join("gcreds", "token.json")
     creds_path = os.path.join("gcreds", "credentials.json")
 
+    if not os.path.exists(token_path):
+        raise FileNotFoundError(f"token.json not found at {token_path}")
+
     with open(token_path, "r") as token_file:
-        token_info = json.load(token_file)
+        token_content = token_file.read().strip()
+        if not token_content:
+            raise ValueError("token.json is empty. Ensure it contains valid JSON credentials.")
+        try:
+            token_info = json.loads(token_content)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Error decoding JSON from token.json: {e}")
 
     creds = OAuthCredentials.from_authorized_user_info(token_info, scopes=scope)
     client = gspread.authorize(creds)
@@ -67,7 +76,7 @@ def run_scraper():
             def safe_text(selector):
                 try:
                     return driver.find_element(By.CSS_SELECTOR, selector).text
-                except:
+                except Exception:
                     return "N/A"
 
             address = safe_text("h2.text")
@@ -81,7 +90,7 @@ def run_scraper():
                     sheet_raw.append_row([link, address, dom, lot_size, price])
                 else:
                     sheet_lhf.append_row([link, address, dom, lot_size, price])
-            except:
+            except Exception:
                 sheet_lhf.append_row([link, address, dom, lot_size, price])
 
     except Exception as e:
