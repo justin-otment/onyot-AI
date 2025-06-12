@@ -32,7 +32,6 @@ logging.basicConfig(
 def setup_edge_driver():
     options = EdgeOptions()
     options.use_chromium = True
-    options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-blink-features=AutomationControlled")
