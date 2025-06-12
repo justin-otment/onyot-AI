@@ -54,7 +54,7 @@ def scrape_crexi_data(driver, max_pages=30):
                 print(f"[!] Error: Could not locate listing container on page {page}. Skipping.")
                 continue
 
-            cards = driver.find_elements(By.CSS_SELECTOR, "a.cui-card-cover-link")
+            cards = driver.find_elements(By.CSS_SELECTOR, "crx-property-tile-aggregate")
 
             for card in cards:
                 for attempt in range(3):
