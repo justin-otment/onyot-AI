@@ -1,4 +1,4 @@
-name: Run Python Automation Script
+name: Run Multiple Python Scripts
 
 on:
   push:
@@ -7,14 +7,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  run-python-script:
-    runs-on: windows-latest
-    
-    env:
-      TWO_CAPTCHA_API_KEY: ${{ secrets.TWO_CAPTCHA_API_KEY }}
-      VPN_USERNAME: ${{ secrets.VPN_USERNAME }}
-      VPN_PASSWORD: ${{ secrets.VPN_PASSWORD }}
-      
+  run-scripts:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        script:
+          - "externals/Zillow/zillow.py"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -22,140 +20,23 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.10'
-
-      - name: Cache Python dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~\AppData\Local\pip\Cache
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          python-version: '3.x'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if (Test-Path requirements.txt) { pip install -r requirements.txt }
-          python -m pip install nest_asyncio google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client selenium chromedriver-autoinstaller
-        shell: powershell
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Install Chrome and ChromeDriver (Latest)
-        run: |
-          $LATEST_VERSION = Invoke-WebRequest -Uri "https://chromedriver.storage.googleapis.com/LATEST_RELEASE" | Select-Object -ExpandProperty Content
-          $CHROMEDRIVER_URL = "https://chromedriver.storage.googleapis.com/$LATEST_VERSION/chromedriver_win32.zip"
-
-          Invoke-WebRequest -Uri $CHROMEDRIVER_URL -OutFile chromedriver.zip
-          Expand-Archive chromedriver.zip -DestinationPath C:\ChromeDriver
-          echo "C:\ChromeDriver" | Out-File -Encoding utf8 -Append $env:GITHUB_PATH
-          C:\ChromeDriver\chromedriver.exe --version
-        shell: powershell
-
-      - name: Install Firefox and Geckodriver
-        run: |
-          choco install firefox -y
-          
-          # Fetch latest Geckodriver release dynamically
-          $response = Invoke-RestMethod -Uri "https://api.github.com/repos/mozilla/geckodriver/releases/latest"
-          $GECKO_VERSION = $response.tag_name -replace "v", ""
-          $GECKO_URL = "https://github.com/mozilla/geckodriver/releases/download/v$GECKO_VERSION/geckodriver-v$GECKO_VERSION-win64.zip"
-          
-          Invoke-WebRequest -Uri $GECKO_URL -OutFile geckodriver.zip
-          Expand-Archive geckodriver.zip -DestinationPath C:\GeckoDriver
-          echo "C:\GeckoDriver" | Out-File -Encoding utf8 -Append $env:GITHUB_PATH
-          C:\GeckoDriver\geckodriver.exe --version
-        shell: powershell
-
-      - name: Install OpenVPN
-        run: choco install openvpn -y
-        shell: powershell
-
-      - name: Debug Repository Structure
-        run: |
-          Write-Output "Listing repository files..."
-          Get-ChildItem -Path "${{ github.workspace }}" -Recurse
-        shell: powershell
-
-      - name: Set OpenVPN Configuration Paths
-        run: |
-          $configPath = "${{ github.workspace }}\externals\VPNs\us11597.nordvpn.com.tcp.ovpn"
-          $authPath = "${{ github.workspace }}\externals\VPNs\auth.txt"
-
-          if (-Not (Test-Path $configPath)) {
-              Write-Error "ERROR: OpenVPN configuration file not found at $configPath!"
-              exit 1
-          }
-
-          if (-Not (Test-Path $authPath)) {
-              Write-Error "ERROR: OpenVPN authentication file not found at $authPath!"
-              exit 1
-          }
-
-          echo "CONFIG_PATH=$configPath" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
-          echo "AUTH_PATH=$authPath" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
-        shell: powershell
-
-      - name: Start OpenVPN Connection
-        run: |
-          if (Test-Path "C:\Program Files\OpenVPN\bin\openvpn.exe") {
-              Write-Output "Starting OpenVPN..."
-
-              if ((Test-Path "$env:CONFIG_PATH") -and (Test-Path "$env:AUTH_PATH")) {
-                  Start-Process -FilePath "C:\Program Files\OpenVPN\bin\openvpn.exe" -ArgumentList "--config $env:CONFIG_PATH --auth-user-pass $env:AUTH_PATH" -NoNewWindow
-                  Write-Output "OpenVPN started successfully."
-              } else {
-                  Write-Error "OpenVPN configuration or authentication file missing!"
-                  exit 1
-              }
-          } else {
-              Write-Error "OpenVPN executable not found!"
-              exit 1
-          }
-        shell: powershell
-
-      - name: Verify OpenVPN Connection
-        run: |
-          ipconfig | Select-String "VPN"
-        shell: powershell
-
-      - name: Create directory for service account file
-        run: mkdir -p "Skip Tracing"
-        shell: bash
-
-      - name: Decode service-account_base64.txt to service-account.json
-        shell: pwsh
-        run: |
-          $base64Content = Get-Content "Skip Tracing/service-account_base64.txt" -Raw
-          if (-not $base64Content) {
-            Write-Error "ERROR: service-account_base64.txt is empty or missing!"
-            exit 1
-          }
-      
-          [System.IO.File]::WriteAllBytes("Skip Tracing/service-account.json", [System.Convert]::FromBase64String($base64Content))
-      
-          # Validate JSON
-          try {
-            Get-Content "Skip Tracing/service-account.json" | ConvertFrom-Json | Out-Null
-          } catch {
-            Write-Error "ERROR: Decoded service-account.json is not valid JSON!"
-            exit 1
-          }
-
-      - name: Remove expired OAuth token
-        run: |
-          if (Test-Path "Skip Tracing/token.json") {
-            Remove-Item "Skip Tracing/token.json"
-            Write-Output "Removed expired token.json"
-          }
-        shell: powershell
-
-      - name: Debug logs
-        run: |
-          echo "Starting script execution at $(Get-Date)"
-        shell: powershell
-
-      - name: Verify script location
-        run: Get-ChildItem -Path "Skip Tracing" -Recurse
-        shell: powershell
+      - name: Debug Directory Structure
+        run: ls -R
 
       - name: Run Python script
-        run: python "Skip Tracing/truppl_parser.py"
+        run: |
+          script_path="${{ matrix.script }}"
+          if [ -f "$script_path" ]; then
+            echo "Running: $script_path"
+            python "$script_path"
+          else
+            echo "Error: Script $script_path not found!"
+            exit 1
+          fi
