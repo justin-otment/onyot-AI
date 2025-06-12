@@ -19,8 +19,7 @@ URL             = (
     "pageSize=60&mapCenter=28.749099306735435,-82.0311664044857"
     "&mapZoom=7&showMap=true&acreageMin=2&types%5B%5D=Land"
 )
-DEFAULT_TIMEOUT = 120
-ua              = UserAgent()
+DEFAULT_TIMEOUT = 180
 
 # -------------------------- Logging Setup --------------------------
 logging.basicConfig(
@@ -37,7 +36,6 @@ def setup_edge_driver():
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument(f"user-agent={ua.random}")
     driver = webdriver.Edge(options=options)
     logging.info("Edge driver initialized.")
     return driver
