@@ -3,14 +3,14 @@ name: Run Crexi Scraper
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 14 * * *'  # Every day at 2 PM UTC (9 AM ET)
+    - cron: '0 14 * * *'  # 2PM UTC daily
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -18,28 +18,18 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install selenium fake_useragent gspread google-auth
+          pip install selenium gspread google-auth
 
-      - name: Install Firefox and Geckodriver
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y firefox
-          GECKODRIVER_VERSION=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | grep 'tag_name' | cut -d '"' -f 4)
-          wget https://github.com/mozilla/geckodriver/releases/download/${GECKODRIVER_VERSION}/geckodriver-${GECKODRIVER_VERSION}-linux64.tar.gz
-          tar -xzf geckodriver-${GECKODRIVER_VERSION}-linux64.tar.gz
-          chmod +x geckodriver
-          sudo mv geckodriver /usr/local/bin/
-
-      - name: Set up Google credentials
+      - name: Decode Google Credentials
         run: |
           mkdir -p gcreds
-          echo "${{ secrets.GOOGLE_CREDENTIALS_JSON_BASE64 }}" | base64 -d > gcreds/credentials.json
+          echo "${{ secrets.GOOGLE_CREDENTIALS_JSON_BASE64 }}" | base64 --decode > gcreds/credentials.json
 
-      - name: Run CREXi scraper
+      - name: Run Scraper
         env:
           GOOGLE_APPLICATION_CREDENTIALS: "${{ github.workspace }}/gcreds/credentials.json"
         run: |
