@@ -1,4 +1,4 @@
-name: Run Python Scraping Script
+name: Run Python Scraping Script (Windows)
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   run-scripts:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     strategy:
       matrix:
         script:
@@ -29,12 +29,9 @@ jobs:
 
       - name: Install Chrome & ChromeDriver
         run: |
-          sudo apt update
-          sudo apt install -y google-chrome-stable
-          wget -N https://chromedriver.storage.googleapis.com/$(curl -s https://chromedriver.storage.googleapis.com/LATEST_RELEASE)/chromedriver_linux64.zip
-          unzip chromedriver_linux64.zip
-          sudo mv chromedriver /usr/local/bin/
-          chromedriver --version
+          choco install googlechrome -y
+          choco install chromedriver -y
+          echo "Chrome and Chromedriver installed successfully"
 
       - name: Install proxybroker first to resolve attrs conflict
         run: |
@@ -50,34 +47,33 @@ jobs:
       - name: Debug Directory Structure
         run: |
           echo "Listing available files..."
-          ls -R
+          dir /s /b
 
       - name: Validate Script Path
         run: |
-          script_path="${{ matrix.script }}"
-          if [ ! -f "$script_path" ]; then
-            echo "Error: Script $script_path not found! Available files:"
-            ls -R
+          $script_path = "${{ matrix.script }}"
+          if (!(Test-Path $script_path)) {
+            Write-Host "Error: Script $script_path not found! Available files:"
+            dir /s /b
             exit 1
-          fi
+          }
 
       - name: Run Python script
         run: |
-          script_path="${{ matrix.script }}"
-          echo "Running: $script_path"
-          python "$script_path"
+          $script_path = "${{ matrix.script }}"
+          Write-Host "Running: $script_path"
+          python $script_path
 
       - name: Post-Execution Debugging (Capture Logs)
         if: failure()
         run: |
-          echo "Capturing logs after failure..."
-          cat /var/log/syslog | tail -n 50
-          dmesg | tail -n 50
+          Get-EventLog -LogName Application -Newest 50
+          Get-EventLog -LogName System -Newest 50
 
       - name: Clean Virtual Environment (Optional Recovery Step)
         if: failure()
         run: |
           python -m venv env
-          source env/bin/activate
+          .\env\Scripts\Activate
           pip install --upgrade pip setuptools wheel
           pip install --upgrade --force-reinstall -r requirements.txt
