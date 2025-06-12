@@ -48,7 +48,7 @@ def scrape_crexi_data(driver, max_pages=30):
 
             try:
                 WebDriverWait(driver, 30).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, 'div.search-result-container'))
+                    EC.presence_of_element_located((By.CSS_SELECTOR, 'div.search-grid-responsive'))
                 )
             except TimeoutException:
                 print(f"[!] Error: Could not locate listing container on page {page}. Skipping.")
