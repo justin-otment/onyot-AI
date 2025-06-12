@@ -33,8 +33,10 @@ def setup_edge_driver():
     options = EdgeOptions()
     options.use_chromium = True
     options.add_argument("--no-sandbox")
+    options.add_argument("--headless")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--remote-debugging-port=0")
     driver = webdriver.Edge(options=options)
     logging.info("Edge driver initialized.")
     return driver
