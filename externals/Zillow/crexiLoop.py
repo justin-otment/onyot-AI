@@ -25,15 +25,13 @@ def setup_chrome_driver():
     return Chrome(options=options)
 
 def wait_for_results_container(driver):
+    print("[...] Waiting for property tiles to load...")
     WebDriverWait(driver, 30).until(
-        EC.presence_of_element_located((By.CSS_SELECTOR, "div.search-grid-responsive"))
+        EC.presence_of_all_elements_located((By.CSS_SELECTOR, "#crx-property-tile-aggregate"))
     )
 
 def extract_listing_links(driver):
-    WebDriverWait(driver, 30).until(
-        EC.presence_of_all_elements_located((By.CSS_SELECTOR, "crx-property-tile-aggregate"))
-    )
-    cards = driver.find_elements(By.CSS_SELECTOR, "crx-property-tile-aggregate")
+    cards = driver.find_elements(By.CSS_SELECTOR, "#crx-property-tile-aggregate a.cui-card-cover-link")
     hrefs = []
     for card in cards:
         try:
