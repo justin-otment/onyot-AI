@@ -23,17 +23,17 @@ def load_json_file(file_path):
     
     Args:
         file_path (str): Path to the JSON file.
-    
+        
     Returns:
         dict: The decoded JSON data.
-    
+        
     Raises:
         FileNotFoundError: If the file is not found.
         ValueError: If the file is empty or contains invalid JSON.
-    
+        
     Note:
-        If you trust that the YAML step decodes the files correctly, you may remove
-        the base64 fallback logic below.
+        If you trust that the YAML step decodes the files correctly,
+        you may remove the base64 fallback logic.
     """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"File not found: {file_path}")
@@ -78,7 +78,7 @@ def setup_gspread():
 def setup_firefox_driver():
     """
     Initialize and return a headless Firefox WebDriver.
-
+    
     Returns:
         webdriver.Firefox: The initialized Firefox driver.
     """
@@ -98,7 +98,7 @@ def safe_text(driver, selector):
     Args:
         driver (webdriver.Firefox): The Selenium WebDriver instance.
         selector (str): CSS selector for the desired element.
-    
+        
     Returns:
         str: The element's text content, or "N/A" if not found.
     """
@@ -152,7 +152,7 @@ def run_scraper():
             lot_size = safe_text(driver, "div:nth-of-type(4) span.detail-value")
             price = safe_text(driver, ".term-value span")
             
-            # Determine which sheet to use based on label text.
+            # Determine target sheet based on property info.
             try:
                 label_text = safe_text(driver, "div > div.property-info-container:nth-of-type(1)")
                 if "Units" in label_text:
