@@ -64,3 +64,18 @@ jobs:
 
       - name: Run CREXi scraper
         run: python externals/Zillow/crexiLoop.py
+
+      - name: Log updated token
+        if: always()
+        run: |
+          echo "📜 Updated token.json:"
+          cat gcreds/token.json
+
+      - name: Commit refreshed token (optional)
+        if: always()
+        run: |
+          git config --global user.email "github-actions@users.noreply.github.com"
+          git config --global user.name "GitHub Actions"
+          git add gcreds/token.json
+          git diff --cached --quiet || git commit -m "🔄 Auto-update token.json"
+          git push || echo "⚠️ Push failed (likely due to permissions)"
