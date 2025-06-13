@@ -9,6 +9,7 @@ from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.firefox.service import Service as FirefoxService
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.action_chains import ActionChains
 import gspread
 from google.oauth2.credentials import Credentials as OAuthCredentials
 
@@ -23,31 +24,29 @@ def load_json_file(file_path):
     
     Args:
         file_path (str): Path to the JSON file.
-        
+    
     Returns:
         dict: The decoded JSON data.
-        
+    
     Raises:
         FileNotFoundError: If the file is not found.
         ValueError: If the file is empty or contains invalid JSON.
-        
+    
     Note:
         If you trust that the YAML step decodes the files correctly,
         you may remove the base64 fallback logic.
     """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"File not found: {file_path}")
-
+    
     with open(file_path, "r") as f:
         content = f.read().strip()
         if not content:
             raise ValueError(f"{file_path} is empty. Ensure it contains valid JSON.")
         
-        # Attempt to parse as raw JSON.
         try:
             return json.loads(content)
         except json.JSONDecodeError as json_err:
-            # Fallback: attempt base64 decoding then parse.
             try:
                 decoded = base64.b64decode(content).decode("utf-8")
                 return json.loads(decoded)
@@ -69,7 +68,6 @@ def setup_gspread():
     
     token_info = load_json_file(token_path)
     
-    # Create OAuth credentials from token_info.
     creds = OAuthCredentials.from_authorized_user_info(token_info, scopes=scope)
     client = gspread.authorize(creds)
     logger.info("Google Sheets client initialized.")
@@ -98,7 +96,7 @@ def safe_text(driver, selector):
     Args:
         driver (webdriver.Firefox): The Selenium WebDriver instance.
         selector (str): CSS selector for the desired element.
-        
+    
     Returns:
         str: The element's text content, or "N/A" if not found.
     """
@@ -108,11 +106,51 @@ def safe_text(driver, selector):
         logger.debug(f"Selector '{selector}' not found or error occurred: {e}")
         return "N/A"
 
+def wait_for_all_results_to_load(driver, timeout=30, sleep_interval=2):
+    """
+    Wait for the entire results container to fully load on a page.
+    This function repeatedly scrolls to the last element until the number of items stabilizes.
+    
+    Args:
+        driver (webdriver.Firefox): The Selenium WebDriver instance.
+        timeout (int): Maximum waiting time in seconds.
+        sleep_interval (int): Seconds to wait between scrolls.
+    
+    Returns:
+        list: List of WebElements corresponding to the result items.
+    """
+    from selenium.webdriver.support.ui import WebDriverWait
+    
+    end_time = time.time() + timeout
+    prev_count = -1
+    while time.time() < end_time:
+        # Wait until at least one element is found
+        WebDriverWait(driver, sleep_interval).until(
+            EC.presence_of_element_located((By.ID, "crx-property-tile-aggregate"))
+        )
+        results = driver.find_elements(By.ID, "crx-property-tile-aggregate")
+        count = len(results)
+        logger.info(f"Found {count} result items so far.")
+        if count == prev_count:
+            # Assume no new results are loading
+            break
+        else:
+            prev_count = count
+            # Scroll to last element to trigger more lazy loading, if any.
+            try:
+                ActionChains(driver).move_to_element(results[-1]).perform()
+            except Exception as e:
+                logger.debug(f"Error during scrolling: {e}")
+            time.sleep(sleep_interval)
+    return results
+
 def run_scraper():
     """
     Main function to run the CREXi scraper.
-    It retrieves property links from the CREXi properties page, visits each link,
-    extracts data, and appends information to two separate Google Sheets.
+    It waits for the full list of property items on the results page,
+    extracts each link (href) with id "crx-property-tile-aggregate", then visits each link,
+    extracts the required text data, classifies the listing type, and appends the data
+    to the appropriate Google Sheet (raw or low hanging fruit).
     """
     SHEET_NAME_RAW = "raw"
     SHEET_NAME_LHF = "low hanging fruit"
@@ -132,39 +170,52 @@ def run_scraper():
     try:
         driver.get(url)
         logger.info(f"Accessing {url}")
+        
+        # Wait for the main container to show up first.
         WebDriverWait(driver, 30).until(
             EC.presence_of_element_located((By.ID, "crx-property-tile-aggregate"))
         )
-        logger.info("Properties loaded.")
+        logger.info("Initial results container loaded.")
+        
+        # Wait until all results are loaded on this page.
+        results = wait_for_all_results_to_load(driver)
+        logger.info(f"Total results loaded: {len(results)}")
+        
+        # Per page, extract the href values for each result.
+        hrefs = [elem.get_attribute("href") for elem in results if elem.get_attribute("href")]
+        logger.info(f"Extracted {len(hrefs)} href links.")
 
-        tiles = driver.find_elements(By.ID, "crx-property-tile-aggregate")
-        hrefs = [tile.get_attribute("href") for tile in tiles if tile.get_attribute("href")]
-
-        logger.info(f"Found {len(hrefs)} property links.")
+        # Process each link.
         for link in hrefs:
             driver.get(link)
             logger.info(f"Processing: {link}")
-            time.sleep(2)  # Pause to allow page content to load
+            time.sleep(2)  # Allow the page to load
             
-            # Extract data using safe_text helper function
+            # Extract text elements.
             address = safe_text(driver, "h2.text")
             dom = safe_text(driver, ".pdp_updated-date-value span.ng-star-inserted")
             lot_size = safe_text(driver, "div:nth-of-type(4) span.detail-value")
             price = safe_text(driver, ".term-value span")
             
-            # Determine target sheet based on property info.
+            # Scroll the classification container into view to mitigate stale element issues.
             try:
-                label_text = safe_text(driver, "div > div.property-info-container:nth-of-type(1)")
-                if "Units" in label_text:
-                    sheet_raw.append_row([link, address, dom, lot_size, price])
-                    logger.info("Data appended to raw sheet.")
-                else:
-                    sheet_lhf.append_row([link, address, dom, lot_size, price])
-                    logger.info("Data appended to LHF sheet.")
+                classification_elem = driver.find_element(By.CSS_SELECTOR, "div > div.property-info-container:nth-of-type(1)")
+                ActionChains(driver).move_to_element(classification_elem).perform()
+                label_text = classification_elem.text
             except Exception as ex:
+                label_text = ""
+                logger.error(f"Error fetching classification text for {link}: {ex}")
+            
+            # Classify and log the data.
+            if "Units" in label_text:
+                # If the text contains "Units", classify as a general (raw) listing.
+                sheet_raw.append_row([link, address, dom, lot_size, price])
+                logger.info("Data appended to raw sheet.")
+            else:
+                # If not, classify as low hanging fruit.
                 sheet_lhf.append_row([link, address, dom, lot_size, price])
-                logger.error(f"Error determining sheet for data from {link}: {ex}")
-
+                logger.info("Data appended to low hanging fruit sheet.")
+            
     except Exception as err:
         logger.error(f"Error during scraping: {err}")
     finally:
