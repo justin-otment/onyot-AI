@@ -22,7 +22,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install jq
+          sudo apt-get install -y jq
 
       - name: Install Firefox & geckodriver
         run: |
@@ -40,12 +40,8 @@ jobs:
           set -euo pipefail
           mkdir -p gcreds
 
-          echo "▶️ Writing credentials.json"
-          echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" > gcreds/credentials.json || {
-            echo "❌ Failed to write credentials.json"
-            exit 1
-          }
-
+          # Save credentials.json
+          echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" > gcreds/credentials.json
           if ! jq empty gcreds/credentials.json 2>/dev/null; then
             echo "⚠️ credentials.json is not valid JSON. Trying base64 decode..."
             echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" | base64 -d > gcreds/credentials.json || {
@@ -54,12 +50,8 @@ jobs:
             }
           fi
 
-          echo "▶️ Writing token.json"
-          echo "${{ secrets.GOOGLE_TOKEN_JSON }}" > gcreds/token.json || {
-            echo "❌ Failed to write token.json"
-            exit 1
-          }
-
+          # Save token.json
+          echo "${{ secrets.GOOGLE_TOKEN_JSON }}" > gcreds/token.json
           if ! jq empty gcreds/token.json 2>/dev/null; then
             echo "⚠️ token.json is not valid JSON. Trying base64 decode..."
             echo "${{ secrets.GOOGLE_TOKEN_JSON }}" | base64 -d > gcreds/token.json || {
