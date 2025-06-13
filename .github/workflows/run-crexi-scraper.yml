@@ -49,6 +49,8 @@ jobs:
               echo "Attempting to decode $f from base64..."
               base64 -d "$f" > "${f}.decoded" && mv "${f}.decoded" "$f"
               jq empty "$f" || (echo "Decoded $f is not valid JSON" && exit 1)
+            else
+              echo "$f is valid JSON"
             fi
           done
 
