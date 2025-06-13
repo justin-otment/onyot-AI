@@ -37,29 +37,27 @@ jobs:
       - name: Set up Google OAuth credentials
         run: |
           mkdir -p gcreds
-          # For credentials.json: prefer raw JSON; if not present try the base64 version.
+          # For credentials.json: use raw JSON if provided; otherwise, fallback to base64-encoded.
           if [ -n "${{ secrets.GOOGLE_OAUTH_CREDENTIALS_JSON }}" ]; then
             printf '%s' "${{ secrets.GOOGLE_OAUTH_CREDENTIALS_JSON }}" > gcreds/credentials.json
           else
             printf '%s' "$(echo "${{ secrets.GOOGLE_OAUTH_CREDENTIALS_JSON_BASE64 }}" | base64 -d)" > gcreds/credentials.json
           fi
-      
-          # For token.json: similar approach. Prefer raw JSON, else decode base64 if available.
+
+          # For token.json: use raw JSON if provided; otherwise, fallback to base64-encoded.
           if [ -n "${{ secrets.GOOGLE_OAUTH_TOKEN_JSON }}" ]; then
             printf '%s' "${{ secrets.GOOGLE_OAUTH_TOKEN_JSON }}" > gcreds/token.json
           else
             printf '%s' "$(echo "${{ secrets.GOOGLE_OAUTH_TOKEN_JSON_BASE64 }}" | base64 -d)" > gcreds/token.json
           fi
-      
-          # Optional validation: remove if exposing sensitive data is a concern
+
+          # Optional validation: remove these lines if you're concerned about logging sensitive data.
           jq empty gcreds/credentials.json
           jq empty gcreds/token.json
 
-      # Optionally, for debugging purposes, print out token.json (remove after validation)
-      # - name: Debug token.json content
-      #   run: |
-      #     echo "Contents of gcreds/token.json:"
-      #     cat gcreds/token.json
+      # Optional debugging step – remove after confirming file contents.
+      # - name: Debug token file size
+      #   run: ls -lah gcreds/token.json
 
       - name: Run CREXi scraper
         run: python externals/Zillow/crexiLoop.py
