@@ -30,20 +30,24 @@ def load_json_file(file_path):
     Raises:
         FileNotFoundError: If the file is not found.
         ValueError: If the file is empty or contains invalid JSON.
+    
+    Note:
+        If you trust that the YAML step decodes the files correctly, you may remove
+        the base64 fallback logic below.
     """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"File not found: {file_path}")
-    
+
     with open(file_path, "r") as f:
         content = f.read().strip()
         if not content:
-            raise ValueError(f"{file_path} is empty. Ensure it contains valid JSON or a base64 encoded JSON string.")
+            raise ValueError(f"{file_path} is empty. Ensure it contains valid JSON.")
         
-        # Attempt to parse as raw JSON
+        # Attempt to parse as raw JSON.
         try:
             return json.loads(content)
         except json.JSONDecodeError as json_err:
-            # If raw JSON fails; try base64-decoding then parse.
+            # Fallback: attempt base64 decoding then parse.
             try:
                 decoded = base64.b64decode(content).decode("utf-8")
                 return json.loads(decoded)
@@ -56,7 +60,7 @@ def load_json_file(file_path):
 def setup_gspread():
     """
     Set up and return a gspread client using an OAuth token loaded from 'gcreds/token.json'.
-
+    
     Returns:
         gspread.Client: An authorized gspread client.
     """
@@ -74,7 +78,7 @@ def setup_gspread():
 def setup_firefox_driver():
     """
     Initialize and return a headless Firefox WebDriver.
-    
+
     Returns:
         webdriver.Firefox: The initialized Firefox driver.
     """
@@ -107,8 +111,8 @@ def safe_text(driver, selector):
 def run_scraper():
     """
     Main function to run the CREXi scraper.
-    It retrieves property links from the CRExi properties page, visits each link, extracts data, 
-    and appends information to two separate Google Sheets.
+    It retrieves property links from the CREXi properties page, visits each link,
+    extracts data, and appends information to two separate Google Sheets.
     """
     SHEET_NAME_RAW = "raw"
     SHEET_NAME_LHF = "low hanging fruit"
@@ -148,7 +152,7 @@ def run_scraper():
             lot_size = safe_text(driver, "div:nth-of-type(4) span.detail-value")
             price = safe_text(driver, ".term-value span")
             
-            # Attempt to determine which sheet the data belongs to.
+            # Determine which sheet to use based on label text.
             try:
                 label_text = safe_text(driver, "div > div.property-info-container:nth-of-type(1)")
                 if "Units" in label_text:
