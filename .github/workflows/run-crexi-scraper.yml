@@ -1,58 +1,63 @@
-name: Run Crexi Scraper
+name: Google OAuth Setup
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
-  schedule:
-    - cron: '0 14 * * *'  # 2PM UTC daily
 
 jobs:
-  scrape:
+  setup-google-auth:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install jq
-
-      - name: Install Firefox & geckodriver
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y firefox
-          GECKO_VERSION=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | jq -r '.tag_name')
-          wget https://github.com/mozilla/geckodriver/releases/download/${GECKO_VERSION}/geckodriver-${GECKO_VERSION}-linux64.tar.gz
-          tar -xzf geckodriver-${GECKO_VERSION}-linux64.tar.gz
-          chmod +x geckodriver
-          sudo mv geckodriver /usr/local/bin/
-
       - name: Set up Google OAuth credentials
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p gcreds
-          echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" > gcreds/credentials.json
-          echo "${{ secrets.GOOGLE_TOKEN_JSON }}" > gcreds/token.json
-          jq empty gcreds/credentials.json
-          jq empty gcreds/token.json
 
-      - name: Decode JSON if needed
-        run: |
-          for f in gcreds/*.json; do
-            if ! jq empty "$f" >/dev/null 2>&1; then
-              echo "Attempting to decode $f from base64..."
-              base64 -d "$f" > "${f}.decoded" && mv "${f}.decoded" "$f"
-              jq empty "$f" || (echo "Decoded $f is not valid JSON" && exit 1)
-            else
-              echo "$f is valid JSON"
-            fi
-          done
+          echo "▶️ Writing credentials.json"
+          echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" > gcreds/credentials.json || {
+            echo "❌ Failed to write credentials.json"
+            exit 1
+          }
 
-      - name: Run CREXi scraper
-        run: python externals/Zillow/crexiLoop.py
+          if ! jq empty gcreds/credentials.json 2>/dev/null; then
+            echo "⚠️ credentials.json is not valid JSON. Trying base64 decode..."
+            echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" | base64 -d > gcreds/credentials.json || {
+              echo "❌ Base64 decoding failed for credentials.json"
+              exit 1
+            }
+          fi
+
+          echo "▶️ Writing token.json"
+          echo "${{ secrets.GOOGLE_TOKEN_JSON }}" > gcreds/token.json || {
+            echo "❌ Failed to write token.json"
+            exit 1
+          }
+
+          if ! jq empty gcreds/token.json 2>/dev/null; then
+            echo "⚠️ token.json is not valid JSON. Trying base64 decode..."
+            echo "${{ secrets.GOOGLE_TOKEN_JSON }}" | base64 -d > gcreds/token.json || {
+              echo "❌ Base64 decoding failed for token.json"
+              exit 1
+            }
+          fi
+
+          echo "✅ Google OAuth credentials successfully configured"
+
+      # Optional: confirm file contents for debugging (never do this with real secrets)
+      # - name: Debug credentials (only enable for testing!)
+      #   run: |
+      #     echo "Credentials:"
+      #     cat gcreds/credentials.json
+      #     echo "Token:"
+      #     cat gcreds/token.json
+
+      # Example: Use credentials for gapps CLI or node script, etc.
+      # - name: Use credentials
+      #   run: |
+      #     ./your-script-using-google-auth.sh gcreds/credentials.json gcreds/token.json
