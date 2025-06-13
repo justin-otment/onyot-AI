@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -53,12 +53,12 @@ jobs:
             echo "Error: GOOGLE_TOKEN_JSON secret is not set." >&2
             exit 1
           fi
-
-          # Optional preliminary validation using jq. This may error out if the files aren’t valid JSON.
+          
+          # Preliminary validation using jq; this may error if the file isn’t valid JSON.
           jq empty gcreds/credentials.json
           jq empty gcreds/token.json
 
-      - name: Decode JSON files if necessary
+      - name: Decode JSON files if needed
         run: |
           for f in gcreds/credentials.json gcreds/token.json; do
             if ! jq empty "$f" >/dev/null 2>&1; then
@@ -75,6 +75,10 @@ jobs:
               echo "$f is valid JSON"
             fi
           done
+
+      # Optionally you can add a debug step to show the size of the created files.
+      # - name: Debug: List credential file sizes
+      #   run: ls -lh gcreds/
 
       - name: Run CREXi scraper
         run: python externals/Zillow/crexiLoop.py
