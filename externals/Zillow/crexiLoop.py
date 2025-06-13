@@ -14,11 +14,22 @@ from google.oauth2.credentials import Credentials as OAuthCredentials
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def load_json_file(file_path):
     """
     Load JSON content from a file. First, attempt to load as raw JSON.
     If that fails, try to base64-decode the file content and then load as JSON.
+    
+    Args:
+        file_path (str): Path to the JSON file.
+    
+    Returns:
+        dict: The decoded JSON data.
+    
+    Raises:
+        FileNotFoundError: If the file is not found.
+        ValueError: If the file is empty or contains invalid JSON.
     """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"File not found: {file_path}")
@@ -27,11 +38,12 @@ def load_json_file(file_path):
         content = f.read().strip()
         if not content:
             raise ValueError(f"{file_path} is empty. Ensure it contains valid JSON or a base64 encoded JSON string.")
-        # Attempt to parse as raw JSON.
+        
+        # Attempt to parse as raw JSON
         try:
             return json.loads(content)
         except json.JSONDecodeError as json_err:
-            # If raw JSON fails, try base64-decoding then parse.
+            # If raw JSON fails; try base64-decoding then parse.
             try:
                 decoded = base64.b64decode(content).decode("utf-8")
                 return json.loads(decoded)
@@ -41,80 +53,119 @@ def load_json_file(file_path):
                     f"Also, base64 decoding failed: {b64_err}"
                 )
 
-# Setup Google Sheets API using OAuth token
 def setup_gspread():
+    """
+    Set up and return a gspread client using an OAuth token loaded from 'gcreds/token.json'.
+
+    Returns:
+        gspread.Client: An authorized gspread client.
+    """
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     token_path = os.path.join("gcreds", "token.json")
     
-    # Load token file using the helper function
     token_info = load_json_file(token_path)
     
     # Create OAuth credentials from token_info.
     creds = OAuthCredentials.from_authorized_user_info(token_info, scopes=scope)
     client = gspread.authorize(creds)
+    logger.info("Google Sheets client initialized.")
     return client
 
-# Setup Firefox WebDriver
 def setup_firefox_driver():
+    """
+    Initialize and return a headless Firefox WebDriver.
+    
+    Returns:
+        webdriver.Firefox: The initialized Firefox driver.
+    """
     options = FirefoxOptions()
     options.headless = True
     options.set_preference("dom.webdriver.enabled", False)
     options.set_preference("useAutomationExtension", False)
     service = FirefoxService()
     driver = webdriver.Firefox(service=service, options=options)
-    logging.info("Firefox driver initialized.")
+    logger.info("Firefox driver initialized.")
     return driver
 
-# Main scraping logic
+def safe_text(driver, selector):
+    """
+    Safely extract and return the text content of an element defined by a CSS selector.
+    
+    Args:
+        driver (webdriver.Firefox): The Selenium WebDriver instance.
+        selector (str): CSS selector for the desired element.
+    
+    Returns:
+        str: The element's text content, or "N/A" if not found.
+    """
+    try:
+        return driver.find_element(By.CSS_SELECTOR, selector).text
+    except Exception as e:
+        logger.debug(f"Selector '{selector}' not found or error occurred: {e}")
+        return "N/A"
+
 def run_scraper():
+    """
+    Main function to run the CREXi scraper.
+    It retrieves property links from the CRExi properties page, visits each link, extracts data, 
+    and appends information to two separate Google Sheets.
+    """
     SHEET_NAME_RAW = "raw"
     SHEET_NAME_LHF = "low hanging fruit"
     SPREADSHEET_ID = "1IckEBCfyh-o0q7kTPBwU0Ui3eMYJNwOQOmyAysm6W5E"
 
-    client = setup_gspread()
-    sheet_raw = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME_RAW)
-    sheet_lhf = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME_LHF)
+    try:
+        client = setup_gspread()
+        sheet_raw = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME_RAW)
+        sheet_lhf = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME_LHF)
+    except Exception as e:
+        logger.error(f"Error setting up Google Sheets: {e}")
+        return
 
     url = "https://www.crexi.com/properties"
     driver = setup_firefox_driver()
 
     try:
         driver.get(url)
+        logger.info(f"Accessing {url}")
         WebDriverWait(driver, 30).until(
             EC.presence_of_element_located((By.ID, "crx-property-tile-aggregate"))
         )
+        logger.info("Properties loaded.")
 
         tiles = driver.find_elements(By.ID, "crx-property-tile-aggregate")
         hrefs = [tile.get_attribute("href") for tile in tiles if tile.get_attribute("href")]
 
+        logger.info(f"Found {len(hrefs)} property links.")
         for link in hrefs:
             driver.get(link)
-            time.sleep(2)
-
-            def safe_text(selector):
-                try:
-                    return driver.find_element(By.CSS_SELECTOR, selector).text
-                except Exception:
-                    return "N/A"
-
-            address = safe_text("h2.text")
-            dom = safe_text(".pdp_updated-date-value span.ng-star-inserted")
-            lot_size = safe_text("div:nth-of-type(4) span.detail-value")
-            price = safe_text(".term-value span")
-
+            logger.info(f"Processing: {link}")
+            time.sleep(2)  # Pause to allow page content to load
+            
+            # Extract data using safe_text helper function
+            address = safe_text(driver, "h2.text")
+            dom = safe_text(driver, ".pdp_updated-date-value span.ng-star-inserted")
+            lot_size = safe_text(driver, "div:nth-of-type(4) span.detail-value")
+            price = safe_text(driver, ".term-value span")
+            
+            # Attempt to determine which sheet the data belongs to.
             try:
-                label_text = driver.find_element(By.CSS_SELECTOR, "div > div.property-info-container:nth-of-type(1)").text
+                label_text = safe_text(driver, "div > div.property-info-container:nth-of-type(1)")
                 if "Units" in label_text:
                     sheet_raw.append_row([link, address, dom, lot_size, price])
+                    logger.info("Data appended to raw sheet.")
                 else:
                     sheet_lhf.append_row([link, address, dom, lot_size, price])
-            except Exception:
+                    logger.info("Data appended to LHF sheet.")
+            except Exception as ex:
                 sheet_lhf.append_row([link, address, dom, lot_size, price])
+                logger.error(f"Error determining sheet for data from {link}: {ex}")
 
-    except Exception as e:
-        logging.error(f"Error during scraping: {e}")
+    except Exception as err:
+        logger.error(f"Error during scraping: {err}")
     finally:
         driver.quit()
+        logger.info("Firefox driver closed.")
 
 if __name__ == "__main__":
     run_scraper()
