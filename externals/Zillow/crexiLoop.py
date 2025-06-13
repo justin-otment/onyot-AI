@@ -27,25 +27,24 @@ def load_json_file(file_path):
         content = f.read().strip()
         if not content:
             raise ValueError(f"{file_path} is empty. Ensure it contains valid JSON or a base64 encoded JSON string.")
-        # Attempt raw JSON load
+        # Attempt to parse as raw JSON.
         try:
             return json.loads(content)
         except json.JSONDecodeError as json_err:
-            # Try base64-decoding then loading as JSON
+            # If raw JSON fails, try base64-decoding then parse.
             try:
                 decoded = base64.b64decode(content).decode("utf-8")
                 return json.loads(decoded)
             except Exception as b64_err:
                 raise ValueError(
                     f"Failed to parse {file_path} as JSON. Original JSON error: {json_err}. "
-                    f"Additionally, base64 decoding failed: {b64_err}"
+                    f"Also, base64 decoding failed: {b64_err}"
                 )
 
 # Setup Google Sheets API using OAuth token
 def setup_gspread():
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     token_path = os.path.join("gcreds", "token.json")
-    creds_path = os.path.join("gcreds", "credentials.json")
     
     # Load token file using the helper function
     token_info = load_json_file(token_path)
