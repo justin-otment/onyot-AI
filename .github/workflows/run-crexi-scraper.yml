@@ -74,13 +74,10 @@ jobs:
           with open(token_path, "r") as f:
               token_info = json.load(f)
 
-          # Create credentials object using the current token info.
           creds = Credentials.from_authorized_user_info(token_info, scopes=["https://www.googleapis.com/auth/spreadsheets"])
-          
           if creds.expired or not creds.valid:
               print("🔄 Token is expired or invalid. Refreshing...")
               creds.refresh(Request())
-              # Write the refreshed token to file.
               with open(token_path, "w") as f:
                   json.dump(json.loads(creds.to_json()), f, indent=2)
               print("✅ Token refreshed successfully.")
