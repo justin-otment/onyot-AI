@@ -16,7 +16,7 @@ from google.oauth2.credentials import Credentials
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Paths
+# Paths to the credentials files created by the GitHub actions workflow
 TOKEN_PATH = "gcreds/token.json"
 CREDS_PATH = "gcreds/credentials.json"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -24,18 +24,32 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 def get_credentials():
     """
     Load and refresh Google API credentials.
+    
+    The function loads credentials from TOKEN_PATH and, if they are expired
+    and a refresh token is present, attempts to refresh the token.
+    The refreshed token is written back to TOKEN_PATH.
     """
     if not os.path.exists(TOKEN_PATH):
         raise FileNotFoundError(f"{TOKEN_PATH} not found! Ensure workflow decoded and placed it.")
 
-    creds = Credentials.from_authorized_user_file(TOKEN_PATH, scopes=SCOPES)
+    try:
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH, scopes=SCOPES)
+    except Exception as e:
+        logger.error("❌ Failed to load credentials from file: %s", e)
+        raise
 
+    # Refresh token if needed
     if creds and creds.expired and creds.refresh_token:
-        logger.info("🔄 Refreshing access token...")
-        creds.refresh(Request())
-        with open(TOKEN_PATH, 'w') as token_file:
-            token_file.write(creds.to_json())
-        logger.info("✅ Token refreshed and saved.")
+        logger.info("🔄 Token is expired or invalid. Refreshing access token...")
+        try:
+            creds.refresh(Request())
+        except Exception as refresh_error:
+            logger.error("❌ Failed to refresh token: %s", refresh_error)
+            raise
+        else:
+            with open(TOKEN_PATH, 'w') as token_file:
+                token_file.write(creds.to_json())
+            logger.info("✅ Token refreshed and saved. New expiry: %s", creds.expiry)
 
     return creds
 
@@ -44,8 +58,12 @@ def setup_gspread():
     Authorize gspread with refreshed credentials.
     """
     creds = get_credentials()
-    client = gspread.authorize(creds)
-    logger.info("✅ Google Sheets client initialized.")
+    try:
+        client = gspread.authorize(creds)
+        logger.info("✅ Google Sheets client initialized.")
+    except Exception as e:
+        logger.error("❌ Failed to authorize gspread: %s", e)
+        raise
     return client
 
 def setup_firefox_driver():
@@ -54,22 +72,31 @@ def setup_firefox_driver():
     """
     options = FirefoxOptions()
     options.headless = True
+    # Disable automation flags to reduce detection likelihood.
     options.set_preference("dom.webdriver.enabled", False)
     options.set_preference("useAutomationExtension", False)
     service = FirefoxService()
-    driver = webdriver.Firefox(service=service, options=options)
-    logger.info("🦊 Firefox driver initialized.")
+    try:
+        driver = webdriver.Firefox(service=service, options=options)
+        logger.info("🦊 Firefox driver initialized.")
+    except Exception as e:
+        logger.error("❌ Failed to initialize Firefox driver: %s", e)
+        raise
     return driver
 
 def safe_text(driver, selector):
+    """
+    Safely returns text content for a given CSS selector.
+    """
     try:
         return driver.find_element(By.CSS_SELECTOR, selector).text
-    except Exception:
+    except Exception as e:
+        logger.debug("Selector '%s' not found: %s", selector, e)
         return "N/A"
 
 def wait_for_all_results_to_load(driver, timeout=30, sleep_interval=2):
     """
-    Scroll/load all property results dynamically.
+    Dynamically scroll and load all property results.
     """
     end_time = time.time() + timeout
     prev_count = -1
@@ -78,7 +105,7 @@ def wait_for_all_results_to_load(driver, timeout=30, sleep_interval=2):
             EC.presence_of_element_located((By.ID, "crx-property-tile-aggregate"))
         )
         results = driver.find_elements(By.ID, "crx-property-tile-aggregate")
-        logger.info(f"🧱 Found {len(results)} result items so far.")
+        logger.info("🧱 Found %d result items so far.", len(results))
         if len(results) == prev_count:
             break
         prev_count = len(results)
@@ -90,6 +117,13 @@ def wait_for_all_results_to_load(driver, timeout=30, sleep_interval=2):
     return results
 
 def run_scraper():
+    """
+    Main scraper function.
+    
+    It loads Google Sheets credentials, connects to the spreadsheets,
+    launches a headless browser to load listings, extracts property data,
+    and classifies & writes data to specific sheets.
+    """
     SHEET_RAW = "raw"
     SHEET_LHF = "low hanging fruit"
     SPREADSHEET_ID = "1IckEBCfyh-o0q7kTPBwU0Ui3eMYJNwOQOmyAysm6W5E"
