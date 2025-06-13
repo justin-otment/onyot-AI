@@ -74,8 +74,15 @@ jobs:
       - name: Commit refreshed token (optional)
         if: always()
         run: |
+          # Option A: Do not push updated token; simply log that the file has been updated.
+          # Uncomment the next two lines and comment-out the token pushing section if you don't want a push.
+          # echo "Skipping push of refreshed token."
+          # exit 0
+
+          # Option B: Push updated token using a Personal Access Token stored as GH_PUSH_TOKEN.
           git config --global user.email "github-actions@users.noreply.github.com"
           git config --global user.name "GitHub Actions"
           git add gcreds/token.json
           git diff --cached --quiet || git commit -m "🔄 Auto-update token.json"
-          git push || echo "⚠️ Push failed (likely due to permissions)"
+          # The following uses the PAT for pushing; ensure you have stored the PAT as GH_PUSH_TOKEN.
+          git push https://$GH_PUSH_TOKEN@github.com/justin-otment/onyot-AI.git || echo "⚠️ Push failed (likely due to permissions)"
