@@ -67,22 +67,31 @@ jobs:
         run: |
           python - <<'EOF'
           import json
+          import sys
           from google.oauth2.credentials import Credentials
           from google.auth.transport.requests import Request
+          from google.auth.exceptions import RefreshError
 
           token_path = "gcreds/token.json"
-          with open(token_path, "r") as f:
-              token_info = json.load(f)
-
-          creds = Credentials.from_authorized_user_info(token_info, scopes=["https://www.googleapis.com/auth/spreadsheets"])
-          if creds.expired or not creds.valid:
-              print("🔄 Token is expired or invalid. Refreshing...")
-              creds.refresh(Request())
-              with open(token_path, "w") as f:
-                  json.dump(json.loads(creds.to_json()), f, indent=2)
-              print("✅ Token refreshed successfully.")
-          else:
-              print("✅ Token is still valid.")
+          try:
+              with open(token_path, "r") as f:
+                  token_info = json.load(f)
+              creds = Credentials.from_authorized_user_info(token_info, scopes=["https://www.googleapis.com/auth/spreadsheets"])
+              if creds.expired or not creds.valid:
+                  print("🔄 Token is expired or invalid. Refreshing...")
+                  creds.refresh(Request())
+                  with open(token_path, "w") as f:
+                      json.dump(json.loads(creds.to_json()), f, indent=2)
+                  print("✅ Token refreshed successfully.")
+                  print("New expiry time:", creds.expiry)
+              else:
+                  print("✅ Token is still valid.")
+          except RefreshError as e:
+              print("❌ Failed to refresh token:", e, file=sys.stderr)
+              sys.exit(1)
+          except Exception as e:
+              print("❌ An unexpected error occurred during token refresh:", e, file=sys.stderr)
+              sys.exit(1)
           EOF
 
       - name: Run CREXi scraper
