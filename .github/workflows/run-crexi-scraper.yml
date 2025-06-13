@@ -1,7 +1,7 @@
 name: Run Crexi Scraper
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
   schedule:
     - cron: '0 14 * * *'  # 2PM UTC daily
 
@@ -37,48 +37,34 @@ jobs:
       - name: Set up Google OAuth credentials
         run: |
           mkdir -p gcreds
-          
-          # Write credentials.json using GOOGLE_CREDENTIALS_JSON secret
+      
+          # Write credentials.json using the GOOGLE_CREDENTIALS_JSON secret.
+          # IMPORTANT: Ensure that the secret GOOGLE_CREDENTIALS_JSON contains the entire raw JSON.
           if [ -n "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" ]; then
             printf '%s' "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" > gcreds/credentials.json
           else
             echo "Error: GOOGLE_CREDENTIALS_JSON secret is not set." >&2
             exit 1
           fi
-          
-          # Write token.json using GOOGLE_TOKEN_JSON secret
+      
+          # Write token.json using the GOOGLE_TOKEN_JSON secret.
+          # IMPORTANT: Ensure that the secret GOOGLE_TOKEN_JSON contains the entire raw JSON.
           if [ -n "${{ secrets.GOOGLE_TOKEN_JSON }}" ]; then
             printf '%s' "${{ secrets.GOOGLE_TOKEN_JSON }}" > gcreds/token.json
           else
             echo "Error: GOOGLE_TOKEN_JSON secret is not set." >&2
             exit 1
           fi
-          
-          # Preliminary validation using jq; this may error if the file isn’t valid JSON.
+      
+          # Preliminary validation using jq. If the file isn’t valid JSON, this step will error.
+          echo "Validating credentials.json..."
           jq empty gcreds/credentials.json
+          echo "Validating token.json..."
           jq empty gcreds/token.json
 
-      - name: Decode JSON files if needed
-        run: |
-          for f in gcreds/credentials.json gcreds/token.json; do
-            if ! jq empty "$f" >/dev/null 2>&1; then
-              echo "$f is not valid JSON; attempting base64 decode..."
-              base64 -d "$f" > "${f}.decoded" || { echo "Error decoding $f"; exit 1; }
-              mv "${f}.decoded" "$f"
-              if jq empty "$f" >/dev/null 2>&1; then
-                echo "$f successfully decoded from base64"
-              else
-                echo "Decoding for $f did not produce valid JSON"
-                exit 1
-              fi
-            else
-              echo "$f is valid JSON"
-            fi
-          done
-
-      # Optionally you can add a debug step to show the size of the created files.
-      # - name: Debug: List credential file sizes
-      #   run: ls -lh gcreds/
+      # Optional: Check created file sizes (for debugging—remove or comment out in production)
+      - name: Debug: List credential file sizes
+        run: ls -lh gcreds/
 
       - name: Run CREXi scraper
         run: python externals/Zillow/crexiLoop.py
