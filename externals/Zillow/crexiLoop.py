@@ -1,8 +1,6 @@
 import os
 import time
 import logging
-import json
-import base64
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
@@ -12,6 +10,10 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
 import gspread
 from google.oauth2.credentials import Credentials as OAuthCredentials
+import base64, json
+decoded = base64.b64decode("PASTE_STRING_HERE")
+print(json.loads(decoded))
+
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
