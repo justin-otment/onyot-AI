@@ -17,11 +17,12 @@ logging.basicConfig(level=logging.INFO)
 
 def load_json_file(file_path):
     """
-    Load JSON content from a file. First attempts to decode as raw JSON.
-    If that fails, it attempts to base64-decode the file content and then load as JSON.
+    Load JSON content from a file. First, attempt to load as raw JSON.
+    If that fails, try to base64-decode the file content and then load as JSON.
     """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"File not found: {file_path}")
+    
     with open(file_path, "r") as f:
         content = f.read().strip()
         if not content:
@@ -30,7 +31,7 @@ def load_json_file(file_path):
         try:
             return json.loads(content)
         except json.JSONDecodeError as json_err:
-            # Try applying base64 decoding first
+            # Try base64-decoding then loading as JSON
             try:
                 decoded = base64.b64decode(content).decode("utf-8")
                 return json.loads(decoded)
@@ -48,7 +49,8 @@ def setup_gspread():
     
     # Load token file using the helper function
     token_info = load_json_file(token_path)
-    # We load credentials if needed later; in this example, gspread uses token_info
+    
+    # Create OAuth credentials from token_info.
     creds = OAuthCredentials.from_authorized_user_info(token_info, scopes=scope)
     client = gspread.authorize(creds)
     return client
