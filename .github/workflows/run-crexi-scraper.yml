@@ -63,7 +63,7 @@ jobs:
           echo "✅ Google OAuth credentials successfully configured"
 
       - name: Run CREXi scraper
-        run: python externals/Zillow/crexiLoop.py
+        run: python Property Appraiser Scripts/leePA_01.py
 
       - name: Log updated token
         if: always()
