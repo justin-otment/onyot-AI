@@ -1,0 +1,42 @@
+name: Run Multiple Python Scripts
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  run-scripts:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        script:
+          - "Property Appraiser Scripts/leePA_01.py"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Debug Directory Structure
+        run: ls -R
+
+      - name: Run Python script
+        run: |
+          script_path="${{ matrix.script }}"
+          if [ -f "$script_path" ]; then
+            echo "Running: $script_path"
+            python "$script_path"
+          else
+            echo "Error: Script $script_path not found!"
+            exit 1
+          fi
