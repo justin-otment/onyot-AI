@@ -39,7 +39,7 @@ ssl_ctx.verify_mode = ssl.CERT_NONE
 SHEET_ID   = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
 SHEET_NAME = 'Cape Coral - ArcGIS_LANDonly'
 SCOPES     = ['https://www.googleapis.com/auth/spreadsheets']
-SA_FILE    = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+SA_FILE    = os.getenv('GOOGLE_CREDENTIALS_JSON')
 
 def authenticate_service_account():
     creds = service_account.Credentials.from_service_account_file(
