@@ -32,7 +32,7 @@ def make_request_with_retries(url, retries=3, backoff_factor=1):
     raise Exception(f"Failed to fetch {url} after {retries} attempts.")
 
 # Example usage:
-url = 'https://www.leepa.org/Search/PropertySearch.aspx'
+url = 'https://www.crexi.com/properties?pageSize=60&mapCenter=28.749099306735435,-82.0311664044857&mapZoom=7&showMap=true&acreageMin=2&types%5B%5D=Land'
 response = make_request_with_retries(url)
 print(response.data)
 
