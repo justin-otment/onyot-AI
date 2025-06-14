@@ -1,5 +1,9 @@
 name: Google OAuth Setup and Run CREXi Scraper
 
+# Grant the workflow write access so GITHUB_TOKEN can push back
+permissions:
+  contents: write
+
 on:
   push:
     branches: [main]
@@ -12,6 +16,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # persist-credentials: true is default, so checkout uses GITHUB_TOKEN
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -28,8 +35,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y firefox
-          GECKO_VERSION=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | jq -r '.tag_name')
-          wget https://github.com/mozilla/geckodriver/releases/download/${GECKO_VERSION}/geckodriver-${GECKO_VERSION}-linux64.tar.gz
+          GECKO_VERSION=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest \
+                         | jq -r '.tag_name')
+          wget https://github.com/mozilla/geckodriver/releases/download/${GECKO_VERSION}/\
+                  geckodriver-${GECKO_VERSION}-linux64.tar.gz
           tar -xzf geckodriver-${GECKO_VERSION}-linux64.tar.gz
           chmod +x geckodriver
           sudo mv geckodriver /usr/local/bin/
@@ -40,30 +49,24 @@ jobs:
           set -euo pipefail
           mkdir -p gcreds
 
-          # Write credentials.json from repository secret.
+          # credentials.json
           echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" > gcreds/credentials.json
-          if ! jq empty gcreds/credentials.json 2>/dev/null; then
-            echo "⚠️ credentials.json is not valid JSON. Trying base64 decode..."
-            echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" | base64 -d > gcreds/credentials.json || {
-              echo "❌ Base64 decoding failed for credentials.json"
-              exit 1
-            }
-          fi
+          jq empty gcreds/credentials.json 2>/dev/null \
+            || (echo "⚠️ credentials.json invalid, attempting base64 decode" \
+                && echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" \
+                     | base64 -d > gcreds/credentials.json)
 
-          # Write token.json from repository secret.
+          # token.json
           echo "${{ secrets.GOOGLE_TOKEN_JSON }}" > gcreds/token.json
-          if ! jq empty gcreds/token.json 2>/dev/null; then
-            echo "⚠️ token.json is not valid JSON. Trying base64 decode..."
-            echo "${{ secrets.GOOGLE_TOKEN_JSON }}" | base64 -d > gcreds/token.json || {
-              echo "❌ Base64 decoding failed for token.json"
-              exit 1
-            }
-          fi
+          jq empty gcreds/token.json 2>/dev/null \
+            || (echo "⚠️ token.json invalid, attempting base64 decode" \
+                && echo "${{ secrets.GOOGLE_TOKEN_JSON }}" \
+                     | base64 -d > gcreds/token.json)
 
           echo "✅ Google OAuth credentials successfully configured"
 
       - name: Run CREXi scraper
-        run: python Property Appraiser Scripts/leePA_01.py
+        run: python "Property Appraiser Scripts/leePA_01.py"
 
       - name: Log updated token
         if: always()
@@ -71,18 +74,11 @@ jobs:
           echo "📜 Updated token.json:"
           cat gcreds/token.json
 
-      - name: Commit refreshed token (optional)
+      - name: Commit & push refreshed token
         if: always()
         run: |
-          # Option A: Do not push updated token; simply log that the file has been updated.
-          # Uncomment the next two lines and comment-out the token pushing section if you don't want a push.
-          # echo "Skipping push of refreshed token."
-          # exit 0
-
-          # Option B: Push updated token using a Personal Access Token stored as GH_PUSH_TOKEN.
-          git config --global user.email "github-actions@users.noreply.github.com"
-          git config --global user.name "GitHub Actions"
+          git config user.name "GitHub Actions"
+          git config user.email "github-actions@users.noreply.github.com"
           git add gcreds/token.json
           git diff --cached --quiet || git commit -m "🔄 Auto-update token.json"
-          # The following uses the PAT for pushing; ensure you have stored the PAT as GH_PUSH_TOKEN.
-          git push https://$GH_PUSH_TOKEN@github.com/justin-otment/onyot-AI.git || echo "⚠️ Push failed (likely due to permissions)"
+          git push origin HEAD:main
