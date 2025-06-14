@@ -36,7 +36,7 @@ ssl_ctx.check_hostname = False
 ssl_ctx.verify_mode = ssl.CERT_NONE
 
 # Google Sheets config
-SHEET_ID   = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
+SHEET_ID   = '1IckEBCfyh-o0q7kTPBwU0Ui3eMYJNwOQOmyAysm6W5E'
 SHEET_NAME = 'Cape Coral - ArcGIS_LANDonly'
 SCOPES     = ['https://www.googleapis.com/auth/spreadsheets']
 SA_FILE    = os.getenv('GOOGLE_CREDENTIALS_JSON')
@@ -58,7 +58,7 @@ def fetch_data_and_update_sheet():
         print(f"Error fetching sheet data: {e}")
         return
 
-    base_url = 'https://www.leepa.org/Search/PropertySearch.aspx'
+    base_url = 'https://www.crexi.com/properties?pageSize=60&mapCenter=28.749099306735435,-82.0311664044857&mapZoom=7&showMap=true&acreageMin=2&types%5B%5D=Land'
 
     for i, row in enumerate(rows, start=2):
         owner = (row[0] or "").strip()
