@@ -40,11 +40,11 @@ jobs:
 
       - name: Run Python script
         run: |
-          script_path="${{ matrix.script }}"
+          script_path="Property Appraiser Scripts/leePA_01.py"
           if [ -f "$script_path" ]; then
             echo "Running: $script_path"
             python "$script_path"
           else
             echo "Error: Script $script_path not found!"
             exit 1
-          fis
+          fi
