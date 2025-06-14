@@ -1,195 +1,141 @@
+#!/usr/bin/env python3
 import os
 import time
 import json
+import ssl
+import urllib3
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from google.auth.transport.requests import Request
-from google_auth_oauthlib.flow import InstalledAppFlow
-import urllib3
-from urllib3.exceptions import ProtocolError
-import ssl
-from googleapiclient.discovery import build
-from google.oauth2.credentials import Credentials  # Correct import for OAuth2 credentials
 
-# Request with retries
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+
+# --- Retry helper for HTTP GETs ---
 def make_request_with_retries(url, retries=3, backoff_factor=1):
     http = urllib3.PoolManager()
-    attempt = 0
-    while attempt < retries:
+    for attempt in range(1, retries + 1):
         try:
-            response = http.request('GET', url)
-            return response
-        except ProtocolError as e:
-            print(f"Attempt {attempt + 1} failed: {e}")
-            attempt += 1
-            sleep_time = backoff_factor * (2 ** attempt)  # Exponential backoff
-            print(f"Retrying in {sleep_time} seconds...")
+            return http.request('GET', url)
+        except urllib3.exceptions.ProtocolError as e:
+            print(f"Attempt {attempt} failed: {e}")
+            sleep_time = backoff_factor * (2 ** attempt)
+            print(f"Retrying in {sleep_time}s…")
             time.sleep(sleep_time)
-    raise Exception(f"Failed to fetch {url} after {retries} attempts.")
+    raise RuntimeError(f"Failed to fetch {url} after {retries} attempts")
 
-# Example usage:
-url = 'https://www.leepa.org/Search/PropertySearch.aspx'
-response = make_request_with_retries(url)
-print(response.data)
-
-# Disable SSL verification temporarily (use only for testing)
+# Disable SSL warnings (for testing)
 os.environ['NO_PROXY'] = 'localhost,127.0.0.1'
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-context = ssl.create_default_context()
-context.check_hostname = False
-context.verify_mode = ssl.CERT_NONE
+ssl_ctx = ssl.create_default_context()
+ssl_ctx.check_hostname = False
+ssl_ctx.verify_mode = ssl.CERT_NONE
 
-# Google Sheets setup
-SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
+# Google Sheets config
+SHEET_ID   = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
 SHEET_NAME = 'Cape Coral - ArcGIS_LANDonly'
+SCOPES     = ['https://www.googleapis.com/auth/spreadsheets']
+SA_FILE    = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
 
+def authenticate_service_account():
+    creds = service_account.Credentials.from_service_account_file(
+        SA_FILE, scopes=SCOPES
+    )
+    return build('sheets', 'v4', credentials=creds)
 
-# Define file paths
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
-TOKEN_PATH = os.path.join(BASE_DIR, "token.json")
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-
-# Authenticate with Google Sheets API
-def authenticate_google_sheets():
-    """Authenticate with Google Sheets API."""
-    creds = None
-    # Check if the token file exists
-    if os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-    # If no valid credentials, allow the user to login via OAuth
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())  # Refresh token if expired
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
-            creds = flow.run_local_server(port=0)
-
-    # Save the credentials for the next run
-    with open(TOKEN_PATH, "w") as token:
-        token.write(creds.to_json())
-
-    return build("sheets", "v4", credentials=creds)
-
-# Correcting the function
 def fetch_data_and_update_sheet():
     try:
-        # Authenticate with Google Sheets API
-        sheets_service = authenticate_google_sheets()  # Changed 'service' to 'sheets_service'
-        sheet = sheets_service.spreadsheets()  # This is the correct object to interact with Sheets API
-
-        # Define the range for the data
-        range_ = f"{SHEET_NAME}!A2:A2500"
-        result = sheet.values().get(spreadsheetId=SHEET_ID, range=range_).execute()
-        sheet_data = result.get("values", [])
-        print(f"Fetched data: {sheet_data}")  # Debug print to check the data
+        sheets = authenticate_service_account().spreadsheets()
+        range_in = f"{SHEET_NAME}!A2:A2500"
+        result = sheets.values().get(spreadsheetId=SHEET_ID, range=range_in).execute()
+        rows = result.get('values', [])
+        print(f"Fetched {len(rows)} rows")
     except Exception as e:
-        print(f"Error fetching data from Google Sheets: {e}")
-        return  # Exit if there's an issue fetching the sheet data
+        print(f"Error fetching sheet data: {e}")
+        return
 
-    # Web scraping and updating data in Google Sheets
-    url = 'https://www.leepa.org/Search/PropertySearch.aspx'
+    base_url = 'https://www.leepa.org/Search/PropertySearch.aspx'
 
-    for i, row in enumerate(sheet_data, start=2):
-        owner = row[0] if row else None
-        if not owner or owner.strip() == '':
-            print(f"Skipping empty or blank cell at row {i}")
+    for i, row in enumerate(rows, start=2):
+        owner = (row[0] or "").strip()
+        if not owner:
+            print(f"[Row {i}] blank → skip")
             continue
 
-        print(f"Processing Name: {owner}")
-
-        # Setup Firefox driver with headless option
+        print(f"[Row {i}] Searching for: {owner}")
+        # headless Firefox
         options = webdriver.FirefoxOptions()
         options.add_argument("--headless")
-        service = Service()  # Selenium WebDriver service (for Firefox)
-        driver = webdriver.Firefox(service=service, options=options)
+        driver = webdriver.Firefox(service=Service(), options=options)
 
         try:
-            driver.get(url)
-
-            # Enter owner name and submit
-            strap_input = WebDriverWait(driver, 60).until(
-                EC.presence_of_element_located((By.ID, "ctl00_BodyContentPlaceHolder_WebTab1_tmpl0_STRAPTextBox"))
+            driver.get(base_url)
+            inp = WebDriverWait(driver, 30).until(
+                EC.presence_of_element_located((By.ID,
+                    "ctl00_BodyContentPlaceHolder_WebTab1_tmpl0_STRAPTextBox"))
             )
-            strap_input.send_keys(owner, Keys.RETURN)
+            inp.send_keys(owner, Keys.RETURN)
 
+            # handle warning popup if it appears
             try:
-                # Handle warning pop-up
-                WebDriverWait(driver, 60).until(
-                    EC.presence_of_element_located((By.ID, "ctl00_BodyContentPlaceHolder_pnlIssues"))
+                WebDriverWait(driver, 5).until(
+                    EC.presence_of_element_located((By.ID,
+                        "ctl00_BodyContentPlaceHolder_pnlIssues"))
                 )
-                warning_button = driver.find_element(By.ID, "ctl00_BodyContentPlaceHolder_btnWarning")
-                warning_button.click()
+                driver.find_element(By.ID,
+                    "ctl00_BodyContentPlaceHolder_btnWarning").click()
             except:
-                print("No pop-up found, continuing to next step.")
-
-            time.sleep(7)
-
-            # Navigate to property details
-            href = WebDriverWait(driver, 60).until(
-                EC.presence_of_element_located((By.XPATH, '//*[@id="ctl00_BodyContentPlaceHolder_WebTab1"]/div/div[1]/div[1]/table/tbody/tr/td[4]/div/div[1]/a'))
-            ).get_attribute('href')
-            driver.get(href)
+                pass
 
             time.sleep(5)
+            href = WebDriverWait(driver, 30).until(
+                EC.presence_of_element_located((By.XPATH,
+                    '//*[@id="ctl00_BodyContentPlaceHolder_WebTab1"]/div/div[1]/div[1]/table'
+                    '/tbody/tr/td[4]/div/div[1]/a'))
+            ).get_attribute('href')
+            driver.get(href)
+            time.sleep(3)
 
-            # Click image to reveal ownership details
-            img_element = WebDriverWait(driver, 60).until(
-                EC.presence_of_element_located((By.XPATH, '//*[@id="divDisplayParcelOwner"]/div[1]/div/div[1]/a[2]/img'))
+            # gather and write back various fields
+            fields = {
+                'C': '//*[@id="ownershipDiv"]/div/ul',
+                'D': '//*[@id="divDisplayParcelOwner"]/div[1]/div/div[2]/div',
+                'E': '//*[@id="valueGrid"]/tbody/tr[2]/td[4]',
+                'F': '//*[@id="divDisplayParcelOwner"]/div[3]/table[1]/tbody/tr[3]/td',
+                'S': '//*[@id="divDisplayParcelOwner"]/div[2]/div[3]'
+            }
+
+            # click image to reveal ownership UL
+            img = WebDriverWait(driver, 15).until(
+                EC.element_to_be_clickable((By.XPATH,
+                    '//*[@id="divDisplayParcelOwner"]/div[1]/div/div[1]/a[2]/img'))
             )
-            img_element.click()
+            img.click()
 
-            ownership_text = driver.find_element(By.XPATH, '//*[@id="ownershipDiv"]/div/ul').text
-            sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!C{i}",
-                valueInputOption="RAW",
-                body={"values": [[ownership_text]]}
-            ).execute()
-
-            additional_text = driver.find_element(By.XPATH, '//*[@id="divDisplayParcelOwner"]/div[1]/div/div[2]/div').text
-            sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!D{i}",
-                valueInputOption="RAW",
-                body={"values": [[additional_text]]}
-            ).execute()
-
-            # Click Value tab and extract property value
-            value_tab = driver.find_element(By.ID, "ValuesHyperLink").click()
-            property_value = WebDriverWait(driver, 60).until(
-                EC.presence_of_element_located((By.XPATH, '//*[@id="valueGrid"]/tbody/tr[2]/td[4]'))
-            ).text
-            sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!E{i}",
-                valueInputOption="RAW",
-                body={"values": [[property_value]]}
-            ).execute()
-
-            building_info = driver.find_element(By.XPATH, '//*[@id="divDisplayParcelOwner"]/div[3]/table[1]/tbody/tr[3]/td').text
-            sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!F{i}",
-                valueInputOption="RAW",
-                body={"values": [[building_info]]}
-            ).execute()
-
-            full_site = driver.find_element(By.XPATH, '//*[@id="divDisplayParcelOwner"]/div[2]/div[3]').text
-            sheets_service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range=f"{SHEET_NAME}!S{i}",
-                valueInputOption="RAW",
-                body={"values": [[full_site]]}
-            ).execute()
+            for col, xpath in fields.items():
+                try:
+                    # extra click for “Values” tab
+                    if col == 'E':
+                        driver.find_element(By.ID, "ValuesHyperLink").click()
+                    val = WebDriverWait(driver, 15).until(
+                        EC.presence_of_element_located((By.XPATH, xpath))
+                    ).text
+                except Exception as ex:
+                    val = f"ERR: {ex}"
+                sheets.values().update(
+                    spreadsheetId=SHEET_ID,
+                    range=f"{SHEET_NAME}!{col}{i}",
+                    valueInputOption="RAW",
+                    body={"values": [[val]]}
+                ).execute()
+                print(f" → wrote {col}{i}: {val[:30]}")
 
         except Exception as e:
-            print(f"Error processing row {i}: {e}")
-
+            print(f"[Row {i}] processing error: {e}")
         finally:
             driver.quit()
 
