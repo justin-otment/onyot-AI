@@ -44,8 +44,8 @@ context.check_hostname = False
 context.verify_mode = ssl.CERT_NONE
 
 # Google Sheets setup
-SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
-SHEET_NAME = 'Cape Coral - ArcGIS_LANDonly'
+SHEET_ID = '1IckEBCfyh-o0q7kTPBwU0Ui3eMYJNwOQOmyAysm6W5E'
+SHEET_NAME = 'raw'
 
 
 # Define file paths
@@ -96,7 +96,7 @@ def fetch_data_and_update_sheet():
         print(f"Error fetching data from Google Sheets: {e}")
         return
 
-    url = 'https://www.leepa.org/Search/PropertySearch.aspx'
+    url = 'https://www.crexi.com/properties?pageSize=60&mapCenter=28.749099306735435,-82.0311664044857&mapZoom=7&showMap=true&acreageMin=2&types%5B%5D=Land'
 
     for i, (name_row, date_row) in enumerate(zip(names_data, dates_data), start=2):
         owner = name_row[0].strip() if name_row else ""
