@@ -26,6 +26,11 @@ jobs:
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
 
+      # ✅ Decode base64 into service-account.json
+      - name: Write service-account.json
+        run: |
+          echo "${{ secrets.GOOGLE_SERVICE_ACCOUNT_B64 }}" | base64 -d > service-account.json
+
       - name: Run Palm Bay script
         working-directory: Property Appraiser Scripts
         run: node palmBayPA.js
