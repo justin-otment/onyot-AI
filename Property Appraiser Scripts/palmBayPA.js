@@ -16,35 +16,25 @@ const __dirname = path.dirname(__filename);
 const SHEET_ID = "1rHU_8_9toBx02wsOUTpIbwDOn_0MmLUNTjVmxTPyDhs";
 const SHEET_NAME = "CAPE CORAL FINAL";
 
-const CREDENTIALS_PATH = path.join(__dirname, "credentials.json");
-const TOKEN_PATH = path.join(__dirname, "token.json");
+// 👇 Service account JSON written by workflow
+const SERVICE_ACCOUNT_PATH = path.join(__dirname, "service-account.json");
 
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
 // ----------------------------
-// Authenticate Google Sheets
+// Authenticate Google Sheets (Service Account)
 // ----------------------------
 async function authenticateGoogleSheets() {
-  if (!fs.existsSync(CREDENTIALS_PATH)) {
-    throw new Error(`❌ credentials.json not found at ${CREDENTIALS_PATH}`);
-  }
-  if (!fs.existsSync(TOKEN_PATH)) {
-    throw new Error(`❌ token.json not found at ${TOKEN_PATH}`);
+  if (!fs.existsSync(SERVICE_ACCOUNT_PATH)) {
+    throw new Error(`❌ service-account.json not found at ${SERVICE_ACCOUNT_PATH}`);
   }
 
-  const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, "utf-8"));
-  const token = JSON.parse(fs.readFileSync(TOKEN_PATH, "utf-8"));
+  const auth = new google.auth.GoogleAuth({
+    keyFile: SERVICE_ACCOUNT_PATH,
+    scopes: SCOPES,
+  });
 
-  const { client_secret, client_id, redirect_uris } = credentials.installed;
-
-  const oAuth2Client = new google.auth.OAuth2(
-    client_id,
-    client_secret,
-    redirect_uris[0]
-  );
-
-  oAuth2Client.setCredentials(token);
-  return google.sheets({ version: "v4", auth: oAuth2Client });
+  return google.sheets({ version: "v4", auth });
 }
 
 // ----------------------------
@@ -146,12 +136,30 @@ async function processRow(site, i, sheets) {
 
     console.log("✅ Result loaded for site:", site);
 
-    const ownershipText = await extractText(driver, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[1]/div[2]/div[1]');
-    const additionalText = await extractText(driver, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[2]/div[2]/div');
-    const propertyValue = await extractText(driver, '//*[@id="tValues"]/tbody/tr[1]/td[2]');
-    const bldgInfo = await extractText(driver, '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[7]/div[2]');
-    const saleData = await extractText(driver, '//*[@id="tSalesTransfers"]/tbody/tr[1]/td[1]');
-    const saleAmount = await extractText(driver, '//*[@id="tSalesTransfers"]/tbody/tr[1]/td[2]');
+    const ownershipText = await extractText(
+      driver,
+      '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[1]/div[2]/div[1]'
+    );
+    const additionalText = await extractText(
+      driver,
+      '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[2]/div[2]/div'
+    );
+    const propertyValue = await extractText(
+      driver,
+      '//*[@id="tValues"]/tbody/tr[1]/td[2]'
+    );
+    const bldgInfo = await extractText(
+      driver,
+      '//*[@id="cssDetails_Top_Outer"]/div[2]/div/div[7]/div[2]'
+    );
+    const saleData = await extractText(
+      driver,
+      '//*[@id="tSalesTransfers"]/tbody/tr[1]/td[1]'
+    );
+    const saleAmount = await extractText(
+      driver,
+      '//*[@id="tSalesTransfers"]/tbody/tr[1]/td[2]'
+    );
 
     await updateGoogleSheet(
       sheets,
@@ -169,7 +177,9 @@ async function processRow(site, i, sheets) {
     console.error(`❌ Error processing row ${i}:`, err.message);
   } finally {
     if (driver) await driver.quit();
-    try { fs.rmSync(profileDir, { recursive: true, force: true }); } catch {}
+    try {
+      fs.rmSync(profileDir, { recursive: true, force: true });
+    } catch {}
     console.log(`🚪 Closed browser instance for Row ${i}\n`);
   }
 }
@@ -185,7 +195,9 @@ async function fetchDataAndUpdateSheet() {
   const maxRows = grid.rowCount;
 
   if (REQUEST_START_ROW > maxRows) {
-    console.log(`Requested start row ${REQUEST_START_ROW} is beyond sheet rowCount ${maxRows}.`);
+    console.log(
+      `Requested start row ${REQUEST_START_ROW} is beyond sheet rowCount ${maxRows}.`
+    );
     return;
   }
 
