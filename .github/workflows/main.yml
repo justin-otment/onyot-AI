@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  palm-bay_permits:
+  corpTracer_PalmBay:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -31,7 +31,7 @@ jobs:
 
       - name: Run Palm Bay Permit Checker script
         working-directory: Property Appraiser Scripts
-        run: node palmBay_permits.js
+        run: node corpTracer.js
 
   charlotte:
     runs-on: ubuntu-latest
