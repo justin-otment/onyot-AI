@@ -8,17 +8,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install
+        working-directory: onyot-AI
+        run: npm ci
 
-      - name: Install Chrome and Chromedriver
+      - name: Install Chrome and dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y wget unzip xvfb libxi6 libxss1 libnss3 libatk-bridge2.0-0 libgtk-3-0
@@ -26,28 +27,29 @@ jobs:
           sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
 
       - name: Decode Service Account JSON
-        working-directory: Property Appraiser Scripts
-        run: base64 -d service-account_base64.txt > service-account.json
+        working-directory: onyot-AI/Property Appraiser Scripts
+        run: echo "${{ secrets.SERVICE_ACCOUNT_JSON }}" | base64 -d > service-account.json
 
-      - name: Run Palm Bay Permit Checker script
-        working-directory: Property Appraiser Scripts
+      - name: Run corpTracer script
+        working-directory: onyot-AI/Property Appraiser Scripts
         run: node corpTracer.js
 
   charlotte:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install
+        working-directory: onyot-AI
+        run: npm ci
 
-      - name: Install Chrome and Chromedriver
+      - name: Install Chrome and dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y wget unzip xvfb libxi6 libxss1 libnss3 libatk-bridge2.0-0 libgtk-3-0
@@ -55,9 +57,9 @@ jobs:
           sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
 
       - name: Decode Service Account JSON
-        working-directory: Property Appraiser Scripts
-        run: base64 -d service-account_base64.txt > service-account.json
+        working-directory: onyot-AI/Property Appraiser Scripts
+        run: echo "${{ secrets.SERVICE_ACCOUNT_JSON }}" | base64 -d > service-account.json
 
       - name: Run Charlotte script
-        working-directory: Property Appraiser Scripts
+        working-directory: onyot-AI/Property Appraiser Scripts
         run: node charlottePA.js
