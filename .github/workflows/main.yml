@@ -46,7 +46,7 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        working-directory: onyot-AI
+        working-directory: onyot-AI/Property Appraiser Scripts
         run: npm ci
 
       - name: Install Chrome and dependencies
