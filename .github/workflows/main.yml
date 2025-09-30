@@ -26,10 +26,14 @@ jobs:
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
 
-      # ✅ Decode base64 into service-account.json
-      - name: Write service-account.json
+      - name: Decode Service Account JSON
+        working-directory: Property Appraiser Scripts
         run: |
-          echo "${{ secrets.GOOGLE_SERVICE_ACCOUNT_B64 }}" | base64 -d > service-account.json
+          # If you have it in a file checked in (service-account_base64.txt):
+          base64 -d service-account_base64.txt > service-account.json
+
+          # OR, if using GitHub Secrets instead of file:
+          # echo "$SERVICE_ACCOUNT_BASE64" | base64 -d > service-account.json
 
       - name: Run Palm Bay script
         working-directory: Property Appraiser Scripts
