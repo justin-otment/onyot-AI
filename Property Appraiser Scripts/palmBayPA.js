@@ -25,23 +25,23 @@ const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 // Authenticate Google Sheets
 // ----------------------------
 async function authenticateGoogleSheets() {
-  const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, "utf-8"));
-  const { client_secret, client_id, redirect_uris } = credentials.installed;
-
-  let token;
-  if (fs.existsSync(TOKEN_PATH)) {
-    token = JSON.parse(fs.readFileSync(TOKEN_PATH, "utf-8"));
+  if (!fs.existsSync(CREDENTIALS_PATH)) {
+    throw new Error(`❌ credentials.json not found at ${CREDENTIALS_PATH}`);
   }
+  if (!fs.existsSync(TOKEN_PATH)) {
+    throw new Error(`❌ token.json not found at ${TOKEN_PATH}`);
+  }
+
+  const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, "utf-8"));
+  const token = JSON.parse(fs.readFileSync(TOKEN_PATH, "utf-8"));
+
+  const { client_secret, client_id, redirect_uris } = credentials.installed;
 
   const oAuth2Client = new google.auth.OAuth2(
     client_id,
     client_secret,
     redirect_uris[0]
   );
-
-  if (!token) {
-    throw new Error("❌ No token.json found. Provide token.json in repo or secrets.");
-  }
 
   oAuth2Client.setCredentials(token);
   return google.sheets({ version: "v4", auth: oAuth2Client });
