@@ -1,12 +1,11 @@
-name: Run Palm Bay Scraper
+name: Run Scrapers
 
 on:
   workflow_dispatch:
 
 jobs:
-  scrape:
+  palm-bay:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -28,13 +27,37 @@ jobs:
 
       - name: Decode Service Account JSON
         working-directory: Property Appraiser Scripts
-        run: |
-          # If you have it in a file checked in (service-account_base64.txt):
-          base64 -d service-account_base64.txt > service-account.json
-
-          # OR, if using GitHub Secrets instead of file:
-          # echo "$SERVICE_ACCOUNT_BASE64" | base64 -d > service-account.json
+        run: base64 -d service-account_base64.txt > service-account.json
 
       - name: Run Palm Bay script
         working-directory: Property Appraiser Scripts
         run: node palmBayPA.js
+
+  charlotte:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Chrome and Chromedriver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip xvfb libxi6 libxss1 libnss3 libatk-bridge2.0-0 libgtk-3-0
+          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
+
+      - name: Decode Service Account JSON
+        working-directory: Property Appraiser Scripts
+        run: base64 -d service-account_base64.txt > service-account.json
+
+      - name: Run Charlotte script
+        working-directory: Property Appraiser Scripts
+        run: node charlottePA.js
