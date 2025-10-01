@@ -29,7 +29,7 @@ jobs:
         working-directory: Property Appraiser Scripts
         run: base64 -d service-account_base64.txt > service-account.json
 
-      - name: Run Palm Bay Appraiser script
+      - name: Run Lee Appraiser script
         working-directory: Property Appraiser Scripts
         run: node leePA.js
 
