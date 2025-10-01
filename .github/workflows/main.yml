@@ -29,9 +29,9 @@ jobs:
         working-directory: Property Appraiser Scripts
         run: base64 -d service-account_base64.txt > service-account.json
 
-      - name: Run Palm Bay Permit Checker script
+      - name: Run Palm Bay Appraiser script
         working-directory: Property Appraiser Scripts
-        run: node palmBayPA.js
+        run: node // palmBayPA.js <--- uncomment if need to run it
 
   charlotte:
     runs-on: ubuntu-latest
@@ -58,7 +58,7 @@ jobs:
         working-directory: Property Appraiser Scripts
         run: base64 -d service-account_base64.txt > service-account.json
 
-      - name: Run Charlotte script
+      - name: Run Charlotte Appraiser script
         working-directory: Property Appraiser Scripts
         run: node charlottePA.js
 
