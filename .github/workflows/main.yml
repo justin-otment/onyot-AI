@@ -87,6 +87,6 @@ jobs:
         working-directory: Property Appraiser Scripts
         run: base64 -d service-account_base64.txt > service-account.json
 
-      - name: Run Port Charlotte script
+      - name: Run Corp Tracer Palm Bay County script
         working-directory: Property Appraiser Scripts
-        run: node portCharlotte.js
+        run: node corpTracer.js
