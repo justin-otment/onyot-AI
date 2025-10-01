@@ -7,8 +7,8 @@ import chrome from "selenium-webdriver/chrome.js";
 // ==========================
 // Google Sheets Configuration
 // ==========================
-const SHEET_ID = "140GOtFSLYBk4FC50Jd9__Y6SaKSHhfb2PIeap4lKXPE";
-const SHEET_NAME = "Port Charlotte";
+const SHEET_ID = "1rHU_8_9toBx02wsOUTpIbwDOn_0MmLUNTjVmxTPyDhs";
+const SHEET_NAME = "CAPE CORAL FINAL";
 
 // ==========================
 // Authenticate Google Sheets (Service Account)
@@ -54,7 +54,7 @@ async function updateSheet(auth, officerNames, rowIndex) {
 async function updateCompanyDetails(auth, details, rowIndex) {
   const sheets = google.sheets({ version: "v4", auth });
 
-  const range = `${SHEET_NAME}!U${rowIndex}:X${rowIndex}`;
+  const range = `${SHEET_NAME}!M${rowIndex}:P${rowIndex}`;
   const values = [[details.registered_name, details.status, details.mail, details.agent]];
 
   try {
@@ -75,7 +75,7 @@ async function updateCompanyDetails(auth, details, rowIndex) {
 async function updateCommonAddress(auth, street, zip, rowIndex) {
   const sheets = google.sheets({ version: "v4", auth });
 
-  const range = `${SHEET_NAME}!Y${rowIndex}:Z${rowIndex}`;
+  const range = `${SHEET_NAME}!R${rowIndex}:S${rowIndex}`;
   const values = [[street, zip]];
 
   try {
@@ -247,7 +247,7 @@ async function scrapeCompanyDetails(driver) {
 // ==========================
 async function getCompanyNames(auth) {
   const sheets = google.sheets({ version: "v4", auth });
-  const range = `${SHEET_NAME}!M2:M`;
+  const range = `${SHEET_NAME}!E2:M`;
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
