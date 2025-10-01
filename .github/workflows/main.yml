@@ -62,7 +62,7 @@ jobs:
         working-directory: Property Appraiser Scripts
         run: node charlottePA.js
 
-  portCharlotte:
+  CorpTracer:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
