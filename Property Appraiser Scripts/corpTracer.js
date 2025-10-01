@@ -1,4 +1,3 @@
-```js
 import { Builder, By, until, Key } from "selenium-webdriver";
 import { google } from "googleapis";
 import fs from "fs";
