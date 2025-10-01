@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  PalmBay:
+  Lee PA:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -31,7 +31,7 @@ jobs:
 
       - name: Run Palm Bay Appraiser script
         working-directory: Property Appraiser Scripts
-        run: node // palmBayPA.js <--- uncomment if need to run it
+        run: node leePA.js
 
   charlotte:
     runs-on: ubuntu-latest
