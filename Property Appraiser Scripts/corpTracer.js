@@ -404,4 +404,3 @@ async function processCompany(auth, driver, companyName, rowIndex = null, visite
     await driver.quit();
   }
 })();
-```
