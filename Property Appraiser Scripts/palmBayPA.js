@@ -190,7 +190,7 @@ async function processRow(site, i, sheets) {
 async function fetchDataAndUpdateSheet() {
   const sheets = await authenticateGoogleSheets();
 
-  const REQUEST_START_ROW = 16781;
+  const REQUEST_START_ROW = 17539;
   const grid = await getSheetGridProperties(sheets, SHEET_ID, SHEET_NAME);
   const maxRows = grid.rowCount;
 
