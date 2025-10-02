@@ -17,6 +17,9 @@ const SEARCH_URL = 'https://www.leepa.org/Search/PropertySearch.aspx';
 const CHROME_PATH = process.env.CHROME_PATH || '/usr/bin/google-chrome-stable';
 const HEADLESS = process.env.HEADLESS !== 'false';
 
+const SERVICE_ACCOUNT_FILE = path.join(__dirname, "service-account.json");
+const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
+
 // -----------------------------
 // Helpers
 // -----------------------------
