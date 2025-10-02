@@ -247,7 +247,7 @@ async function scrapeCompanyDetails(driver) {
 // ==========================
 async function getCompanyNames(auth) {
   const sheets = google.sheets({ version: "v4", auth });
-  const range = `${SHEET_NAME}!E11371:E`;
+  const range = `${SHEET_NAME}!E2:E`;
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
@@ -259,7 +259,7 @@ async function getCompanyNames(auth) {
   return values
     .map((val, index) => ({
       name: val[0]?.trim() || null,
-      rowIndex: index + 11371,
+      rowIndex: index + 2,
       isBusiness: isBusinessEntity(val[0]?.trim() || ""),
     }))
     .filter((entry) => entry.name);
