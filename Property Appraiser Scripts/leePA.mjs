@@ -231,7 +231,6 @@ async function fetchDataAndUpdateSheet() {
         console.log(`[Row ${rowIndex}] Wrote sale amount: "${saleAmountText}"`);
       } else {
         console.log(`[Row ${rowIndex}] No sale amount extracted`);
-      }
     }
   }
 
