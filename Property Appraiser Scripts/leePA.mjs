@@ -17,8 +17,10 @@ const SEARCH_URL = 'https://www.leepa.org/Search/PropertySearch.aspx';
 const CHROME_PATH = process.env.CHROME_PATH || '/usr/bin/google-chrome-stable';
 const HEADLESS = process.env.HEADLESS !== 'false';
 
-const SERVICE_ACCOUNT_FILE = path.join(__dirname, "service-account.json");
-const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
+// Ensure SERVICE_ACCOUNT_PATH is defined and resolved from env or common locations
+const SERVICE_ACCOUNT_PATH = process.env.GOOGLE_APPLICATION_CREDENTIALS
+  ? path.resolve(process.cwd(), process.env.GOOGLE_APPLICATION_CREDENTIALS)
+  : path.resolve(process.cwd(), 'service-account.json');
 
 // -----------------------------
 // Helpers
