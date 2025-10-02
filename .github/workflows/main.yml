@@ -60,7 +60,7 @@ jobs:
 
       - name: Run Charlotte Appraiser script
         working-directory: Property Appraiser Scripts
-        run: node charlottePA.js
+        run: node // <-------- charlottePA.js uncomment 
 
   CorpTracer:
     runs-on: ubuntu-latest
