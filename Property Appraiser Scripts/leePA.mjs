@@ -51,12 +51,19 @@ async function makeRequestWithRetries(url, retries = 3, backoffFactor = 1000) {
 // Google Sheets (service account) auth
 // -----------------------------
 async function getSheetsClient() {
-  if (!fs.existsSync(SERVICE_ACCOUNT_PATH)) {
-    throw new Error(`service-account.json not found at ${SERVICE_ACCOUNT_PATH}`);
+  const candidates = [
+    SERVICE_ACCOUNT_PATH,
+    path.resolve(process.cwd(), 'Property Appraiser Scripts', 'service-account.json'),
+    path.resolve(process.cwd(), 'service-account.json'),
+  ];
+
+  const keyPath = candidates.find((p) => fs.existsSync(p));
+  if (!keyPath) {
+    throw new Error(`service-account.json not found. Looked at: ${candidates.join('; ')}`);
   }
 
   const auth = new google.auth.GoogleAuth({
-    keyFile: SERVICE_ACCOUNT_PATH,
+    keyFile: keyPath,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
 
@@ -96,7 +103,7 @@ async function fetchDataAndUpdateSheet() {
   const namesData = namesRes.data.values || [];
   const datesData = datesRes.data.values || [];
 
-  console.log(`[Init] Fetched ${namesData.length} names and ${datesData.length} date cells.`);
+  console.log(`[Init] Fetched ${namesData.length} names and ${datesData.length} H-column cells.`);
 
   const browser = await launchBrowser();
   const page = await browser.newPage();
@@ -104,10 +111,10 @@ async function fetchDataAndUpdateSheet() {
   for (let i = 0; i < namesData.length; i++) {
     const rowIndex = START_ROW + i;
     const owner = (namesData[i] && namesData[i][0]) ? namesData[i][0].trim() : '';
-    const saleDateExisting = (datesData[i] && datesData[i][0]) ? datesData[i][0].trim() : '';
+    const existingH = (datesData[i] && datesData[i][0]) ? datesData[i][0].trim() : '';
 
-    if (saleDateExisting) {
-      console.log(`[Row ${rowIndex}] Skipping: column E already filled`);
+    if (existingH) {
+      console.log(`[Row ${rowIndex}] Skipping: column H already filled`);
       continue;
     }
     if (!owner) {
@@ -131,14 +138,14 @@ async function fetchDataAndUpdateSheet() {
       await page.keyboard.press('Enter');
 
       // short pause
-      await page.waitForTimeout(500);
+      await sleep(500);
 
       // handle warning popup
       try {
         await page.waitForSelector('#ctl00_BodyContentPlaceHolder_pnlIssues', { timeout: 5000 });
         await page.click('#ctl00_BodyContentPlaceHolder_btnWarning');
         console.log(`[Row ${rowIndex}] Dismissed warning popup`);
-        await page.waitForTimeout(500);
+        await sleep(500);
       } catch {
         // no popup
       }
@@ -166,7 +173,7 @@ async function fetchDataAndUpdateSheet() {
       try {
         await page.waitForSelector('#SalesHyperLink > img', { timeout: 10000 });
         await page.click('#SalesHyperLink > img');
-        await page.waitForTimeout(500);
+        await sleep(500);
       } catch {
         // no sales history
       }
@@ -226,9 +233,28 @@ async function fetchDataAndUpdateSheet() {
         console.log(`[Row ${rowIndex}] No sale amount extracted`);
       }
 
-      await page.waitForTimeout(500);
+      // optional: write a simple status into column H to mark processed
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: `${SHEET_NAME}!H${rowIndex}`,
+        valueInputOption: 'RAW',
+        requestBody: { values: [['processed']] },
+      });
+
+      await sleep(500);
     } catch (err) {
       console.error(`[Row ${rowIndex}] Error: ${err.stack || err.message}`);
+      // write error marker to column H
+      try {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID,
+          range: `${SHEET_NAME}!H${rowIndex}`,
+          valueInputOption: 'RAW',
+          requestBody: { values: [[`error: ${String(err).slice(0, 200)}`]] },
+        });
+      } catch (e) {
+        console.error(`[Row ${rowIndex}] Failed to write error to sheet: ${e.message}`);
+      }
     }
   }
 
