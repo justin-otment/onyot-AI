@@ -31,7 +31,7 @@ jobs:
 
       - name: Run Lee Appraiser script
         working-directory: Property Appraiser Scripts
-        run: node leePA.js
+        run: node leePA.mjs
 
   charlotte:
     runs-on: ubuntu-latest
