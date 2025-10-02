@@ -1,224 +1,144 @@
-// leePA.js
+// leePA_skip_bot.js
+const fs = require('fs');
+const path = require('path');
+const axios = require('axios');
+const puppeteer = require('puppeteer');
+const { google } = require('googleapis');
 
-import { Builder, By, Key, until } from "selenium-webdriver";
-import chrome from "selenium-webdriver/chrome.js";
-import { google } from "googleapis";
-import fs from "fs";
+// -----------------------------
+// Retry wrapper for HTTP requests
+// -----------------------------
+async function makeRequestWithRetries(url, retries = 3, backoffFactor = 1000) {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const response = await axios.get(url, { httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false }) });
+      return response.data;
+    } catch (err) {
+      console.log(`Attempt ${attempt + 1} failed: ${err.message}`);
+      const sleepTime = backoffFactor * Math.pow(2, attempt);
+      console.log(`Retrying in ${sleepTime / 1000} seconds...`);
+      await new Promise(r => setTimeout(r, sleepTime));
+    }
+  }
+  throw new Error(`Failed to fetch ${url} after ${retries} attempts.`);
+}
 
 // ================= GOOGLE SHEETS AUTH ==================
+const { google } = require("googleapis");
+
 const auth = new google.auth.GoogleAuth({
-  keyFile: "service-account.json",
+  keyFile: "service-account.json", // path to your service account key
   scopes: ["https://www.googleapis.com/auth/spreadsheets"],
 });
+
 const sheets = google.sheets({ version: "v4", auth });
 
-// ================= SHEET CONFIG ==================
-const SPREADSHEET_ID = "1zvXxmncHa0MMggdgIWSFTtkoi5gyy6go-ozVea_4f54"; // <- replace with actual
-const SHEET_NAME = "Spec_Zipcode";
+// -----------------------------
+// Main scraping + sheet update
+// -----------------------------
+const SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A';
+const SHEET_NAME = 'Cape Coral - ArcGIS_LANDonly';
 
-const searchRange = `${SHEET_NAME}!A2:A`;   // renamed from namesRange → searchKey
-const datesRange = `${SHEET_NAME}!H2:H`;   // unchanged
-const dorOwnerRange = `${SHEET_NAME}!G`;   // will append row dynamically
-const saleDateRange = `${SHEET_NAME}!H`;
-const soldAmountRange = `${SHEET_NAME}!I`;
-const mailingAddrRange = `${SHEET_NAME}!J`;
-const extraFieldRange = `${SHEET_NAME}!K`;
-const matcherRange = `${SHEET_NAME}!B2:B`; // for IF_2 text similarity
+async function fetchDataAndUpdateSheet() {
+  const sheets = await authenticateGoogleSheets();
 
-// ================= HELPER FUNCTIONS ==================
-function normalizeText(txt) {
-  return txt
-    .toLowerCase()
-    .replace(/[^a-z0-9 ]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+  // Fetch names and dates
+  const namesRange = `${SHEET_NAME}!A3951:A7900`;
+  const datesRange = `${SHEET_NAME}!E3951:E7900`;
 
-function similarity(str1, str2) {
-  // quick similarity scoring (Jaccard-like)
-  const set1 = new Set(normalizeText(str1).split(" "));
-  const set2 = new Set(normalizeText(str2).split(" "));
-  const inter = new Set([...set1].filter((x) => set2.has(x)));
-  const union = new Set([...set1, ...set2]);
-  return inter.size / union.size;
-}
+  const [namesRes, datesRes] = await Promise.all([
+    sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: namesRange }),
+    sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: datesRange }),
+  ]);
 
-// ================= MAIN ==================
-async function main() {
-  const options = new chrome.Options()
-    .addArguments("--headless=new")
-    .addArguments("--no-sandbox")
-    .addArguments("--disable-dev-shm-usage");
+  const namesData = namesRes.data.values || [];
+  const datesData = datesRes.data.values || [];
 
-  const driver = await new Builder()
-    .forBrowser("chrome")
-    .setChromeOptions(options)
-    .build();
+  console.log(`Fetched ${namesData.length} names and ${datesData.length} date cells.`);
 
-  try {
-    // 1. Read input search keys + matcher values
-    const [searchResp, matcherResp] = await Promise.all([
-      sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: searchRange,
-      }),
-      sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: matcherRange,
-      }),
-    ]);
+  const url = 'https://www.leepa.org/Search/PropertySearch.aspx';
+  const browser = await puppeteer.launch({ headless: true });
 
-    const searchKeys = searchResp.data.values?.flat() || [];
-    const matcherVals = matcherResp.data.values?.flat() || [];
+  for (let i = 0; i < namesData.length; i++) {
+    const rowIndex = 3951 + i;
+    const owner = (namesData[i][0] || '').trim();
+    const saleDate = (datesData[i] && datesData[i][0]) ? datesData[i][0].trim() : '';
 
-    for (let row = 0; row < searchKeys.length; row++) {
-      const searchKey = searchKeys[row];
-      if (!searchKey) continue;
-
-      console.log(`🔎 Processing row ${row + 2}: ${searchKey}`);
-
-      await driver.get("https://county-taxes.net/fl-lee/fl-lee/property-tax");
-
-      // input search key
-      const inputBox = await driver.wait(
-        until.elementLocated(By.css("input.form-control")),
-        30000
-      );
-      await inputBox.sendKeys(searchKey, Key.RETURN);
-
-      // wait for either condition
-      let foundPath = null;
-      try {
-        await driver.wait(until.elementLocated(By.css("body > div.container-fluid")), 10000);
-        foundPath = "IF_1";
-      } catch {
-        // fallback to property-tax list
-        const listElems = await driver.findElements(By.css("div.property-tax"));
-        if (listElems.length > 0) {
-          foundPath = "IF_2";
-        }
-      }
-
-      // ----------------- IF_1 -----------------
-      if (foundPath === "IF_1") {
-        const clickElem = await driver.wait(
-          until.elementLocated(
-            By.css("body > div.container-fluid > main > section > div.account-header > div:nth-child(2) > div:nth-child(3) > div:nth-child(3) > a")
-          ),
-          15000
-        );
-        await clickElem.click();
-
-        // switch to new tab
-        const handles = await driver.getAllWindowHandles();
-        await driver.switchTo().window(handles[handles.length - 1]);
-      }
-
-      // ----------------- IF_2 -----------------
-      if (foundPath === "IF_2") {
-        const listElems = await driver.findElements(By.css("div.property-tax"));
-        const matcherVal = matcherVals[row] || "";
-
-        let bestMatch = null;
-        let bestScore = 0;
-
-        for (const elem of listElems) {
-          const txt = await elem.getText();
-          const score = similarity(txt, matcherVal);
-          if (score > bestScore) {
-            bestScore = score;
-            bestMatch = elem;
-          }
-        }
-
-        if (bestMatch && bestScore >= 0.8) {
-          // click sibling button
-          const btn = await bestMatch.findElement(By.xpath("./following-sibling::button"));
-          await btn.click();
-
-          // now wait for container-fluid again
-          await driver.wait(until.elementLocated(By.css("body > div.container-fluid")), 20000);
-        } else {
-          console.warn(`⚠️ No match above threshold for row ${row + 2}`);
-          continue;
-        }
-      }
-
-      // ================== DATA EXTRACTION ==================
-      // 1. Owner + Mailing Info
-      const ownerBlock = await driver.findElement(
-        By.css("#divDisplayParcelOwner > div.column.columnLeft > div > div.textPanel > div")
-      );
-      const ownerText = await ownerBlock.getText();
-      const ownerLines = ownerText.split("\n").map((x) => x.trim()).filter(Boolean);
-
-      const mailingAddress = ownerLines.slice(-2).join(" ");
-      const dorOwner = ownerLines.slice(0, -2).join(" + ");
-
-      // write values
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${dorOwnerRange}${row + 2}`,
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: [[dorOwner]] },
-      });
-
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${mailingAddrRange}${row + 2}`,
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: [[mailingAddress]] },
-      });
-
-      // 2. Extra field
-      try {
-        const extraField = await driver.findElement(
-          By.css("#divDisplayParcelOwner > div:nth-child(3) > table > tbody > tr:nth-child(2) > td")
-        );
-        const extraText = await extraField.getText();
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SPREADSHEET_ID,
-          range: `${extraFieldRange}${row + 2}`,
-          valueInputOption: "USER_ENTERED",
-          requestBody: { values: [[extraText]] },
-        });
-      } catch {
-        console.log("No extra field found.");
-      }
-
-      // 3. Sales info
-      const salesLink = await driver.findElement(By.css("a#SalesHyperLink"));
-      await salesLink.click();
-
-      await driver.wait(until.elementLocated(By.css("#SalesDetails")), 20000);
-
-      const soldAmount = await driver
-        .findElement(By.css("#SalesDetails > div.overFlowDiv > table > tbody > tr:nth-child(2) > td.rightAlign"))
-        .getText();
-
-      const saleDate = await driver
-        .findElement(By.css("#SalesDetails > div.overFlowDiv > table > tbody > tr:nth-child(2) > td:nth-child(2)"))
-        .getText();
-
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${soldAmountRange}${row + 2}`,
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: [[soldAmount]] },
-      });
-
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${saleDateRange}${row + 2}`,
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: [[saleDate]] },
-      });
-
-      console.log(`✅ Row ${row + 2} updated successfully.`);
+    if (saleDate) {
+      console.log(`Skipping row ${rowIndex} because column E is already filled.`);
+      continue;
     }
-  } finally {
-    await driver.quit();
+    if (!owner) {
+      console.log(`Skipping row ${rowIndex} because owner name is blank.`);
+      continue;
+    }
+
+    console.log(`Processing row ${rowIndex}: Owner = ${owner}`);
+    const page = await browser.newPage();
+
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+      // Input owner name
+      await page.type('#ctl00_BodyContentPlaceHolder_WebTab1_tmpl0_STRAPTextBox', owner);
+      await page.keyboard.press('Enter');
+
+      // Handle warning popup if present
+      try {
+        await page.waitForSelector('#ctl00_BodyContentPlaceHolder_pnlIssues', { timeout: 10000 });
+        await page.click('#ctl00_BodyContentPlaceHolder_btnWarning');
+      } catch {
+        console.log('No warning popup.');
+      }
+
+      // Click into property link
+      const href = await page.$eval(
+        '#ctl00_BodyContentPlaceHolder_WebTab1 div div table tr td:nth-child(4) div div a',
+        el => el.href
+      );
+      await page.goto(href, { waitUntil: 'domcontentloaded' });
+
+      // Click sales history
+      await page.waitForSelector('#SalesHyperLink > img', { timeout: 30000 });
+      await page.click('#SalesHyperLink > img');
+
+      // Extract sale date + amount
+      const saleDateText = await page.$eval('#SalesDetails div:nth-child(3) table tr:nth-child(2) td:nth-child(2)', el => el.innerText);
+      const saleAmountText = await page.$eval('#SalesDetails div:nth-child(3) table tr:nth-child(2) td:nth-child(1)', el => el.innerText);
+
+      // Update Google Sheet
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: `${SHEET_NAME}!E${rowIndex}`,
+        valueInputOption: 'RAW',
+        requestBody: { values: [[saleDateText]] },
+      });
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: `${SHEET_NAME}!F${rowIndex}`,
+        valueInputOption: 'RAW',
+        requestBody: { values: [[saleAmountText]] },
+      });
+
+      console.log(`Updated row ${rowIndex} with sale date ${saleDateText} and amount ${saleAmountText}`);
+    } catch (err) {
+      console.error(`Error processing row ${rowIndex}: ${err.message}`);
+    } finally {
+      await page.close();
+    }
   }
+
+  await browser.close();
 }
 
-main().catch(console.error);
+// -----------------------------
+// Run
+// -----------------------------
+(async () => {
+  try {
+    await fetchDataAndUpdateSheet();
+  } catch (err) {
+    console.error('Fatal error:', err);
+  }
+})();
