@@ -7,34 +7,77 @@ jobs:
   Lee_PA:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 20
 
-      - name: Install Chrome
+      - name: Confirm workspace and package.json
         run: |
-          sudo apt-get update
+          echo "PWD: $(pwd)"
+          ls -la
+          echo "package.json:"
+          cat package.json
+
+      - name: Install Chrome (system)
+        run: |
+          sudo apt-get update -y
           sudo apt-get install -y wget unzip xvfb libxi6 libxss1 libnss3 libatk-bridge2.0-0 libgtk-3-0
           wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
+        timeout-minutes: 10
 
-      - name: Install dependencies
+      - name: Install dependencies (skip chromium download)
         env:
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
         run: npm ci
+        timeout-minutes: 10
+
+      - name: Debug installed modules
+        run: |
+          node -v
+          npm -v
+          echo "node_modules top-level:"
+          ls -la node_modules | head -n 200
+          echo "puppeteer-core present?"
+          ls -la node_modules/puppeteer-core || true
+          echo "puppeteer present?"
+          ls -la node_modules/puppeteer || true
+          echo "which chrome:"
+          which google-chrome-stable || true
+
+      - name: Smoke test import puppeteer-core
+        run: |
+          node -e "import('puppeteer-core').then(()=>console.log('puppeteer-core import OK')).catch(e=>{console.error('import failed', e); process.exit(1)})"
 
       - name: Decode Service Account JSON
         working-directory: "Property Appraiser Scripts"
-        run: base64 -d service-account_base64.txt > service-account.json
+        run: |
+          if [ ! -f service-account_base64.txt ]; then
+            echo "service-account_base64.txt not found in Property Appraiser Scripts" >&2
+            ls -la
+            exit 1
+          fi
+          base64 -d service-account_base64.txt > service-account.json
+          ls -la service-account.json
 
       - name: Run Lee Appraiser script
         working-directory: "Property Appraiser Scripts"
         env:
           HEADLESS: 'true'
+          CHROME_PATH: '/usr/bin/google-chrome-stable'
+          GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
         run: node leePA.mjs
+
+      - name: Optional fallback - install full puppeteer (if any stray imports require it)
+        if: failure()
+        run: |
+          echo "Attempting fallback: install full puppeteer and rerun"
+          npm install puppeteer --no-audit --no-fund
+          node "Property Appraiser Scripts/leePA.mjs"
 
   charlotte:
     runs-on: ubuntu-latest
