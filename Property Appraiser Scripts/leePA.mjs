@@ -12,7 +12,7 @@ import https from 'https';
 const SHEET_ID = '1zvXxmncHa0MMggdgIWSFTtkoi5gyy6go-ozVea_4f54';
 const SHEET_NAME = 'Spec_Zipcode';
 const START_ROW = 2;
-const END_ROW = 2;
+const END_ROW = 343;
 const SEARCH_URL = 'https://www.leepa.org/Search/PropertySearch.aspx';
 const CHROME_PATH = process.env.CHROME_PATH || '/usr/bin/google-chrome-stable';
 const HEADLESS = process.env.HEADLESS !== 'false';
