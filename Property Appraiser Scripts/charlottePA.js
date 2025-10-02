@@ -14,7 +14,10 @@ import { google } from "googleapis";
 import { Builder, By, until } from "selenium-webdriver";
 import chrome from "selenium-webdriver/chrome.js";
 import os from "os";
-import { v4 as uuidv4 } from "uuid";
+import { v4 as uuidv4 } from 'uuid';
+const id = uuidv4();
+
+
 
 // ============================
 // Constants & Paths
