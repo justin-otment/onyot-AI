@@ -1,5 +1,4 @@
 // leePA_skip_bot.js
-const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const puppeteer = require('puppeteer');
