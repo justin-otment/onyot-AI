@@ -8,7 +8,8 @@ import { fileURLToPath } from "url";
 import { google } from "googleapis";
 import { Builder, By, Key, until } from "selenium-webdriver";
 import chrome from "selenium-webdriver/chrome.js";
-import { v4 as uuidv4 } from "uuid";
+import { v4 as uuidv4 } from 'uuid';
+const id = uuidv4();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
