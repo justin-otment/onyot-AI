@@ -21,42 +21,37 @@ const HEADLESS = process.env.HEADLESS !== 'false';
 // Helpers
 // -----------------------------
 function sleep(ms) {
-  return new Promise(res => setTimeout(res, ms));
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 async function makeRequestWithRetries(url, retries = 3, backoffFactor = 1000) {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      const response = await axios.get(url, { httpsAgent: new https.Agent({ rejectUnauthorized: false }) });
-      return response.data;
+      const response = await axios.get(url, {
+        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+        timeout: 20000,
+      });
+      return response;
     } catch (err) {
       console.log(`[HTTP] Attempt ${attempt + 1} failed: ${err.message}`);
-      const sleepTime = backoffFactor * Math.pow(2, attempt);
-      console.log(`[HTTP] Retrying in ${sleepTime / 1000}s...`);
-      await sleep(sleepTime);
+      if (attempt + 1 === retries) throw err;
+      const wait = backoffFactor * 2 ** attempt;
+      console.log(`[HTTP] Retrying in ${wait}ms`);
+      await sleep(wait);
     }
   }
-  throw new Error(`Failed to fetch ${url} after ${retries} attempts.`);
 }
 
 // -----------------------------
-// Google Sheets auth
+// Google Sheets (service account) auth
 // -----------------------------
-async function authenticateGoogleSheets() {
-  const envCred = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-  const candidatePaths = [];
-
-  if (envCred) candidatePaths.push(path.resolve(envCred));
-  candidatePaths.push(path.resolve(process.cwd(), 'service-account.json'));
-  candidatePaths.push(path.resolve(process.cwd(), 'Property Appraiser Scripts', 'service-account.json'));
-
-  const keyPath = candidatePaths.find(p => fs.existsSync(p));
-  if (!keyPath) {
-    throw new Error(`Service account key not found. Looked at: ${candidatePaths.join('; ')}`);
+async function getSheetsClient() {
+  if (!fs.existsSync(SERVICE_ACCOUNT_PATH)) {
+    throw new Error(`service-account.json not found at ${SERVICE_ACCOUNT_PATH}`);
   }
 
   const auth = new google.auth.GoogleAuth({
-    keyFile: keyPath,
+    keyFile: SERVICE_ACCOUNT_PATH,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
 
@@ -67,12 +62,11 @@ async function authenticateGoogleSheets() {
 // Puppeteer launch helper
 // -----------------------------
 async function launchBrowser() {
-  // Ensure chrome exists when using puppeteer-core
   if (!fs.existsSync(CHROME_PATH)) {
-    throw new Error(`Chrome not found at ${CHROME_PATH}. Set CHROME_PATH env or install chrome in CI.`);
+    throw new Error(`Chrome not found at ${CHROME_PATH}. Set CHROME_PATH or install Chrome in CI.`);
   }
 
-  return await puppeteer.launch({
+  return puppeteer.launch({
     headless: HEADLESS,
     executablePath: CHROME_PATH,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
@@ -81,13 +75,13 @@ async function launchBrowser() {
 }
 
 // -----------------------------
-// Main scraping + sheet update
+// Main flow
 // -----------------------------
 async function fetchDataAndUpdateSheet() {
-  const sheets = await authenticateGoogleSheets();
+  const sheets = await getSheetsClient();
 
-  const namesRange = `${SHEET_NAME}!A${START_ROW}:A${END_ROW}`;
-  const datesRange = `${SHEET_NAME}!E${START_ROW}:E${END_ROW}`;
+  const namesRange = `${SHEET_NAME}!G${START_ROW}:G${END_ROW}`;
+  const datesRange = `${SHEET_NAME}!H${START_ROW}:H${END_ROW}`;
 
   const [namesRes, datesRes] = await Promise.all([
     sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: namesRange }),
@@ -100,8 +94,6 @@ async function fetchDataAndUpdateSheet() {
   console.log(`[Init] Fetched ${namesData.length} names and ${datesData.length} date cells.`);
 
   const browser = await launchBrowser();
-
-  // reuse a single page but guard navigation concurrency
   const page = await browser.newPage();
 
   for (let i = 0; i < namesData.length; i++) {
@@ -110,7 +102,7 @@ async function fetchDataAndUpdateSheet() {
     const saleDateExisting = (datesData[i] && datesData[i][0]) ? datesData[i][0].trim() : '';
 
     if (saleDateExisting) {
-      console.log(`[Row ${rowIndex}] Skipping: E already has value`);
+      console.log(`[Row ${rowIndex}] Skipping: column E already filled`);
       continue;
     }
     if (!owner) {
@@ -123,66 +115,69 @@ async function fetchDataAndUpdateSheet() {
     try {
       await page.goto(SEARCH_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-      // Ensure input exists
-      await page.waitForSelector('#ctl00_BodyContentPlaceHolder_WebTab1_tmpl0_STRAPTextBox', { timeout: 10000 });
-      await page.evaluate((sel) => { document.querySelector(sel).value = ''; }, '#ctl00_BodyContentPlaceHolder_WebTab1_tmpl0_STRAPTextBox');
+      // ensure input exists and clear it
+      await page.waitForSelector('#ctl00_BodyContentPlaceHolder_WebTab1_tmpl0_STRAPTextBox', { timeout: 15000 });
+      await page.evaluate((sel) => {
+        const el = document.querySelector(sel);
+        if (el) el.value = '';
+      }, '#ctl00_BodyContentPlaceHolder_WebTab1_tmpl0_STRAPTextBox');
+
       await page.type('#ctl00_BodyContentPlaceHolder_WebTab1_tmpl0_STRAPTextBox', owner, { delay: 20 });
       await page.keyboard.press('Enter');
 
-      // optional short wait for results
+      // short pause
       await page.waitForTimeout(500);
 
       // handle warning popup
       try {
         await page.waitForSelector('#ctl00_BodyContentPlaceHolder_pnlIssues', { timeout: 5000 });
         await page.click('#ctl00_BodyContentPlaceHolder_btnWarning');
-        console.log(`[Row ${rowIndex}] Dismissed warning`);
+        console.log(`[Row ${rowIndex}] Dismissed warning popup`);
         await page.waitForTimeout(500);
       } catch {
-        // no warning
+        // no popup
       }
 
-      // Wait for result links; fallback to a resilient search for anchors in result area
-      await page.waitForSelector('#ctl00_BodyContentPlaceHolder_WebTab1 a', { timeout: 15000 });
+      // wait for result anchors
+      await page.waitForSelector('#ctl00_BodyContentPlaceHolder_WebTab1 a[href]', { timeout: 15000 });
 
       const href = await page.$$eval(
         '#ctl00_BodyContentPlaceHolder_WebTab1 a[href]',
         (els) => {
           if (!els || els.length === 0) return null;
           for (const el of els) {
-            const h = el.href;
+            const h = el.href || '';
             if (/PropertyDetail|PropertySearch|Detail/.test(h)) return h;
           }
           return els[0].href;
         }
       );
 
-      if (!href) throw new Error('Property link not found in results');
+      if (!href) throw new Error('Property link not found');
 
       await page.goto(href, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-      // Click sales history if present
+      // click sales history if present
       try {
         await page.waitForSelector('#SalesHyperLink > img', { timeout: 10000 });
         await page.click('#SalesHyperLink > img');
         await page.waitForTimeout(500);
       } catch {
-        // no sales history link
+        // no sales history
       }
 
-      // Extract sale date and amount with guarded selectors
+      // extract sale date and amount with guarded selectors
       let saleDateText = '';
       let saleAmountText = '';
 
       try {
         saleDateText = await page.$eval(
           '#SalesDetails div:nth-child(3) table tr:nth-child(2) td:nth-child(2)',
-          el => el.innerText.trim()
+          (el) => (el ? el.innerText.trim() : '')
         );
       } catch {
-        // try alternative selector patterns if needed
         try {
-          saleDateText = await page.$eval('#SalesDetails table tr:nth-child(2) td:last-child', el => el.innerText.trim());
+          saleDateText = await page.$eval('#SalesDetails table tr:nth-child(2) td:last-child', (el) => el.innerText.trim());
         } catch {
           saleDateText = '';
         }
@@ -191,17 +186,17 @@ async function fetchDataAndUpdateSheet() {
       try {
         saleAmountText = await page.$eval(
           '#SalesDetails div:nth-child(3) table tr:nth-child(2) td:nth-child(1)',
-          el => el.innerText.trim()
+          (el) => (el ? el.innerText.trim() : '')
         );
       } catch {
         try {
-          saleAmountText = await page.$eval('#SalesDetails table tr:nth-child(2) td:first-child', el => el.innerText.trim());
+          saleAmountText = await page.$eval('#SalesDetails table tr:nth-child(2) td:first-child', (el) => el.innerText.trim());
         } catch {
           saleAmountText = '';
         }
       }
 
-      // Write back only when we have values
+      // update sheet when values present
       if (saleDateText) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
@@ -226,11 +221,9 @@ async function fetchDataAndUpdateSheet() {
         console.log(`[Row ${rowIndex}] No sale amount extracted`);
       }
 
-      // polite pause to avoid hammering site
       await page.waitForTimeout(500);
     } catch (err) {
       console.error(`[Row ${rowIndex}] Error: ${err.stack || err.message}`);
-      // continue to next row
     }
   }
 
@@ -243,6 +236,14 @@ async function fetchDataAndUpdateSheet() {
 // -----------------------------
 (async () => {
   try {
+    // quick smoke test for the target site (optional)
+    try {
+      const res = await makeRequestWithRetries(SEARCH_URL, 2, 1000);
+      console.log(`[HTTP] Site reachable, status ${res.status}`);
+    } catch (e) {
+      console.warn('[HTTP] Site reachability check failed:', e.message);
+    }
+
     await fetchDataAndUpdateSheet();
     console.log('[Done] Completed run');
   } catch (err) {
