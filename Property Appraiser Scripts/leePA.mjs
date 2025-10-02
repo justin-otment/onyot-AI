@@ -212,7 +212,7 @@ async function fetchDataAndUpdateSheet() {
       if (saleDateText) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
-          range: `${SHEET_NAME}!E${rowIndex}`,
+          range: `${SHEET_NAME}!H${rowIndex}`,
           valueInputOption: 'RAW',
           requestBody: { values: [[saleDateText]] },
         });
@@ -224,36 +224,13 @@ async function fetchDataAndUpdateSheet() {
       if (saleAmountText) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
-          range: `${SHEET_NAME}!F${rowIndex}`,
+          range: `${SHEET_NAME}!I${rowIndex}`,
           valueInputOption: 'RAW',
           requestBody: { values: [[saleAmountText]] },
         });
         console.log(`[Row ${rowIndex}] Wrote sale amount: "${saleAmountText}"`);
       } else {
         console.log(`[Row ${rowIndex}] No sale amount extracted`);
-      }
-
-      // optional: write a simple status into column H to mark processed
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_ID,
-        range: `${SHEET_NAME}!H${rowIndex}`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [['processed']] },
-      });
-
-      await sleep(500);
-    } catch (err) {
-      console.error(`[Row ${rowIndex}] Error: ${err.stack || err.message}`);
-      // write error marker to column H
-      try {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID,
-          range: `${SHEET_NAME}!H${rowIndex}`,
-          valueInputOption: 'RAW',
-          requestBody: { values: [[`error: ${String(err).slice(0, 200)}`]] },
-        });
-      } catch (e) {
-        console.error(`[Row ${rowIndex}] Failed to write error to sheet: ${e.message}`);
       }
     }
   }
