@@ -24,7 +24,6 @@ async function makeRequestWithRetries(url, retries = 3, backoffFactor = 1000) {
 }
 
 // ================= GOOGLE SHEETS AUTH ==================
-const { google } = require("googleapis");
 
 const auth = new google.auth.GoogleAuth({
   keyFile: "service-account.json", // path to your service account key
