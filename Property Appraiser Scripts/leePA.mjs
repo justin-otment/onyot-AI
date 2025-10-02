@@ -85,7 +85,7 @@ async function launchBrowser() {
 async function fetchDataAndUpdateSheet() {
   const sheets = await getSheetsClient();
 
-  const namesRange = `${SHEET_NAME}!G${START_ROW}:G${END_ROW}`;
+  const namesRange = `${SHEET_NAME}!A${START_ROW}:A${END_ROW}`;
   const datesRange = `${SHEET_NAME}!H${START_ROW}:H${END_ROW}`;
 
   const [namesRes, datesRes] = await Promise.all([
