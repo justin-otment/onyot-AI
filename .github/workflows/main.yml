@@ -90,23 +90,35 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
-        run: npm install
-
-      - name: Install Chrome and Chromedriver
+      - name: Install Chrome (system)
         run: |
-          sudo apt-get update
+          sudo apt-get update -y
           sudo apt-get install -y wget unzip xvfb libxi6 libxss1 libnss3 libatk-bridge2.0-0 libgtk-3-0
-          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
+        timeout-minutes: 10
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Decode Service Account JSON
-        working-directory: Property Appraiser Scripts
-        run: base64 -d service-account_base64.txt > service-account.json
+        working-directory: "Property Appraiser Scripts"
+        run: |
+          if [ ! -f service-account_base64.txt ]; then
+            echo "service-account_base64.txt not found in Property Appraiser Scripts" >&2
+            ls -la
+            exit 1
+          fi
+          base64 -d service-account_base64.txt > service-account.json
+          ls -la service-account.json
 
       - name: Run Charlotte Appraiser script
-        working-directory: Property Appraiser Scripts
-        run: node // <-------- charlottePA.js uncomment 
+        working-directory: "Property Appraiser Scripts"
+        env:
+          HEADLESS: 'true'
+          CHROME_PATH: '/usr/bin/google-chrome-stable'
+          GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
+        run: node charlottePA.mjs
 
   CorpTracer:
     runs-on: ubuntu-latest
@@ -119,20 +131,32 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
-        run: npm install
-
-      - name: Install Chrome and Chromedriver
+      - name: Install Chrome (system)
         run: |
-          sudo apt-get update
+          sudo apt-get update -y
           sudo apt-get install -y wget unzip xvfb libxi6 libxss1 libnss3 libatk-bridge2.0-0 libgtk-3-0
-          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
+        timeout-minutes: 10
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Decode Service Account JSON
-        working-directory: Property Appraiser Scripts
-        run: base64 -d service-account_base64.txt > service-account.json
+        working-directory: "Property Appraiser Scripts"
+        run: |
+          if [ ! -f service-account_base64.txt ]; then
+            echo "service-account_base64.txt not found in Property Appraiser Scripts" >&2
+            ls -la
+            exit 1
+          fi
+          base64 -d service-account_base64.txt > service-account.json
+          ls -la service-account.json
 
       - name: Run Corp Tracer Palm Bay County script
-        working-directory: Property Appraiser Scripts
-        run: node // corpTracer.js <---- uncomment to include this BOT
+        working-directory: "Property Appraiser Scripts"
+        env:
+          HEADLESS: 'true'
+          CHROME_PATH: '/usr/bin/google-chrome-stable'
+          GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
+        run: node corpTracer.mjs
