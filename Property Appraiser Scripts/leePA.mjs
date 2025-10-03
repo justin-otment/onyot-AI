@@ -212,7 +212,7 @@ async function fetchDataAndUpdateSheet() {
       if (saleDateText) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
-          range: `${SHEET_NAME}!E${rowIndex}`,
+          range: `${SHEET_NAME}!H${rowIndex}`,
           valueInputOption: 'RAW',
           requestBody: { values: [[saleDateText]] },
         });
@@ -224,7 +224,7 @@ async function fetchDataAndUpdateSheet() {
       if (saleAmountText) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
-          range: `${SHEET_NAME}!F${rowIndex}`,
+          range: `${SHEET_NAME}!I${rowIndex}`,
           valueInputOption: 'RAW',
           requestBody: { values: [[saleAmountText]] },
         });
@@ -236,7 +236,7 @@ async function fetchDataAndUpdateSheet() {
       // optional: write a simple status into column H to mark processed
       await sheets.spreadsheets.values.update({
         spreadsheetId: SHEET_ID,
-        range: `${SHEET_NAME}!H${rowIndex}`,
+        range: `${SHEET_NAME}!M${rowIndex}`,
         valueInputOption: 'RAW',
         requestBody: { values: [['processed']] },
       });
@@ -248,7 +248,7 @@ async function fetchDataAndUpdateSheet() {
       try {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID,
-          range: `${SHEET_NAME}!H${rowIndex}`,
+          range: `${SHEET_NAME}!M${rowIndex}`,
           valueInputOption: 'RAW',
           requestBody: { values: [[`error: ${String(err).slice(0, 200)}`]] },
         });
