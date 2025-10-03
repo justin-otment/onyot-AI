@@ -22,9 +22,9 @@ const PAGE_LOAD_TIMEOUT_MS = 60000; // 60s page load
 const ELEMENT_TIMEOUT_MS = 60000; // 60s element waits (requested)
 const HEADLESS = String(process.env.HEADLESS || 'false').toLowerCase() === 'true';
 const CHROME_PATH = process.env.CHROME_PATH || null;
-const SERVICE_ACCOUNT_PATH = process.env.GOOGLE_APPLICATION_CREDENTIALS
-  ? path.resolve(process.cwd(), process.env.GOOGLE_APPLICATION_CREDENTIALS)
-  : path.resolve(process.cwd(), 'service-account.json');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const SERVICE_ACCOUNT_PATH = path.join(__dirname, "service-account.json");
 
 // -----------------------------
 // Helpers
