@@ -105,6 +105,67 @@ async function getSheetsClient() {
   return google.sheets({ version: 'v4', auth });
 }
 
+// Dismiss a modal if present. Returns true if dismissed, false if not found.
+async function dismissPopupModalIfPresent(driver, rowIndex, timeout = 3000) {
+  const modalXpath = By.xpath('//*[@id="pnlIssues"]');
+  const closeBtnXpath = By.xpath('//*[@id="btnContinue"]');
+
+  try {
+    // quick existence check within timeout
+    const found = await exists(driver, modalXpath, timeout);
+    if (!found) {
+      console.log(`[Row ${rowIndex}] No modal found (pnlIssues)`);
+      return false;
+    }
+
+    // modal present — attempt to click close button
+    console.log(`[Row ${rowIndex}] Modal detected (pnlIssues) -> attempting dismiss`);
+    try {
+      // wait briefly for button to become available and visible
+      const btn = await driver.wait(until.elementLocated(closeBtnXpath), Math.min(ELEMENT_TIMEOUT_MS, timeout * 3));
+      await driver.wait(until.elementIsVisible(btn), Math.min(ELEMENT_TIMEOUT_MS, timeout * 3));
+      await scrollIntoView(driver, btn);
+      await btn.click();
+      // small pause to allow modal to close
+      await sleep(400);
+      // confirm it's gone
+      if (!(await exists(driver, modalXpath, 1000))) {
+        console.log(`[Row ${rowIndex}] Modal dismissed via btnContinue`);
+        return true;
+      } else {
+        console.warn(`[Row ${rowIndex}] Modal still present after click`);
+        return false;
+      }
+    } catch (e) {
+      console.warn(`[Row ${rowIndex}] Close button click failed: ${e.message} — attempting JS click fallback`);
+      // JS fallback: try to query and click the close button node directly
+      try {
+        const clicked = await driver.executeScript(
+          `const sel = document.evaluate('//*[@id="btnContinue"]', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+           if(!sel) return false;
+           sel.scrollIntoView({block:'center'});
+           sel.click();
+           return true;`
+        );
+        await sleep(400);
+        if (clicked && !(await exists(driver, modalXpath, 1000))) {
+          console.log(`[Row ${rowIndex}] Modal dismissed via JS fallback`);
+          return true;
+        } else {
+          console.warn(`[Row ${rowIndex}] JS fallback click did not remove modal`);
+          return false;
+        }
+      } catch (e2) {
+        console.error(`[Row ${rowIndex}] JS fallback error while dismissing modal: ${e2.message}`);
+        return false;
+      }
+    }
+  } catch (e) {
+    console.error(`[Row ${rowIndex}] Error checking/dismissing modal: ${e.message}`);
+    return false;
+  }
+}
+
 // -----------------------------
 // Selenium launcher
 // -----------------------------
@@ -317,6 +378,13 @@ async function extractFromDetail(driver, sheets, rowIndexZeroBased, ranges) {
   const statusA1 = `${ranges.statusPrefix}${row}`;
 
   console.log(`[Row ${row}] extractFromDetail: start`);
+
+  // dismiss any blocking modal immediately before scraping
+  try {
+    await dismissPopupModalIfPresent(driver, row);
+  } catch (e) {
+    console.warn(`[Row ${row}] dismissPopupModalIfPresent error: ${e.message}`);
+  }
 
   // 1. Owner + Mailing Info
   try {
