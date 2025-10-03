@@ -1,10 +1,15 @@
 // leePA.mjs
+// ESM, Selenium, reads addresses from SHEET_NAME!B2:B and target URLs from SHEET_NAME!K2:K
+// Classification: iframe present -> detailed account, otherwise results list
+// All element waits/use of until.* now use a 60-second timeout constant
+
 import path from 'path';
 import fs from 'fs';
 import axios from 'axios';
-import puppeteer from 'puppeteer-core';
-import { google } from 'googleapis';
 import https from 'https';
+import { google } from 'googleapis';
+import { Builder, By, until, Key } from 'selenium-webdriver';
+import chrome from 'selenium-webdriver/chrome.js';
 
 // -----------------------------
 // Config
@@ -13,11 +18,10 @@ const SHEET_ID = '1zvXxmncHa0MMggdgIWSFTtkoi5gyy6go-ozVea_4f54';
 const SHEET_NAME = 'Spec_Zipcode';
 const START_ROW = 2;
 const END_ROW = 343;
-const SEARCH_URL = 'https://www.leepa.org/Search/PropertySearch.aspx';
-const CHROME_PATH = process.env.CHROME_PATH || '/usr/bin/google-chrome-stable';
-const HEADLESS = process.env.HEADLESS !== 'false';
-
-// Ensure SERVICE_ACCOUNT_PATH is defined and resolved from env or common locations
+const PAGE_LOAD_TIMEOUT_MS = 60000; // 60s page load
+const ELEMENT_TIMEOUT_MS = 60000; // 60s element waits (requested)
+const HEADLESS = String(process.env.HEADLESS || 'false').toLowerCase() === 'true';
+const CHROME_PATH = process.env.CHROME_PATH || null;
 const SERVICE_ACCOUNT_PATH = process.env.GOOGLE_APPLICATION_CREDENTIALS
   ? path.resolve(process.cwd(), process.env.GOOGLE_APPLICATION_CREDENTIALS)
   : path.resolve(process.cwd(), 'service-account.json');
@@ -25,30 +29,67 @@ const SERVICE_ACCOUNT_PATH = process.env.GOOGLE_APPLICATION_CREDENTIALS
 // -----------------------------
 // Helpers
 // -----------------------------
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
-}
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+async function timeoutPromise(ms, message = 'timeout') { return new Promise((_, rej) => setTimeout(() => rej(new Error(message)), ms)); }
 
 async function makeRequestWithRetries(url, retries = 3, backoffFactor = 1000) {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      const response = await axios.get(url, {
-        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
-        timeout: 20000,
-      });
-      return response;
+      const r = await axios.get(url, { httpsAgent: new https.Agent({ rejectUnauthorized: false }), timeout: 60000 });
+      console.log(`[HTTP] Reachability check success: ${url} (status ${r.status})`);
+      return r;
     } catch (err) {
-      console.log(`[HTTP] Attempt ${attempt + 1} failed: ${err.message}`);
-      if (attempt + 1 === retries) throw err;
-      const wait = backoffFactor * 2 ** attempt;
-      console.log(`[HTTP] Retrying in ${wait}ms`);
-      await sleep(wait);
+      console.warn(`[HTTP] Attempt ${attempt + 1} failed for ${url}: ${err.message}`);
+      if (attempt + 1 === retries) { console.error(`[HTTP] All retries failed for ${url}`); throw err; }
+      await sleep(backoffFactor * 2 ** attempt);
     }
   }
 }
 
+// Levenshtein + similarity
+function levenshtein(a = '', b = '') {
+  const la = a.length, lb = b.length;
+  if (la === 0) return lb;
+  if (lb === 0) return la;
+  const v = Array(lb + 1).fill(0);
+  for (let j = 0; j <= lb; j++) v[j] = j;
+  for (let i = 1; i <= la; i++) {
+    let prev = v[0];
+    v[0] = i;
+    for (let j = 1; j <= lb; j++) {
+      const cur = v[j];
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      v[j] = Math.min(v[j] + 1, v[j - 1] + 1, prev + cost);
+      prev = cur;
+    }
+  }
+  return v[lb];
+}
+// normalize to alpha-numeric only, collapse whitespace, remove leading unit tokens
+function normalizeAddressForMatch(s) {
+  if (!s) return '';
+  // collapse multiple spaces, lowercase
+  let t = s.toString().trim().toLowerCase().replace(/\s+/g, ' ');
+  // remove common unit prefixes like "unit", "ste", "apt", "#", "suite" and following tokens
+  // keep street numbers and core street text
+  t = t.replace(/\b(unit|apt|suite|ste|#)\b[:.\s-]*\w*/g, '');
+  // remove all non-alphanumeric characters (keep letters and digits only)
+  t = t.replace(/[^a-z0-9]/g, '');
+  return t;
+}
+
+// updated similarity using the same levenshtein implementation you already have
+function similarityScore(a, b) {
+  a = normalizeAddressForMatch(a);
+  b = normalizeAddressForMatch(b);
+  if (!a && !b) return 1;
+  const dist = levenshtein(a, b);
+  const maxLen = Math.max(a.length, b.length);
+  return maxLen === 0 ? 1 : (1 - dist / maxLen);
+}
 // -----------------------------
-// Google Sheets (service account) auth
+// Google Sheets
 // -----------------------------
 async function getSheetsClient() {
   const candidates = [
@@ -56,210 +97,549 @@ async function getSheetsClient() {
     path.resolve(process.cwd(), 'Property Appraiser Scripts', 'service-account.json'),
     path.resolve(process.cwd(), 'service-account.json'),
   ];
-
   const keyPath = candidates.find((p) => fs.existsSync(p));
-  if (!keyPath) {
-    throw new Error(`service-account.json not found. Looked at: ${candidates.join('; ')}`);
-  }
-
-  const auth = new google.auth.GoogleAuth({
-    keyFile: keyPath,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-
+  if (!keyPath) throw new Error(`service-account.json not found. Looked at: ${candidates.join('; ')}`);
+  console.log(`[Sheets] Using service account file: ${keyPath}`);
+  const auth = new google.auth.GoogleAuth({ keyFile: keyPath, scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
   return google.sheets({ version: 'v4', auth });
 }
 
 // -----------------------------
-// Puppeteer launch helper
+// Selenium launcher
 // -----------------------------
-async function launchBrowser() {
-  if (!fs.existsSync(CHROME_PATH)) {
-    throw new Error(`Chrome not found at ${CHROME_PATH}. Set CHROME_PATH or install Chrome in CI.`);
+async function launchDriver() {
+  console.log('[Browser] Launching Chrome driver, headless:', HEADLESS);
+  const options = new chrome.Options();
+  if (HEADLESS) options.addArguments('--headless=new', '--disable-gpu', '--window-size=1200,900');
+  else options.addArguments('--start-maximized');
+  options.addArguments('--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled');
+
+  let chromeBinary = CHROME_PATH;
+  if (!chromeBinary) {
+    switch (process.platform) {
+      case 'win32': {
+        const pf = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+        const x86 = 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe';
+        chromeBinary = fs.existsSync(pf) ? pf : (fs.existsSync(x86) ? x86 : null);
+        break;
+      }
+      case 'darwin':
+        chromeBinary = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+        break;
+      default:
+        chromeBinary = '/usr/bin/google-chrome';
+    }
+  }
+  if (chromeBinary && fs.existsSync(chromeBinary)) {
+    options.setChromeBinaryPath(chromeBinary);
+    console.log(`[Browser] Using Chrome binary: ${chromeBinary}`);
+  } else {
+    console.warn(`[Browser] Chrome binary not found at ${chromeBinary}. Selenium Manager will attempt resolution.`);
   }
 
-  return puppeteer.launch({
-    headless: HEADLESS,
-    executablePath: CHROME_PATH,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    defaultViewport: { width: 1200, height: 900 },
-  });
+  const driver = await new Builder().forBrowser('chrome').setChromeOptions(options).build();
+  await driver.manage().setTimeouts({ implicit: 0, pageLoad: PAGE_LOAD_TIMEOUT_MS, script: 60000 });
+  if (HEADLESS) await driver.manage().window().setRect({ width: 1200, height: 900, x: 0, y: 0 });
+  console.log('[Browser] Chrome driver launched');
+  return driver;
 }
 
 // -----------------------------
-// Main flow
+// DOM helpers (use ELEMENT_TIMEOUT_MS)
 // -----------------------------
-async function fetchDataAndUpdateSheet() {
-  const sheets = await getSheetsClient();
+async function exists(driver, locator, timeout = ELEMENT_TIMEOUT_MS) {
+  try { await driver.wait(until.elementLocated(locator), timeout); return true; } catch { return false; }
+}
+async function getTextSafe(driver, locator, timeout = ELEMENT_TIMEOUT_MS) {
+  try { const el = await driver.wait(until.elementLocated(locator), timeout); await driver.wait(until.elementIsVisible(el), timeout); return (await el.getText()).trim(); } catch { return ''; }
+}
+async function scrollIntoView(driver, element) {
+  try { await driver.executeScript('arguments[0].scrollIntoView({block:"center"});', element); } catch {}
+}
 
-  const namesRange = `${SHEET_NAME}!A${START_ROW}:A${END_ROW}`;
-  const datesRange = `${SHEET_NAME}!H${START_ROW}:H${END_ROW}`;
-
-  const [namesRes, datesRes] = await Promise.all([
-    sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: namesRange }),
-    sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: datesRange }),
-  ]);
-
-  const namesData = namesRes.data.values || [];
-  const datesData = datesRes.data.values || [];
-
-  console.log(`[Init] Fetched ${namesData.length} names and ${datesData.length} H-column cells.`);
-
-  const browser = await launchBrowser();
-  const page = await browser.newPage();
-
-  for (let i = 0; i < namesData.length; i++) {
-    const rowIndex = START_ROW + i;
-    const owner = (namesData[i] && namesData[i][0]) ? namesData[i][0].trim() : '';
-    const existingH = (datesData[i] && datesData[i][0]) ? datesData[i][0].trim() : '';
-
-    if (existingH) {
-      console.log(`[Row ${rowIndex}] Skipping: column H already filled`);
-      continue;
+// -----------------------------
+// Page flows (with 60s element waits)
+// -----------------------------
+async function handleDetailedAccountByIframe(driver, rowIndex) {
+  console.log(`[Row ${rowIndex}] handleDetailedAccount: switching into iframe if present`);
+  try {
+    const iframes = await driver.findElements(By.css('iframe'));
+    if (iframes.length > 0) {
+      await driver.switchTo().frame(iframes[0]);
+      console.log(`[Row ${rowIndex}] Switched to iframe (index 0)`);
+      await sleep(300);
+    } else {
+      console.log(`[Row ${rowIndex}] No iframe to switch into (unexpected in detailed path)`);
     }
-    if (!owner) {
-      console.log(`[Row ${rowIndex}] Skipping: owner blank`);
-      continue;
-    }
+  } catch (e) {
+    console.warn(`[Row ${rowIndex}] iframe switch error: ${e.message}`);
+  }
 
-    console.log(`[Row ${rowIndex}] Processing owner: "${owner}"`);
+  const sectionXpath = By.xpath('/html/body/div[2]/main/section');
+  console.log(`[Row ${rowIndex}] Waiting for main section xpath (60s)`);
+  await driver.wait(until.elementLocated(sectionXpath), ELEMENT_TIMEOUT_MS);
+  const sectionEl = await driver.findElement(sectionXpath);
+  await scrollIntoView(driver, sectionEl);
+  console.log(`[Row ${rowIndex}] Scrolled to main section`);
 
+  const linkXpath = By.xpath('/html/body/div[2]/main/section/div[2]/div[2]/div[3]/div[3]/a');
+  console.log(`[Row ${rowIndex}] Looking for detail anchor xpath (60s)`);
+  if (await exists(driver, linkXpath, ELEMENT_TIMEOUT_MS)) {
+    const aEl = await driver.findElement(linkXpath);
+    await scrollIntoView(driver, aEl);
+    console.log(`[Row ${rowIndex}] Clicking detail anchor`);
+    await aEl.click();
+  } else {
+    throw new Error('Detail anchor not found in detailed account flow');
+  }
+}
+
+async function handleResultsAndMatch(driver, targetAddress, rowIndex) {
+  console.log(`[Row ${rowIndex}] handleResults: extracting candidate addresses (60s)`);
+  const itemTextCss = '.col-12 span';
+
+  // Wait defensively for any candidate nodes
+  try {
+    await driver.wait(until.elementLocated(By.css(itemTextCss)), ELEMENT_TIMEOUT_MS);
+  } catch (e) {
+    console.warn(`[Row ${rowIndex}] No candidate nodes located within timeout: ${e.message}`);
+    return { matched: false };
+  }
+
+  const nodes = await driver.findElements(By.css(itemTextCss));
+  const nodeCount = Array.isArray(nodes) ? nodes.length : 0;
+  console.log(`[Row ${rowIndex}] Found ${nodeCount} candidate address nodes`);
+
+  if (!Array.isArray(nodes) || nodes.length === 0) return { matched: false };
+
+  // Normalize target once and log for proof
+  const normalizedTarget = normalizeAddressForMatch(targetAddress);
+  console.log(`[Row ${rowIndex}] Target normalized: "${normalizedTarget}"`);
+
+  for (let i = 0; i < nodes.length; i++) {
     try {
-      await page.goto(SEARCH_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      const rawText = (await nodes[i].getText()).trim();
+      const normalizedCandidate = normalizeAddressForMatch(rawText);
 
-      // ensure input exists and clear it
-      await page.waitForSelector('#ctl00_BodyContentPlaceHolder_WebTab1_tmpl0_STRAPTextBox', { timeout: 15000 });
-      await page.evaluate((sel) => {
-        const el = document.querySelector(sel);
-        if (el) el.value = '';
-      }, '#ctl00_BodyContentPlaceHolder_WebTab1_tmpl0_STRAPTextBox');
+      console.log(`[Row ${rowIndex}] Candidate #${i + 1} text: "${rawText}"`);
+      console.log(`[Row ${rowIndex}] Candidate #${i + 1} normalized: "${normalizedCandidate}"`);
 
-      await page.type('#ctl00_BodyContentPlaceHolder_WebTab1_tmpl0_STRAPTextBox', owner, { delay: 20 });
-      await page.keyboard.press('Enter');
-
-      // short pause
-      await sleep(500);
-
-      // handle warning popup
-      try {
-        await page.waitForSelector('#ctl00_BodyContentPlaceHolder_pnlIssues', { timeout: 5000 });
-        await page.click('#ctl00_BodyContentPlaceHolder_btnWarning');
-        console.log(`[Row ${rowIndex}] Dismissed warning popup`);
-        await sleep(500);
-      } catch {
-        // no popup
-      }
-
-      // wait for result anchors
-      await page.waitForSelector('#ctl00_BodyContentPlaceHolder_WebTab1 a[href]', { timeout: 15000 });
-
-      const href = await page.$$eval(
-        '#ctl00_BodyContentPlaceHolder_WebTab1 a[href]',
-        (els) => {
-          if (!els || els.length === 0) return null;
-          for (const el of els) {
-            const h = el.href || '';
-            if (/PropertyDetail|PropertySearch|Detail/.test(h)) return h;
+      // Exact numeric parcel shortcut
+      if (/^\d+$/.test(normalizedCandidate) && /^\d+$/.test(normalizedTarget)) {
+        if (normalizedCandidate === normalizedTarget) {
+          console.log(`[Row ${rowIndex}] Exact numeric parcel match on normalized values`);
+          try {
+            const ancestorButton = await nodes[i].findElement(By.xpath('../../div[2]/button'));
+            await scrollIntoView(driver, ancestorButton);
+            await ancestorButton.click();
+            console.log(`[Row ${rowIndex}] Clicked matched candidate button`);
+            await sleep(600);
+            return { matched: true };
+          } catch (e) {
+            console.warn(`[Row ${rowIndex}] Exact-match click failed: ${e.message} — attempting JS fallback`);
+            const btn = await driver.executeScript(
+              `const node = arguments[0];
+               let el = node;
+               for (let j=0;j<8;j++){ if(!el) break; el = el.parentElement; }
+               if(!el) return null;
+               return el.querySelector('button');`, nodes[i]
+            );
+            if (btn) {
+              await driver.executeScript('arguments[0].scrollIntoView({block:"center"}); arguments[0].click();', btn);
+              console.log(`[Row ${rowIndex}] Clicked matched candidate button via JS fallback`);
+              await sleep(600);
+              return { matched: true };
+            } else {
+              console.warn(`[Row ${rowIndex}] No clickable button found for exact-match candidate #${i + 1}`);
+            }
           }
-          return els[0].href;
+        } else {
+          console.log(`[Row ${rowIndex}] Numeric parcels differ (normalized): "${normalizedCandidate}" vs "${normalizedTarget}"`);
         }
-      );
-
-      if (!href) throw new Error('Property link not found');
-
-      await page.goto(href, { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-      // click sales history if present
-      try {
-        await page.waitForSelector('#SalesHyperLink > img', { timeout: 10000 });
-        await page.click('#SalesHyperLink > img');
-        await sleep(500);
-      } catch {
-        // no sales history
       }
 
-      // extract sale date and amount with guarded selectors
-      let saleDateText = '';
-      let saleAmountText = '';
+      // Compute similarity on normalized strings
+      const score = similarityScore(normalizedCandidate, normalizedTarget);
+      console.log(`[Row ${rowIndex}] Similarity (normalized) with target: ${(score * 100).toFixed(1)}%`);
 
-      try {
-        saleDateText = await page.$eval(
-          '#SalesDetails div:nth-child(3) table tr:nth-child(2) td:nth-child(2)',
-          (el) => (el ? el.innerText.trim() : '')
-        );
-      } catch {
+      if (score >= 0.5) {
+        console.log(`[Row ${rowIndex}] Candidate #${i + 1} matched (>=50%) — attempting to click associated button (60s lookups)`);
         try {
-          saleDateText = await page.$eval('#SalesDetails table tr:nth-child(2) td:last-child', (el) => el.innerText.trim());
-        } catch {
-          saleDateText = '';
+          const ancestorButton = await nodes[i].findElement(By.xpath('../../div[2]/button'));
+          await scrollIntoView(driver, ancestorButton);
+          await ancestorButton.click();
+          console.log(`[Row ${rowIndex}] Clicked matched candidate button`);
+          await sleep(600);
+          return { matched: true };
+        } catch (e) {
+          console.warn(`[Row ${rowIndex}] Failed to click relative button via XPath: ${e.message} — attempting JS fallback`);
+          const btn = await driver.executeScript(
+            `const node = arguments[0];
+             let el = node;
+             for (let j=0;j<8;j++){ if(!el) break; el = el.parentElement; }
+             if(!el) return null;
+             return el.querySelector('button');`, nodes[i]
+          );
+          if (btn) {
+            await driver.executeScript('arguments[0].scrollIntoView({block:"center"}); arguments[0].click();', btn);
+            console.log(`[Row ${rowIndex}] Clicked matched candidate button via JS fallback`);
+            await sleep(600);
+            return { matched: true };
+          } else {
+            console.warn(`[Row ${rowIndex}] No clickable button found for candidate #${i + 1}`);
+          }
         }
       }
-
-      try {
-        saleAmountText = await page.$eval(
-          '#SalesDetails div:nth-child(3) table tr:nth-child(2) td:nth-child(1)',
-          (el) => (el ? el.innerText.trim() : '')
-        );
-      } catch {
-        try {
-          saleAmountText = await page.$eval('#SalesDetails table tr:nth-child(2) td:first-child', (el) => el.innerText.trim());
-        } catch {
-          saleAmountText = '';
-        }
-      }
-
-      // update sheet when values present
-      if (saleDateText) {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID,
-          range: `${SHEET_NAME}!H${rowIndex}`,
-          valueInputOption: 'RAW',
-          requestBody: { values: [[saleDateText]] },
-        });
-        console.log(`[Row ${rowIndex}] Wrote sale date: "${saleDateText}"`);
-      } else {
-        console.log(`[Row ${rowIndex}] No sale date extracted`);
-      }
-
-      if (saleAmountText) {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID,
-          range: `${SHEET_NAME}!I${rowIndex}`,
-          valueInputOption: 'RAW',
-          requestBody: { values: [[saleAmountText]] },
-        });
-        console.log(`[Row ${rowIndex}] Wrote sale amount: "${saleAmountText}"`);
-      } else {
-        console.log(`[Row ${rowIndex}] No sale amount extracted`);
-      }
-
-      // optional: write a simple status into column H to mark processed
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_ID,
-        range: `${SHEET_NAME}!M${rowIndex}`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [['processed']] },
-      });
-
-      await sleep(500);
-    } catch (err) {
-      console.error(`[Row ${rowIndex}] Error: ${err.stack || err.message}`);
-      // write error marker to column H
-      try {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID,
-          range: `${SHEET_NAME}!M${rowIndex}`,
-          valueInputOption: 'RAW',
-          requestBody: { values: [[`error: ${String(err).slice(0, 200)}`]] },
-        });
-      } catch (e) {
-        console.error(`[Row ${rowIndex}] Failed to write error to sheet: ${e.message}`);
-      }
+    } catch (e) {
+      console.warn(`[Row ${rowIndex}] Candidate #${i + 1} processing error: ${e.message}`);
+      // continue to next candidate
     }
   }
 
-  await page.close();
-  await browser.close();
+  console.log(`[Row ${rowIndex}] No matched candidate at >=50% similarity`);
+  return { matched: false };
+}
+
+// -----------------------------
+// extractFromDetail (replaced with your exact selectors and writes)
+// -----------------------------
+async function extractFromDetail(driver, sheets, rowIndexZeroBased, ranges) {
+  // rowIndexZeroBased is zero-based index in arrays; convert to sheet row
+  const row = START_ROW + rowIndexZeroBased;
+
+  // build full A1 addresses by appending the row number
+  const dorOwnerA1 = `${ranges.dorOwnerPrefix}${row}`;
+  const saleDateA1 = `${ranges.saleDatePrefix}${row}`;
+  const soldAmountA1 = `${ranges.soldAmountPrefix}${row}`;
+  const mailingAddrA1 = `${ranges.mailingAddrPrefix}${row}`;
+  const extraFieldA1 = `${ranges.extraFieldPrefix}${row}`;
+  const statusA1 = `${ranges.statusPrefix}${row}`;
+
+  console.log(`[Row ${row}] extractFromDetail: start`);
+
+  // 1. Owner + Mailing Info
+  try {
+    const ownerBlockSel = By.css('#divDisplayParcelOwner > div.column.columnLeft > div > div.textPanel > div');
+    console.log(`[Row ${row}] Waiting for owner block selector`);
+    await driver.wait(until.elementLocated(ownerBlockSel), ELEMENT_TIMEOUT_MS);
+    const ownerBlock = await driver.findElement(ownerBlockSel);
+    await scrollIntoView(driver, ownerBlock);
+    const ownerText = (await ownerBlock.getText()).trim();
+    console.log(`[Row ${row}] Owner block text:`, ownerText.split('\n').slice(0,5).join(' | '));
+    const ownerLines = ownerText.split('\n').map((x) => x.trim()).filter(Boolean);
+    const mailingAddress = ownerLines.slice(-2).join(' ');
+    const dorOwner = ownerLines.slice(0, -2).join(' + ');
+
+    // write values to sheet
+    try {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: dorOwnerA1,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [[dorOwner]] },
+      });
+      console.log(`[Row ${row}] Wrote dorOwner to ${dorOwnerA1}${row}`);
+    } catch (e) {
+      console.error(`[Row ${row}] Failed writing dorOwner: ${e.message}`);
+    }
+
+    try {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: mailingAddrA1,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [[mailingAddress]] },
+      });
+      console.log(`[Row ${row}] Wrote mailingAddress to ${mailingAddrA1}${row}`);
+    } catch (e) {
+      console.error(`[Row ${row}] Failed writing mailingAddress: ${e.message}`);
+    }
+  } catch (e) {
+    console.warn(`[Row ${row}] Owner block not found or extraction failed: ${e.message}`);
+  }
+
+  // 2. Extra field (optional)
+  try {
+    const extraFieldSel = By.css('#divDisplayParcelOwner > div:nth-child(3) > table > tbody > tr:nth-child(2) > td');
+    console.log(`[Row ${row}] Looking for extra field`);
+    if (await exists(driver, extraFieldSel, ELEMENT_TIMEOUT_MS)) {
+      const extraField = await driver.findElement(extraFieldSel);
+      await scrollIntoView(driver, extraField);
+      const extraText = (await extraField.getText()).trim();
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: extraFieldA1,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [[extraText]] },
+      });
+      console.log(`[Row ${row}] Wrote extraText to ${extraFieldA1}${row}`);
+    } else {
+      console.log(`[Row ${row}] No extra field found`);
+    }
+  } catch (e) {
+    console.warn(`[Row ${row}] Extra field extraction failed: ${e.message}`);
+  }
+
+  // 3. Sales info
+  try {
+    const salesLinkSel = By.css('a#SalesHyperLink');
+    console.log(`[Row ${row}] Waiting for sales link`);
+    if (await exists(driver, salesLinkSel, ELEMENT_TIMEOUT_MS)) {
+      const salesLink = await driver.findElement(salesLinkSel);
+      await scrollIntoView(driver, salesLink);
+      console.log(`[Row ${row}] Clicking sales link`);
+      await salesLink.click();
+
+      console.log(`[Row ${row}] Waiting for SalesDetails`);
+      const salesDetailsSel = By.css('#SalesDetails');
+      await driver.wait(until.elementLocated(salesDetailsSel), ELEMENT_TIMEOUT_MS);
+      await driver.wait(until.elementIsVisible(await driver.findElement(salesDetailsSel)), ELEMENT_TIMEOUT_MS);
+
+      // sold amount selector
+      const soldAmountSel = By.css('#SalesDetails > div.overFlowDiv > table > tbody > tr:nth-child(2) > td.rightAlign');
+      const saleDateSel = By.css('#SalesDetails > div.overFlowDiv > table > tbody > tr:nth-child(2) > td:nth-child(2)');
+
+      let soldAmount = '';
+      let saleDate = '';
+
+      try {
+        if (await exists(driver, soldAmountSel, ELEMENT_TIMEOUT_MS)) {
+          soldAmount = (await driver.findElement(soldAmountSel).getText()).trim();
+        }
+      } catch (e) {
+        console.warn(`[Row ${row}] soldAmount extraction error: ${e.message}`);
+      }
+
+      try {
+        if (await exists(driver, saleDateSel, ELEMENT_TIMEOUT_MS)) {
+          saleDate = (await driver.findElement(saleDateSel).getText()).trim();
+        }
+      } catch (e) {
+        console.warn(`[Row ${row}] saleDate extraction error: ${e.message}`);
+      }
+
+      console.log(`[Row ${row}] Extracted soldAmount: "${soldAmount}" saleDate: "${saleDate}"`);
+
+      try {
+        if (soldAmount) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SHEET_ID,
+            range: soldAmountA1,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: [[soldAmount]] },
+          });
+          console.log(`[Row ${row}] Wrote soldAmount to ${soldAmountA1}${row}`);
+        }
+      } catch (e) { console.error(`[Row ${row}] Failed writing soldAmount: ${e.message}`); }
+
+      try {
+        if (saleDate) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SHEET_ID,
+            range: saleDateA1,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: [[saleDate]] },
+          });
+          console.log(`[Row ${row}] Wrote saleDate to ${saleDateA1}${row}`);
+        }
+      } catch (e) { console.error(`[Row ${row}] Failed writing saleDate: ${e.message}`); }
+    } else {
+      console.log(`[Row ${row}] Sales link not found`);
+    }
+  } catch (e) {
+    console.warn(`[Row ${row}] Sales extraction flow failed: ${e.message}`);
+  }
+
+  // final status marker if none already set
+  try {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: statusA1,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [['processed']] },
+    });
+    console.log(`[Row ${row}] Marked processed in ${statusA1}${row}`);
+  } catch (e) {
+    console.warn(`[Row ${row}] Failed to write status marker: ${e.message}`);
+  }
+
+  console.log(`[Row ${row}] extractFromDetail: done`);
+}
+
+// -----------------------------
+// Updated fetchDataAndUpdateSheet
+// - Does not pre-write empty columns
+// - Launches browser, runs existing extraction flows
+// - Ensures all per-row A1 ranges are defined before use
+// - Writes per-row with robust try/catch and compact logs
+// -----------------------------
+async function fetchDataAndUpdateSheet() {
+  // define once, before processing rows
+  const ranges = {
+    dorOwnerPrefix: `${SHEET_NAME}!F`,
+    saleDatePrefix: `${SHEET_NAME}!G`,
+    soldAmountPrefix: `${SHEET_NAME}!H`,
+    mailingAddrPrefix: `${SHEET_NAME}!I`,
+    extraFieldPrefix: `${SHEET_NAME}!J`,
+    statusPrefix: `${SHEET_NAME}!M`,
+  };
+  console.log('[Main] Starting fetchDataAndUpdateSheet');
+  const sheets = await getSheetsClient();
+  console.log('[Sheets] Fetching addresses and target URLs from sheet');
+
+  const addressesRange = `${SHEET_NAME}!A${START_ROW}:A${END_ROW}`;
+  const urlsRange = `${SHEET_NAME}!L${START_ROW}:L${END_ROW}`;
+
+  const [addressesRes, urlsRes] = await Promise.all([
+    sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: addressesRange }),
+    sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: urlsRange }),
+  ]);
+
+  const addresses = (addressesRes.data.values || []).map(r => (r[0] || '').trim());
+  const urls = (urlsRes.data.values || []).map(r => (r[0] || '').trim());
+
+  console.log(`[Init] Fetched ${addresses.length} addresses and ${urls.length} urls.`);
+
+  const driver = await launchDriver();
+
+  try {
+    const rowsToProcess = Math.max(addresses.length, urls.length);
+    for (let i = 0; i < rowsToProcess; i++) {
+      const rowIndex = START_ROW + i;
+      const targetUrl = urls[i] || '';
+      const targetAddress = addresses[i] || '';
+
+      console.log(`\n[Row ${rowIndex}] === START ===`);
+      if (!targetUrl) { console.log(`[Row ${rowIndex}] No URL found in sheet column K; skipping`); console.log(`[Row ${rowIndex}] === END ===\n`); continue; }
+      console.log(`[Row ${rowIndex}] Navigating to URL: ${targetUrl}`);
+
+      try {
+        // navigate with timeout
+        try {
+          await Promise.race([
+            driver.get(targetUrl),
+            timeoutPromise(PAGE_LOAD_TIMEOUT_MS, `Page load timeout after ${PAGE_LOAD_TIMEOUT_MS}ms`)
+          ]);
+          console.log(`[Row ${rowIndex}] driver.get completed within ${PAGE_LOAD_TIMEOUT_MS}ms`);
+        } catch (navErr) {
+          console.warn(`[Row ${rowIndex}] Navigation warning: ${navErr.message}`);
+          try { await driver.executeScript('if(window.stop) window.stop();'); console.log(`[Row ${rowIndex}] Invoked window.stop()`); } catch (e) { console.warn(`[Row ${rowIndex}] window.stop() failed: ${e.message}`); }
+        }
+
+        console.log(`[Row ${rowIndex}] Waiting briefly for DOM settlement`);
+        await sleep(15000);
+
+        // detect iframes and choose flow
+        const iframes = await driver.findElements(By.css('iframe'));
+        if (iframes.length > 0) {
+          console.log(`[Row ${rowIndex}] Iframe(s) detected (${iframes.length}) -> treating as Detailed account`);
+          try {
+            await handleDetailedAccountByIframe(driver, rowIndex);
+            const handles = await driver.getAllWindowHandles();
+            if (handles.length > 1) {
+              console.log(`[Row ${rowIndex}] Switching to newly opened tab for extraction`);
+              await driver.switchTo().window(handles[handles.length - 1]);
+              await sleep(500);
+              await extractFromDetail(driver, sheets, i, ranges); // extractFromDetail expects zero-based index
+              try { await driver.close(); console.log(`[Row ${rowIndex}] Closed detail tab`); } catch {}
+              await driver.switchTo().window(handles[0]);
+            } else {
+              console.log(`[Row ${rowIndex}] No new tab opened; extracting on current page`);
+              await extractFromDetail(driver, sheets, i, ranges);
+            }
+          } catch (e) {
+            console.error(`[Row ${rowIndex}] Detailed flow error: ${e.stack || e.message}`);
+            try { await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${statusPrefix}${rowIndex}`, valueInputOption: 'RAW', requestBody: { values: [[`error: ${String(e).slice(0,200)}`]] } }); } catch {}
+          }
+        } else {
+          console.log(`[Row ${rowIndex}] No iframe detected -> treating as Results list`);
+          try {
+            const result = await handleResultsAndMatch(driver, targetAddress, rowIndex);
+            if (result && result.matched) {
+              console.log(`[Row ${rowIndex}] Match clicked; handling post-click extraction`);
+              await sleep(10000);
+              const handles = await driver.findElements(By.css('iframe'));
+              if (handles.length > 0) {
+                console.log(`[Row ${rowIndex}] Iframe(s) detected (${iframes.length}) -> treating as Detailed account`);
+                try {
+                  await handleDetailedAccountByIframe(driver, rowIndex);
+                  const handles = await driver.getAllWindowHandles();
+                  if (handles.length > 1) {
+                    console.log(`[Row ${rowIndex}] Switching to newly opened tab for extraction`);
+                    await driver.switchTo().window(handles[handles.length - 1]);
+                    await sleep(500);
+                    await extractFromDetail(driver, sheets, i, ranges); // extractFromDetail expects zero-based index
+                    try { await driver.close(); console.log(`[Row ${rowIndex}] Closed detail tab`); } catch {}
+                    await driver.switchTo().window(handles[0]);
+                  } else {
+                    console.log(`[Row ${rowIndex}] No new tab opened; extracting on current page`);
+                    await extractFromDetail(driver, sheets, i, ranges);
+                  }
+                } catch (e) {
+                  console.error(`[Row ${rowIndex}] Detailed flow error: ${e.stack || e.message}`);
+                  try { await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${statusPrefix}${rowIndex}`, valueInputOption: 'RAW', requestBody: { values: [[`error: ${String(e).slice(0,200)}`]] } }); } catch {}
+                }
+              }
+            } else {
+              console.log(`[Row ${rowIndex}] No matched candidate found in results`);
+              // Replace the problematic no-results block with this (inside your results branch)
+              const noResultsXpath = By.xpath('//*[@id="index-search"]/div[1]/section/div[1]/div/div/div/div/div/p');
+              if (await exists(driver, noResultsXpath, 2000)) {
+                const txt = (await getTextSafe(driver, noResultsXpath)).toLowerCase();
+                if (txt.includes('no result') || txt.includes('no results') || txt.includes('nothing found')) {
+                  console.log(`[Row ${rowIndex}] Explicit no-results text found: "${txt}" -> marking no results`);
+                  await sheets.spreadsheets.values.update({
+                    spreadsheetId: SHEET_ID,
+                    range: `${ranges.statusPrefix}${rowIndex}`,
+                    valueInputOption: 'RAW',
+                    requestBody: { values: [['no results']] },
+                  });
+                } else {
+                  console.log(`[Row ${rowIndex}] Results present but no match -> marking no match`);
+                  await sheets.spreadsheets.values.update({
+                    spreadsheetId: SHEET_ID,
+                    range: `${ranges.statusPrefix}${rowIndex}`,
+                    valueInputOption: 'RAW',
+                    requestBody: { values: [['no match']] },
+                  });
+                }
+              } else {
+                console.log(`[Row ${rowIndex}] No explicit no-results element; marking no match`);
+                await sheets.spreadsheets.values.update({
+                  spreadsheetId: SHEET_ID,
+                  range: `${ranges.statusPrefix}${rowIndex}`,
+                  valueInputOption: 'RAW',
+                  requestBody: { values: [['no match']] },
+                });
+              }
+            }
+          } catch (e) {
+            console.error(`[Row ${rowIndex}] Results flow error: ${e.stack || e.message}`);
+            try { await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${statusPrefix}${rowIndex}`, valueInputOption: 'RAW', requestBody: { values: [[`error: ${String(e).slice(0,200)}`]] } }); } catch {}
+          }
+        }
+      } catch (err) {
+        console.error(`[Row ${rowIndex}] Navigation/processing error: ${err.stack || err.message}`);
+        try { await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${statusPrefix}${rowIndex}`, valueInputOption: 'RAW', requestBody: { values: [[`error: ${String(err).slice(0,200)}`]] } }); } catch {}
+      } finally {
+        // ensure no dangling detail tabs
+        try {
+          const handles = await driver.getAllWindowHandles();
+          if (handles.length > 1) {
+            for (let h = handles.length - 1; h > 0; h--) { try { await driver.switchTo().window(handles[h]); await driver.close(); } catch {} }
+            await driver.switchTo().window(handles[0]);
+          }
+        } catch (e) {
+          console.warn(`[Row ${rowIndex}] Tab cleanup warning: ${e.message}`);
+        }
+      }
+
+      console.log(`[Row ${rowIndex}] === END ===\n`);
+      await sleep(2000);
+    }
+  } finally {
+    try { await driver.quit(); console.log('[Browser] Driver quit'); } catch (e) { console.warn('[Browser] Driver quit error:', e.message); }
+  }
 }
 
 // -----------------------------
@@ -267,16 +647,10 @@ async function fetchDataAndUpdateSheet() {
 // -----------------------------
 (async () => {
   try {
-    // quick smoke test for the target site (optional)
-    try {
-      const res = await makeRequestWithRetries(SEARCH_URL, 2, 1000);
-      console.log(`[HTTP] Site reachable, status ${res.status}`);
-    } catch (e) {
-      console.warn('[HTTP] Site reachability check failed:', e.message);
-    }
-
+    console.log('[Entrypoint] Starting leePA run');
+    try { await makeRequestWithRetries('https://county-taxes.net', 2, 1000); } catch (e) { console.warn('[Entrypoint] Reachability quick-check failed:', e.message); }
     await fetchDataAndUpdateSheet();
-    console.log('[Done] Completed run');
+    console.log('[Entrypoint] Completed leePA run');
   } catch (err) {
     console.error('[Fatal] Unhandled error:', err.stack || err.message);
     process.exit(1);
