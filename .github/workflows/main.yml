@@ -82,7 +82,7 @@ jobs:
           HEADLESS: 'true'
           CHROME_PATH: '/usr/bin/google-chrome-stable'
           GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
-        run: node charlottePA.mjs
+        run: node charlottePA.js
 
   CorpTracer:
     runs-on: ubuntu-latest
@@ -120,4 +120,4 @@ jobs:
           HEADLESS: 'true'
           CHROME_PATH: '/usr/bin/google-chrome-stable'
           GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
-        run: node corpTracer.js
+        run: // node corpTracer.js <<< --- uncomment to activate
