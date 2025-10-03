@@ -44,7 +44,7 @@ jobs:
           HEADLESS: 'true'
           CHROME_PATH: '/usr/bin/google-chrome-stable'
           GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
-        run: // node leePA.mjs <<<---  uncomment to activate
+        run: node leePA.mjs
 
   charlotte:
     runs-on: ubuntu-latest
