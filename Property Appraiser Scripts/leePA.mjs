@@ -17,7 +17,7 @@ import chrome from 'selenium-webdriver/chrome.js';
 // -----------------------------
 const SHEET_ID = '1zvXxmncHa0MMggdgIWSFTtkoi5gyy6go-ozVea_4f54';
 const SHEET_NAME = 'Spec_Zipcode';
-const START_ROW = 866;
+const START_ROW = 1271;
 const END_ROW = 11229;
 const PAGE_LOAD_TIMEOUT_MS = 60000; // 60s page load
 const ELEMENT_TIMEOUT_MS = 60000; // 60s element waits (requested)
