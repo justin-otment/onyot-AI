@@ -1,7 +1,7 @@
 // leePA.mjs
 // ESM, Selenium, reads addresses from SHEET_NAME!B2:B and target URLs from SHEET_NAME!K2:K
 // Classification: iframe present -> detailed account, otherwise results list
-// All element waits/use of until.* now use a 60-second timeout constant
+// All element waits/use of until.* now use a 30-second timeout constant
 
 import path from 'path';
 import { fileURLToPath } from "url";
@@ -18,9 +18,9 @@ import chrome from 'selenium-webdriver/chrome.js';
 const SHEET_ID = '1zvXxmncHa0MMggdgIWSFTtkoi5gyy6go-ozVea_4f54';
 const SHEET_NAME = 'Spec_Zipcode';
 const START_ROW = 1271;
-const END_ROW = 11229;
-const PAGE_LOAD_TIMEOUT_MS = 60000; // 60s page load
-const ELEMENT_TIMEOUT_MS = 60000; // 60s element waits (requested)
+const END_ROW = 1771;
+const PAGE_LOAD_TIMEOUT_MS = 30000; // 30s page load
+const ELEMENT_TIMEOUT_MS = 30000; // 30s element waits (requested)
 const HEADLESS = String(process.env.HEADLESS || 'false').toLowerCase() === 'true';
 const CHROME_PATH = process.env.CHROME_PATH || null;
 const __filename = fileURLToPath(import.meta.url);
@@ -220,7 +220,7 @@ async function scrollIntoView(driver, element) {
 }
 
 // -----------------------------
-// Page flows (with 60s element waits)
+// Page flows (with 30s element waits)
 // -----------------------------
 async function handleDetailedAccountByIframe(driver, rowIndex) {
   console.log(`[Row ${rowIndex}] handleDetailedAccount: switching into iframe if present`);
@@ -238,14 +238,14 @@ async function handleDetailedAccountByIframe(driver, rowIndex) {
   }
 
   const sectionXpath = By.xpath('/html/body/div[2]/main/section');
-  console.log(`[Row ${rowIndex}] Waiting for main section xpath (60s)`);
+  console.log(`[Row ${rowIndex}] Waiting for main section xpath (30s)`);
   await driver.wait(until.elementLocated(sectionXpath), ELEMENT_TIMEOUT_MS);
   const sectionEl = await driver.findElement(sectionXpath);
   await scrollIntoView(driver, sectionEl);
   console.log(`[Row ${rowIndex}] Scrolled to main section`);
 
   const linkXpath = By.xpath('/html/body/div[2]/main/section/div[2]/div[2]/div[3]/div[3]/a');
-  console.log(`[Row ${rowIndex}] Looking for detail anchor xpath (60s)`);
+  console.log(`[Row ${rowIndex}] Looking for detail anchor xpath (30s)`);
   if (await exists(driver, linkXpath, ELEMENT_TIMEOUT_MS)) {
     const aEl = await driver.findElement(linkXpath);
     await scrollIntoView(driver, aEl);
@@ -257,7 +257,7 @@ async function handleDetailedAccountByIframe(driver, rowIndex) {
 }
 
 async function handleResultsAndMatch(driver, targetAddress, rowIndex) {
-  console.log(`[Row ${rowIndex}] handleResults: extracting candidate addresses (60s)`);
+  console.log(`[Row ${rowIndex}] handleResults: extracting candidate addresses (30s)`);
   const itemTextCss = '.col-12 span';
 
   // Wait defensively for any candidate nodes
@@ -325,7 +325,7 @@ async function handleResultsAndMatch(driver, targetAddress, rowIndex) {
       console.log(`[Row ${rowIndex}] Similarity (normalized) with target: ${(score * 100).toFixed(1)}%`);
 
       if (score >= 0.5) {
-        console.log(`[Row ${rowIndex}] Candidate #${i + 1} matched (>=50%) — attempting to click associated button (60s lookups)`);
+        console.log(`[Row ${rowIndex}] Candidate #${i + 1} matched (>=50%) — attempting to click associated button (30s lookups)`);
         try {
           const ancestorButton = await nodes[i].findElement(By.xpath('../../div[2]/button'));
           await scrollIntoView(driver, ancestorButton);
