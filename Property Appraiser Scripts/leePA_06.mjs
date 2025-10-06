@@ -175,6 +175,18 @@ async function launchDriver() {
   if (HEADLESS) options.addArguments('--headless-new', '--disable-gpu', '--window-size=1200,900');
   else options.addArguments('--start-maximized');
   options.addArguments('--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled');
+  options.setUserPreferences({
+  'profile.default_content_setting_values': { images: 2 },
+  'profile.managed_default_content_settings': { images: 2 }
+});
+  options.addArguments('--blink-settings=imagesEnabled=false');
+
+ // create a unique temp profile dir per process to avoid "user data dir already in use"
+  const tmpBase = process.env.CHROME_TMP_DIR || os.tmpdir();
+  const profileName = `selenium_profile_${process.pid}_${Date.now()}`;
+  const profileDir = path.join(tmpBase, profileName);
+  try { fs.mkdirSync(profileDir, { recursive: true }); } catch (e) { console.warn('[Browser] Failed creating profileDir:', e.message); }
+  options.addArguments(`--user-data-dir=${profileDir}`);
 
   let chromeBinary = CHROME_PATH;
   if (!chromeBinary) {
@@ -200,6 +212,7 @@ async function launchDriver() {
   }
 
   const driver = await new Builder().forBrowser('chrome').setChromeOptions(options).build();
+  driver._seleniumProfileDir = profileDir; // attach for cleanup
   await driver.manage().setTimeouts({ implicit: 0, pageLoad: PAGE_LOAD_TIMEOUT_MS, script: 60000 });
   if (HEADLESS) await driver.manage().window().setRect({ width: 1200, height: 900, x: 0, y: 0 });
   console.log('[Browser] Chrome driver launched');
