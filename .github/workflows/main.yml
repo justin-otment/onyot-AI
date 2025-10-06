@@ -6,6 +6,8 @@ on:
 jobs:
   Lee_PA:
     runs-on: ubuntu-latest
+    env:
+      CHROME_TMP_DIR: /tmp/selenium-profiles
     steps:
       - uses: actions/checkout@v3
 
@@ -38,10 +40,17 @@ jobs:
         working-directory: "Property Appraiser Scripts"
         run: base64 -d service-account_base64.txt > service-account.json
 
+      - name: Pre-clean stray Chrome processes and temp profile dir
+        run: |
+          sudo pkill -f chrome || true
+          mkdir -p "${CHROME_TMP_DIR}"
+          chmod 1777 "${CHROME_TMP_DIR}"
+
       - name: Run Lee Appraiser script_1
         working-directory: "Property Appraiser Scripts"
         env:
           HEADLESS: 'true'
           CHROME_PATH: '/usr/bin/google-chrome-stable'
           GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
+          CHROME_TMP_DIR: ${{ env.CHROME_TMP_DIR }}
         run: node leePA_06.mjs
