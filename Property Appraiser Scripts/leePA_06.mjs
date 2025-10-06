@@ -17,8 +17,8 @@ import chrome from 'selenium-webdriver/chrome.js';
 // -----------------------------
 const SHEET_ID = '1zvXxmncHa0MMggdgIWSFTtkoi5gyy6go-ozVea_4f54';
 const SHEET_NAME = 'Spec_Zipcode';
-const START_ROW = 2;
-const END_ROW = 11229;
+const START_ROW = 1657;
+const END_ROW = 1771;
 const PAGE_LOAD_TIMEOUT_MS = 30000; // 30s page load
 const ELEMENT_TIMEOUT_MS = 30000; // 30s element waits (requested)
 const HEADLESS = String(process.env.HEADLESS || 'false').toLowerCase() === 'true';
@@ -175,11 +175,6 @@ async function launchDriver() {
   if (HEADLESS) options.addArguments('--headless=new', '--disable-gpu', '--window-size=1200,900');
   else options.addArguments('--start-maximized');
   options.addArguments('--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled');
-  options.setUserPreferences({
-  'profile.default_content_setting_values': { images: 2 },
-  'profile.managed_default_content_settings': { images: 2 }
-});
-  options.addArguments('--blink-settings=imagesEnabled=false');
 
   let chromeBinary = CHROME_PATH;
   if (!chromeBinary) {
@@ -211,32 +206,6 @@ async function launchDriver() {
   return driver;
 }
 
-const writeBuffer = []; // each item: { range, values }
-function bufferWrite(range, values) { writeBuffer.push({ range, values }); }
-async function flushWrites(sheets) {
-  if (writeBuffer.length === 0) return;
-  const requests = writeBuffer.map(w => ({ range: w.range, values: w.values }));
-  await sheets.spreadsheets.values.batchUpdate({
-    spreadsheetId: SHEET_ID,
-    requestBody: { valueInputOption: 'USER_ENTERED', data: requests }
-  });
-  writeBuffer.length = 0;
-}
-
-async function runPool(workerCount = 4) {
-  const tasks = Array.from({length: totalRows}, (_,i) => i);
-  const workers = Array.from({length: workerCount}, () => worker(tasks, sheets));
-  await Promise.all(workers);
-}
-async function worker(taskQueue, sheets) {
-  const driver = await launchDriver();
-  while (taskQueue.length) {
-    const i = taskQueue.shift();
-    await processRow(i, driver, sheets); // reuse your existing logic but avoid global sleeps
-  }
-  await driver.quit();
-}
-
 // -----------------------------
 // DOM helpers (use ELEMENT_TIMEOUT_MS)
 // -----------------------------
@@ -254,36 +223,114 @@ async function scrollIntoView(driver, element) {
 // Page flows (with 30s element waits)
 // -----------------------------
 async function handleDetailedAccountByIframe(driver, rowIndex) {
-  console.log(`[Row ${rowIndex}] handleDetailedAccount: switching into iframe if present`);
+  console.log(`[Row ${rowIndex}] handleDetailedAccount: probing iframes for detail link`);
   try {
     const iframes = await driver.findElements(By.css('iframe'));
-    if (iframes.length > 0) {
-      await driver.switchTo().frame(iframes[0]);
-      console.log(`[Row ${rowIndex}] Switched to iframe (index 0)`);
-      await sleep(300);
-    } else {
-      console.log(`[Row ${rowIndex}] No iframe to switch into (unexpected in detailed path)`);
+    console.log(`[Row ${rowIndex}] Found ${iframes.length} iframe(s)`);
+
+    // Attempt to find a frame that contains a main/section or any anchor
+    let chosenFrame = null;
+    for (let idx = 0; idx < iframes.length; idx++) {
+      try {
+        await driver.switchTo().frame(iframes[idx]);
+        // fast check for a main/section or an anchor inside it
+        const hasMain = await exists(driver, By.css('main section, main, body > div > main, #content'), 700);
+        const hasAnyAnchor = await exists(driver, By.css('a'), 400);
+        await driver.switchTo().defaultContent();
+        if (hasMain || hasAnyAnchor) { chosenFrame = idx; break; }
+      } catch (e) {
+        console.warn(`[Row ${rowIndex}] probe iframe ${idx} error: ${e.message}`);
+        try { await driver.switchTo().defaultContent(); } catch {}
+      }
     }
-  } catch (e) {
-    console.warn(`[Row ${rowIndex}] iframe switch error: ${e.message}`);
-  }
 
-  const sectionXpath = By.xpath('/html/body/div[2]/main/section');
-  console.log(`[Row ${rowIndex}] Waiting for main section xpath (30s)`);
-  await driver.wait(until.elementLocated(sectionXpath), ELEMENT_TIMEOUT_MS);
-  const sectionEl = await driver.findElement(sectionXpath);
-  await scrollIntoView(driver, sectionEl);
-  console.log(`[Row ${rowIndex}] Scrolled to main section`);
+    // If none found, but there is at least one iframe, default to index 0
+    if (chosenFrame === null && iframes.length > 0) {
+      chosenFrame = 0;
+      console.log(`[Row ${rowIndex}] No obvious frame matched probes, defaulting to iframe index 0`);
+    }
 
-  const linkXpath = By.xpath('/html/body/div[2]/main/section/div[2]/div[2]/div[3]/div[3]/a');
-  console.log(`[Row ${rowIndex}] Looking for detail anchor xpath (30s)`);
-  if (await exists(driver, linkXpath, ELEMENT_TIMEOUT_MS)) {
-    const aEl = await driver.findElement(linkXpath);
-    await scrollIntoView(driver, aEl);
-    console.log(`[Row ${rowIndex}] Clicking detail anchor`);
-    await aEl.click();
-  } else {
+    // If no iframe found at all, still try to operate on the top-level document
+    if (chosenFrame !== null) {
+      await driver.switchTo().frame(iframes[chosenFrame]);
+      console.log(`[Row ${rowIndex}] Switched to iframe (index ${chosenFrame})`);
+    } else {
+      console.log(`[Row ${rowIndex}] No iframe present, operating on top-level document`);
+    }
+
+    // Short micro-settle; prefer tiny waits to long sleeps
+    await sleep(300);
+
+    // Candidate selectors (fast CSS first, then forgiving XPaths)
+    const candidates = [
+      By.css('main section a, main a, a[href*="detail"], a[href*="Details"], a[href*="Parcel"]'),
+      By.css('a[role="button"], a.button, button a, button'),
+      By.xpath('//a[contains(translate(text(),"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"), "view")]'),
+      By.xpath('//a[contains(translate(text(),"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"), "details")]'),
+      By.xpath('//a[contains(translate(text(),"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"), "parcel")]'),
+      By.xpath('//a'), // last resort
+    ];
+
+    // Try each candidate selector quickly and click the first workable element
+    for (const sel of candidates) {
+      try {
+        if (!await exists(driver, sel, 1200)) continue;
+        const el = await driver.findElement(sel);
+        await scrollIntoView(driver, el);
+        try {
+          await el.click();
+          console.log(`[Row ${rowIndex}] Clicked detail anchor via selector ${sel}`);
+          await sleep(500);
+          return;
+        } catch (clickErr) {
+          console.warn(`[Row ${rowIndex}] Element.click failed for selector ${sel}: ${clickErr.message} — trying JS click`);
+          const clicked = await driver.executeScript(
+            `const el = arguments[0]; if(!el) return false; el.scrollIntoView({block:'center'}); el.click(); return true;`,
+            el
+          );
+          if (clicked) {
+            console.log(`[Row ${rowIndex}] Clicked detail anchor via JS fallback for selector ${sel}`);
+            await sleep(500);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn(`[Row ${rowIndex}] Selector ${sel} error: ${e.message}`);
+      }
+    }
+
+    // If nothing clicked, attempt to find the original specific xpath as a final check
+    try {
+      const originalXpath = By.xpath('/html/body/div[2]/main/section/div[2]/div[2]/div[3]/div[3]/a');
+      if (await exists(driver, originalXpath, 800)) {
+        const aEl = await driver.findElement(originalXpath);
+        await scrollIntoView(driver, aEl);
+        await aEl.click();
+        console.log(`[Row ${rowIndex}] Clicked detail anchor via original XPath`);
+        await sleep(500);
+        return;
+      }
+    } catch (e) {
+      console.warn(`[Row ${rowIndex}] Original XPath attempt failed: ${e.message}`);
+    }
+
+    // Nothing worked: capture a small HTML sample for diagnostics then throw
+    try {
+      const sample = await driver.executeScript(
+        `const node = document.querySelector('main') || document.body; return node ? node.outerHTML.slice(0,1200) : '';`
+      );
+      console.warn(`[Row ${rowIndex}] No detail anchor found; HTML sample: ${sample.slice(0,800)}`);
+    } catch (e) {
+      console.warn(`[Row ${rowIndex}] Could not capture HTML sample: ${e.message}`);
+    }
+
     throw new Error('Detail anchor not found in detailed account flow');
+  } catch (err) {
+    // bubble up so caller can handle marking the status
+    console.error(`[Row ${rowIndex}] handleDetailedAccountByIframe error: ${err.stack || err.message}`);
+    throw err;
+  } finally {
+    try { await driver.switchTo().defaultContent(); } catch {}
   }
 }
 
@@ -574,6 +621,7 @@ async function extractFromDetail(driver, sheets, rowIndexZeroBased, ranges) {
 // - Writes per-row with robust try/catch and compact logs
 // -----------------------------
 async function fetchDataAndUpdateSheet() {
+  // define once, before processing rows
   const ranges = {
     dorOwnerPrefix: `${SHEET_NAME}!F`,
     saleDatePrefix: `${SHEET_NAME}!G`,
@@ -584,154 +632,142 @@ async function fetchDataAndUpdateSheet() {
   };
   console.log('[Main] Starting fetchDataAndUpdateSheet');
   const sheets = await getSheetsClient();
-  console.log('[Sheets] Fetching addresses, urls and existing status column from sheet');
+  console.log('[Sheets] Fetching addresses and target URLs from sheet');
 
   const addressesRange = `${SHEET_NAME}!A${START_ROW}:A${END_ROW}`;
   const urlsRange = `${SHEET_NAME}!L${START_ROW}:L${END_ROW}`;
-  const statusRange = `${SHEET_NAME}!M${START_ROW}:M${END_ROW}`;
 
-  const [addressesRes, urlsRes, statusRes] = await Promise.all([
+  const [addressesRes, urlsRes] = await Promise.all([
     sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: addressesRange }),
     sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: urlsRange }),
-    sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: statusRange }),
   ]);
 
   const addresses = (addressesRes.data.values || []).map(r => (r[0] || '').trim());
   const urls = (urlsRes.data.values || []).map(r => (r[0] || '').trim());
-  const statuses = (statusRes.data.values || []).map(r => (r[0] || '').toString().trim());
 
-  console.log(`[Init] Fetched ${addresses.length} addresses, ${urls.length} urls, ${statuses.length} status cells.`);
+  console.log(`[Init] Fetched ${addresses.length} addresses and ${urls.length} urls.`);
 
   const driver = await launchDriver();
 
   try {
-    const rowsToProcess = Math.max(addresses.length, urls.length, statuses.length);
+    const rowsToProcess = Math.max(addresses.length, urls.length);
     for (let i = 0; i < rowsToProcess; i++) {
-      const sheetRow = START_ROW + i;
+      const rowIndex = START_ROW + i;
       const targetUrl = urls[i] || '';
       const targetAddress = addresses[i] || '';
-      const existingStatus = (statuses[i] || '').trim();
 
-      console.log(`\n[Row ${sheetRow}] === START ===`);
-
-      // If the status cell already contains something, skip this row.
-      if (existingStatus) {
-        console.log(`[Row ${sheetRow}] Skipping because status column (M) already has value: "${existingStatus}"`);
-        console.log(`[Row ${sheetRow}] === END ===\n`);
-        continue;
-      }
-
-      // optional: if you prefer checking dorOwner (F) instead, uncomment below and comment out the status check above
-      // const dorOwnerCell = (dorOwners[i] || '').trim();
-      // if (dorOwnerCell) { console.log(`[Row ${sheetRow}] Skipping because dorOwner (F) already populated: "${dorOwnerCell}"`); continue; }
-
-      if (!targetUrl) { console.log(`[Row ${sheetRow}] No URL found in sheet column L; skipping`); console.log(`[Row ${sheetRow}] === END ===\n`); continue; }
-      console.log(`[Row ${sheetRow}] Navigating to URL: ${targetUrl}`);
+      console.log(`\n[Row ${rowIndex}] === START ===`);
+      if (!targetUrl) { console.log(`[Row ${rowIndex}] No URL found in sheet column K; skipping`); console.log(`[Row ${rowIndex}] === END ===\n`); continue; }
+      console.log(`[Row ${rowIndex}] Navigating to URL: ${targetUrl}`);
 
       try {
+        // navigate with timeout
         try {
           await Promise.race([
             driver.get(targetUrl),
             timeoutPromise(PAGE_LOAD_TIMEOUT_MS, `Page load timeout after ${PAGE_LOAD_TIMEOUT_MS}ms`)
           ]);
-          console.log(`[Row ${sheetRow}] driver.get completed within ${PAGE_LOAD_TIMEOUT_MS}ms`);
+          console.log(`[Row ${rowIndex}] driver.get completed within ${PAGE_LOAD_TIMEOUT_MS}ms`);
         } catch (navErr) {
-          console.warn(`[Row ${sheetRow}] Navigation warning: ${navErr.message}`);
-          try { await driver.executeScript('if(window.stop) window.stop();'); console.log(`[Row ${sheetRow}] Invoked window.stop()`); } catch (e) { console.warn(`[Row ${sheetRow}] window.stop() failed: ${e.message}`); }
+          console.warn(`[Row ${rowIndex}] Navigation warning: ${navErr.message}`);
+          try { await driver.executeScript('if(window.stop) window.stop();'); console.log(`[Row ${rowIndex}] Invoked window.stop()`); } catch (e) { console.warn(`[Row ${rowIndex}] window.stop() failed: ${e.message}`); }
         }
 
-        console.log(`[Row ${sheetRow}] Waiting briefly for DOM settlement`);
+        console.log(`[Row ${rowIndex}] Waiting briefly for DOM settlement`);
         await sleep(15000);
 
+        // detect iframes and choose flow
         const iframes = await driver.findElements(By.css('iframe'));
         if (iframes.length > 0) {
-          console.log(`[Row ${sheetRow}] Iframe(s) detected (${iframes.length}) -> treating as Detailed account`);
+          console.log(`[Row ${rowIndex}] Iframe(s) detected (${iframes.length}) -> treating as Detailed account`);
           try {
-            await handleDetailedAccountByIframe(driver, sheetRow);
+            await handleDetailedAccountByIframe(driver, rowIndex);
             const handles = await driver.getAllWindowHandles();
             if (handles.length > 1) {
-              console.log(`[Row ${sheetRow}] Switching to newly opened tab for extraction`);
+              console.log(`[Row ${rowIndex}] Switching to newly opened tab for extraction`);
               await driver.switchTo().window(handles[handles.length - 1]);
               await sleep(500);
-              await extractFromDetail(driver, sheets, i, ranges);
-              try { await driver.close(); console.log(`[Row ${sheetRow}] Closed detail tab`); } catch {}
+              await extractFromDetail(driver, sheets, i, ranges); // extractFromDetail expects zero-based index
+              try { await driver.close(); console.log(`[Row ${rowIndex}] Closed detail tab`); } catch {}
               await driver.switchTo().window(handles[0]);
             } else {
-              console.log(`[Row ${sheetRow}] No new tab opened; extracting on current page`);
+              console.log(`[Row ${rowIndex}] No new tab opened; extracting on current page`);
               await extractFromDetail(driver, sheets, i, ranges);
             }
           } catch (e) {
-            console.error(`[Row ${sheetRow}] Detailed flow error: ${e.stack || e.message}`);
-            try { await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${ranges.statusPrefix}${sheetRow}`, valueInputOption: 'RAW', requestBody: { values: [[`error: ${String(e).slice(0,200)}`]] } }); } catch {}
+            console.error(`[Row ${rowIndex}] Detailed flow error: ${e.stack || e.message}`);
+            try { await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${statusPrefix}${rowIndex}`, valueInputOption: 'RAW', requestBody: { values: [[`error: ${String(e).slice(0,200)}`]] } }); } catch {}
           }
         } else {
-          console.log(`[Row ${sheetRow}] No iframe detected -> treating as Results list`);
+          console.log(`[Row ${rowIndex}] No iframe detected -> treating as Results list`);
           try {
-            const result = await handleResultsAndMatch(driver, targetAddress, sheetRow);
+            const result = await handleResultsAndMatch(driver, targetAddress, rowIndex);
             if (result && result.matched) {
-              console.log(`[Row ${sheetRow}] Match clicked; handling post-click extraction`);
+              console.log(`[Row ${rowIndex}] Match clicked; handling post-click extraction`);
               await sleep(10000);
-              const postIframes = await driver.findElements(By.css('iframe'));
-              if (postIframes.length > 0) {
+              const handles = await driver.findElements(By.css('iframe'));
+              if (handles.length > 0) {
+                console.log(`[Row ${rowIndex}] Iframe(s) detected (${iframes.length}) -> treating as Detailed account`);
                 try {
-                  await handleDetailedAccountByIframe(driver, sheetRow);
+                  await handleDetailedAccountByIframe(driver, rowIndex);
                   const handles = await driver.getAllWindowHandles();
                   if (handles.length > 1) {
-                    console.log(`[Row ${sheetRow}] Switching to newly opened tab for extraction`);
+                    console.log(`[Row ${rowIndex}] Switching to newly opened tab for extraction`);
                     await driver.switchTo().window(handles[handles.length - 1]);
                     await sleep(500);
-                    await extractFromDetail(driver, sheets, i, ranges);
-                    try { await driver.close(); console.log(`[Row ${sheetRow}] Closed detail tab`); } catch {}
+                    await extractFromDetail(driver, sheets, i, ranges); // extractFromDetail expects zero-based index
+                    try { await driver.close(); console.log(`[Row ${rowIndex}] Closed detail tab`); } catch {}
                     await driver.switchTo().window(handles[0]);
                   } else {
-                    console.log(`[Row ${sheetRow}] No new tab opened; extracting on current page`);
+                    console.log(`[Row ${rowIndex}] No new tab opened; extracting on current page`);
                     await extractFromDetail(driver, sheets, i, ranges);
                   }
                 } catch (e) {
-                  console.error(`[Row ${sheetRow}] Detailed flow error: ${e.stack || e.message}`);
-                  try { await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${ranges.statusPrefix}${sheetRow}`, valueInputOption: 'RAW', requestBody: { values: [[`error: ${String(e).slice(0,200)}`]] } }); } catch {}
+                  console.error(`[Row ${rowIndex}] Detailed flow error: ${e.stack || e.message}`);
+                  try { await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${statusPrefix}${rowIndex}`, valueInputOption: 'RAW', requestBody: { values: [[`error: ${String(e).slice(0,200)}`]] } }); } catch {}
                 }
               }
             } else {
-              console.log(`[Row ${sheetRow}] No matched candidate found in results`);
+              console.log(`[Row ${rowIndex}] No matched candidate found in results`);
+              // Replace the problematic no-results block with this (inside your results branch)
               const noResultsXpath = By.xpath('//*[@id="index-search"]/div[1]/section/div[1]/div/div/div/div/div/p');
               if (await exists(driver, noResultsXpath, 2000)) {
                 const txt = (await getTextSafe(driver, noResultsXpath)).toLowerCase();
                 if (txt.includes('no result') || txt.includes('no results') || txt.includes('nothing found')) {
-                  console.log(`[Row ${sheetRow}] Explicit no-results text found: "${txt}" -> marking no results`);
+                  console.log(`[Row ${rowIndex}] Explicit no-results text found: "${txt}" -> marking no results`);
                   await sheets.spreadsheets.values.update({
                     spreadsheetId: SHEET_ID,
-                    range: `${ranges.statusPrefix}${sheetRow}`,
+                    range: `${ranges.statusPrefix}${rowIndex}`,
                     valueInputOption: 'RAW',
                     requestBody: { values: [['no results']] },
                   });
                 } else {
-                  console.log(`[Row ${sheetRow}] Results present but no match -> marking no match`);
+                  console.log(`[Row ${rowIndex}] Results present but no match -> marking no match`);
                   await sheets.spreadsheets.values.update({
                     spreadsheetId: SHEET_ID,
-                    range: `${ranges.statusPrefix}${sheetRow}`,
+                    range: `${ranges.statusPrefix}${rowIndex}`,
                     valueInputOption: 'RAW',
                     requestBody: { values: [['no match']] },
                   });
                 }
               } else {
-                console.log(`[Row ${sheetRow}] No explicit no-results element; marking no match`);
+                console.log(`[Row ${rowIndex}] No explicit no-results element; marking no match`);
                 await sheets.spreadsheets.values.update({
                   spreadsheetId: SHEET_ID,
-                  range: `${ranges.statusPrefix}${sheetRow}`,
+                  range: `${ranges.statusPrefix}${rowIndex}`,
                   valueInputOption: 'RAW',
                   requestBody: { values: [['no match']] },
                 });
               }
             }
           } catch (e) {
-            console.error(`[Row ${sheetRow}] Results flow error: ${e.stack || e.message}`);
-            try { await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${ranges.statusPrefix}${sheetRow}`, valueInputOption: 'RAW', requestBody: { values: [[`error: ${String(e).slice(0,200)}`]] } }); } catch {}
+            console.error(`[Row ${rowIndex}] Results flow error: ${e.stack || e.message}`);
+            try { await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${statusPrefix}${rowIndex}`, valueInputOption: 'RAW', requestBody: { values: [[`error: ${String(e).slice(0,200)}`]] } }); } catch {}
           }
         }
       } catch (err) {
-        console.error(`[Row ${sheetRow}] Navigation/processing error: ${err.stack || err.message}`);
-        try { await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${ranges.statusPrefix}${sheetRow}`, valueInputOption: 'RAW', requestBody: { values: [[`error: ${String(err).slice(0,200)}`]] } }); } catch {}
+        console.error(`[Row ${rowIndex}] Navigation/processing error: ${err.stack || err.message}`);
+        try { await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${statusPrefix}${rowIndex}`, valueInputOption: 'RAW', requestBody: { values: [[`error: ${String(err).slice(0,200)}`]] } }); } catch {}
       } finally {
         // ensure no dangling detail tabs
         try {
@@ -741,11 +777,11 @@ async function fetchDataAndUpdateSheet() {
             await driver.switchTo().window(handles[0]);
           }
         } catch (e) {
-          console.warn(`[Row ${sheetRow}] Tab cleanup warning: ${e.message}`);
+          console.warn(`[Row ${rowIndex}] Tab cleanup warning: ${e.message}`);
         }
       }
 
-      console.log(`[Row ${sheetRow}] === END ===\n`);
+      console.log(`[Row ${rowIndex}] === END ===\n`);
       await sleep(2000);
     }
   } finally {
