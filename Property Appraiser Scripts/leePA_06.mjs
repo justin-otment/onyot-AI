@@ -172,7 +172,7 @@ async function dismissPopupModalIfPresent(driver, rowIndex, timeout = 3000) {
 async function launchDriver() {
   console.log('[Browser] Launching Chrome driver, headless:', HEADLESS);
   const options = new chrome.Options();
-  if (HEADLESS) options.addArguments('--headless=new', '--disable-gpu', '--window-size=1200,900');
+  if (HEADLESS) options.addArguments('--disable-gpu', '--window-size=1200,900');
   else options.addArguments('--start-maximized');
   options.addArguments('--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled');
 
@@ -263,7 +263,7 @@ async function handleDetailedAccountByIframe(driver, rowIndex) {
 
     // Candidate selectors (fast CSS first, then forgiving XPaths)
     const candidates = [
-      By.css('main section a, main a, a[href*="detail"], a[href*="Details"], a[href*="Parcel"]'),
+      By.xpath('/html/body/div[2]/main/section/div[2]/div[2]/div[3]/div[3]/a'),
       By.css('a[role="button"], a.button, button a, button'),
       By.xpath('//a[contains(translate(text(),"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"), "view")]'),
       By.xpath('//a[contains(translate(text(),"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"), "details")]'),
@@ -301,7 +301,7 @@ async function handleDetailedAccountByIframe(driver, rowIndex) {
 
     // If nothing clicked, attempt to find the original specific xpath as a final check
     try {
-      const originalXpath = By.xpath('/html/body/div[2]/main/section/div[2]/div[2]/div[3]/div[3]/a');
+      const originalXpath = By.xpath('../../div[2]/button');
       if (await exists(driver, originalXpath, 800)) {
         const aEl = await driver.findElement(originalXpath);
         await scrollIntoView(driver, aEl);
