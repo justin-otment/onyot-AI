@@ -172,7 +172,7 @@ async function dismissPopupModalIfPresent(driver, rowIndex, timeout = 3000) {
 async function launchDriver() {
   console.log('[Browser] Launching Chrome driver, headless:', HEADLESS);
   const options = new chrome.Options();
-  if (HEADLESS) options.addArguments('--disable-gpu', '--window-size=1200,900');
+  if (HEADLESS) options.addArguments('--headless-new', '--disable-gpu', '--window-size=1200,900');
   else options.addArguments('--start-maximized');
   options.addArguments('--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled');
 
