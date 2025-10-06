@@ -175,6 +175,11 @@ async function launchDriver() {
   if (HEADLESS) options.addArguments('--headless=new', '--disable-gpu', '--window-size=1200,900');
   else options.addArguments('--start-maximized');
   options.addArguments('--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled');
+  options.setUserPreferences({
+  'profile.default_content_setting_values': { images: 2 },
+  'profile.managed_default_content_settings': { images: 2 }
+});
+  options.addArguments('--blink-settings=imagesEnabled=false');
 
   let chromeBinary = CHROME_PATH;
   if (!chromeBinary) {
@@ -204,6 +209,32 @@ async function launchDriver() {
   if (HEADLESS) await driver.manage().window().setRect({ width: 1200, height: 900, x: 0, y: 0 });
   console.log('[Browser] Chrome driver launched');
   return driver;
+}
+
+const writeBuffer = []; // each item: { range, values }
+function bufferWrite(range, values) { writeBuffer.push({ range, values }); }
+async function flushWrites(sheets) {
+  if (writeBuffer.length === 0) return;
+  const requests = writeBuffer.map(w => ({ range: w.range, values: w.values }));
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: { valueInputOption: 'USER_ENTERED', data: requests }
+  });
+  writeBuffer.length = 0;
+}
+
+async function runPool(workerCount = 4) {
+  const tasks = Array.from({length: totalRows}, (_,i) => i);
+  const workers = Array.from({length: workerCount}, () => worker(tasks, sheets));
+  await Promise.all(workers);
+}
+async function worker(taskQueue, sheets) {
+  const driver = await launchDriver();
+  while (taskQueue.length) {
+    const i = taskQueue.shift();
+    await processRow(i, driver, sheets); // reuse your existing logic but avoid global sleeps
+  }
+  await driver.quit();
 }
 
 // -----------------------------
