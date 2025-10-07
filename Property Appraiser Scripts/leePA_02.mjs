@@ -17,8 +17,8 @@ import chrome from 'selenium-webdriver/chrome.js';
 // -----------------------------
 const SHEET_ID = '1zvXxmncHa0MMggdgIWSFTtkoi5gyy6go-ozVea_4f54';
 const SHEET_NAME = 'Spec_Zipcode';
-const START_ROW = 2158;
-const END_ROW = 2271;
+const START_ROW = 4129;
+const END_ROW = 4264;
 const PAGE_LOAD_TIMEOUT_MS = 30000; // 30s page load
 const ELEMENT_TIMEOUT_MS = 30000; // 30s element waits (requested)
 const HEADLESS = String(process.env.HEADLESS || 'false').toLowerCase() === 'true';
