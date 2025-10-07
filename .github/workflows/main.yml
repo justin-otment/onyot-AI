@@ -255,3 +255,255 @@ jobs:
           CHROME_PATH: '/usr/bin/google-chrome-stable'
           GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
         run: node leePA_06.mjs
+
+  Lee_PA_07:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip xvfb libxi6 libxss1 libnss3 libatk-bridge2.0-0 libgtk-3-0
+          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
+
+      - name: Install dependencies (create lockfile fallback)
+        env:
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "package-lock.json found, running npm ci"
+            npm ci
+          else
+            echo "package-lock.json not found, generating lockfile then running npm ci"
+            npm install --package-lock-only
+            npm ci
+          fi
+
+      - name: Decode Service Account JSON
+        working-directory: "Property Appraiser Scripts"
+        run: base64 -d service-account_base64.txt > service-account.json
+
+      - name: Run Lee_07 Appraiser script
+        working-directory: "Property Appraiser Scripts"
+        env:
+          HEADLESS: 'true'
+          CHROME_PATH: '/usr/bin/google-chrome-stable'
+          GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
+        run: node leePA_07.mjs
+
+  Lee_PA_08:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip xvfb libxi6 libxss1 libnss3 libatk-bridge2.0-0 libgtk-3-0
+          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
+
+      - name: Install dependencies (create lockfile fallback)
+        env:
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "package-lock.json found, running npm ci"
+            npm ci
+          else
+            echo "package-lock.json not found, generating lockfile then running npm ci"
+            npm install --package-lock-only
+            npm ci
+          fi
+
+      - name: Decode Service Account JSON
+        working-directory: "Property Appraiser Scripts"
+        run: base64 -d service-account_base64.txt > service-account.json
+
+      - name: Run Lee_08 Appraiser script
+        working-directory: "Property Appraiser Scripts"
+        env:
+          HEADLESS: 'true'
+          CHROME_PATH: '/usr/bin/google-chrome-stable'
+          GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
+        run: node leePA_08.mjs
+
+  Lee_PA_09:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip xvfb libxi6 libxss1 libnss3 libatk-bridge2.0-0 libgtk-3-0
+          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
+
+      - name: Install dependencies (create lockfile fallback)
+        env:
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "package-lock.json found, running npm ci"
+            npm ci
+          else
+            echo "package-lock.json not found, generating lockfile then running npm ci"
+            npm install --package-lock-only
+            npm ci
+          fi
+
+      - name: Decode Service Account JSON
+        working-directory: "Property Appraiser Scripts"
+        run: base64 -d service-account_base64.txt > service-account.json
+
+      - name: Run Lee_09 Appraiser script
+        working-directory: "Property Appraiser Scripts"
+        env:
+          HEADLESS: 'true'
+          CHROME_PATH: '/usr/bin/google-chrome-stable'
+          GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
+        run: node leePA_09.mjs
+
+  Lee_PA_10:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip xvfb libxi6 libxss1 libnss3 libatk-bridge2.0-0 libgtk-3-0
+          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
+
+      - name: Install dependencies (create lockfile fallback)
+        env:
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "package-lock.json found, running npm ci"
+            npm ci
+          else
+            echo "package-lock.json not found, generating lockfile then running npm ci"
+            npm install --package-lock-only
+            npm ci
+          fi
+
+      - name: Decode Service Account JSON
+        working-directory: "Property Appraiser Scripts"
+        run: base64 -d service-account_base64.txt > service-account.json
+
+      - name: Run Lee_10 Appraiser script
+        working-directory: "Property Appraiser Scripts"
+        env:
+          HEADLESS: 'true'
+          CHROME_PATH: '/usr/bin/google-chrome-stable'
+          GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
+        run: node leePA_10.mjs
+
+  Lee_PA_11:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip xvfb libxi6 libxss1 libnss3 libatk-bridge2.0-0 libgtk-3-0
+          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
+
+      - name: Install dependencies (create lockfile fallback)
+        env:
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "package-lock.json found, running npm ci"
+            npm ci
+          else
+            echo "package-lock.json not found, generating lockfile then running npm ci"
+            npm install --package-lock-only
+            npm ci
+          fi
+
+      - name: Decode Service Account JSON
+        working-directory: "Property Appraiser Scripts"
+        run: base64 -d service-account_base64.txt > service-account.json
+
+      - name: Run Lee_11 Appraiser script
+        working-directory: "Property Appraiser Scripts"
+        env:
+          HEADLESS: 'true'
+          CHROME_PATH: '/usr/bin/google-chrome-stable'
+          GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
+        run: node leePA_11.mjs
+
+  Lee_PA_12:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip xvfb libxi6 libxss1 libnss3 libatk-bridge2.0-0 libgtk-3-0
+          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
+
+      - name: Install dependencies (create lockfile fallback)
+        env:
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "package-lock.json found, running npm ci"
+            npm ci
+          else
+            echo "package-lock.json not found, generating lockfile then running npm ci"
+            npm install --package-lock-only
+            npm ci
+          fi
+
+      - name: Decode Service Account JSON
+        working-directory: "Property Appraiser Scripts"
+        run: base64 -d service-account_base64.txt > service-account.json
+
+      - name: Run Lee_12 Appraiser script
+        working-directory: "Property Appraiser Scripts"
+        env:
+          HEADLESS: 'true'
+          CHROME_PATH: '/usr/bin/google-chrome-stable'
+          GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
+        run: node leePA_12.mjs
