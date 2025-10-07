@@ -6,6 +6,7 @@
 import path from 'path';
 import { fileURLToPath } from "url";
 import fs from 'fs';
+import os from 'os';
 import axios from 'axios';
 import https from 'https';
 import { google } from 'googleapis';
@@ -17,8 +18,8 @@ import chrome from 'selenium-webdriver/chrome.js';
 // -----------------------------
 const SHEET_ID = '1zvXxmncHa0MMggdgIWSFTtkoi5gyy6go-ozVea_4f54';
 const SHEET_NAME = 'Spec_Zipcode';
-const START_ROW = 3160;
-const END_ROW = 3271;
+const START_ROW = 5001;
+const END_ROW = 5500;
 const PAGE_LOAD_TIMEOUT_MS = 30000; // 30s page load
 const ELEMENT_TIMEOUT_MS = 30000; // 30s element waits (requested)
 const HEADLESS = String(process.env.HEADLESS || 'false').toLowerCase() === 'true';
@@ -223,36 +224,114 @@ async function scrollIntoView(driver, element) {
 // Page flows (with 30s element waits)
 // -----------------------------
 async function handleDetailedAccountByIframe(driver, rowIndex) {
-  console.log(`[Row ${rowIndex}] handleDetailedAccount: switching into iframe if present`);
+  console.log(`[Row ${rowIndex}] handleDetailedAccount: probing iframes for detail link`);
   try {
     const iframes = await driver.findElements(By.css('iframe'));
-    if (iframes.length > 0) {
-      await driver.switchTo().frame(iframes[0]);
-      console.log(`[Row ${rowIndex}] Switched to iframe (index 0)`);
-      await sleep(300);
-    } else {
-      console.log(`[Row ${rowIndex}] No iframe to switch into (unexpected in detailed path)`);
+    console.log(`[Row ${rowIndex}] Found ${iframes.length} iframe(s)`);
+
+    // Attempt to find a frame that contains a main/section or any anchor
+    let chosenFrame = null;
+    for (let idx = 0; idx < iframes.length; idx++) {
+      try {
+        await driver.switchTo().frame(iframes[idx]);
+        // fast check for a main/section or an anchor inside it
+        const hasMain = await exists(driver, By.css('main section, main, body > div > main, #content'), 700);
+        const hasAnyAnchor = await exists(driver, By.css('a'), 400);
+        await driver.switchTo().defaultContent();
+        if (hasMain || hasAnyAnchor) { chosenFrame = idx; break; }
+      } catch (e) {
+        console.warn(`[Row ${rowIndex}] probe iframe ${idx} error: ${e.message}`);
+        try { await driver.switchTo().defaultContent(); } catch {}
+      }
     }
-  } catch (e) {
-    console.warn(`[Row ${rowIndex}] iframe switch error: ${e.message}`);
-  }
 
-  const sectionXpath = By.xpath('/html/body/div[2]/main/section');
-  console.log(`[Row ${rowIndex}] Waiting for main section xpath (30s)`);
-  await driver.wait(until.elementLocated(sectionXpath), ELEMENT_TIMEOUT_MS);
-  const sectionEl = await driver.findElement(sectionXpath);
-  await scrollIntoView(driver, sectionEl);
-  console.log(`[Row ${rowIndex}] Scrolled to main section`);
+    // If none found, but there is at least one iframe, default to index 0
+    if (chosenFrame === null && iframes.length > 0) {
+      chosenFrame = 0;
+      console.log(`[Row ${rowIndex}] No obvious frame matched probes, defaulting to iframe index 0`);
+    }
 
-  const linkXpath = By.xpath('/html/body/div[2]/main/section/div[2]/div[2]/div[3]/div[3]/a');
-  console.log(`[Row ${rowIndex}] Looking for detail anchor xpath (30s)`);
-  if (await exists(driver, linkXpath, ELEMENT_TIMEOUT_MS)) {
-    const aEl = await driver.findElement(linkXpath);
-    await scrollIntoView(driver, aEl);
-    console.log(`[Row ${rowIndex}] Clicking detail anchor`);
-    await aEl.click();
-  } else {
+    // If no iframe found at all, still try to operate on the top-level document
+    if (chosenFrame !== null) {
+      await driver.switchTo().frame(iframes[chosenFrame]);
+      console.log(`[Row ${rowIndex}] Switched to iframe (index ${chosenFrame})`);
+    } else {
+      console.log(`[Row ${rowIndex}] No iframe present, operating on top-level document`);
+    }
+
+    // Short micro-settle; prefer tiny waits to long sleeps
+    await sleep(300);
+
+    // Candidate selectors (fast CSS first, then forgiving XPaths)
+    const candidates = [
+      By.xpath('/html/body/div[2]/main/section/div[2]/div[2]/div[3]/div[3]/a'),
+      By.css('a[role="button"], a.button, button a, button'),
+      By.xpath('//a[contains(translate(text(),"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"), "view")]'),
+      By.xpath('//a[contains(translate(text(),"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"), "details")]'),
+      By.xpath('//a[contains(translate(text(),"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"), "parcel")]'),
+      By.xpath('//a'), // last resort
+    ];
+
+    // Try each candidate selector quickly and click the first workable element
+    for (const sel of candidates) {
+      try {
+        if (!await exists(driver, sel, 1200)) continue;
+        const el = await driver.findElement(sel);
+        await scrollIntoView(driver, el);
+        try {
+          await el.click();
+          console.log(`[Row ${rowIndex}] Clicked detail anchor via selector ${sel}`);
+          await sleep(500);
+          return;
+        } catch (clickErr) {
+          console.warn(`[Row ${rowIndex}] Element.click failed for selector ${sel}: ${clickErr.message} — trying JS click`);
+          const clicked = await driver.executeScript(
+            `const el = arguments[0]; if(!el) return false; el.scrollIntoView({block:'center'}); el.click(); return true;`,
+            el
+          );
+          if (clicked) {
+            console.log(`[Row ${rowIndex}] Clicked detail anchor via JS fallback for selector ${sel}`);
+            await sleep(500);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn(`[Row ${rowIndex}] Selector ${sel} error: ${e.message}`);
+      }
+    }
+
+    // If nothing clicked, attempt to find the original specific xpath as a final check
+    try {
+      const originalXpath = By.xpath('../../div[2]/button');
+      if (await exists(driver, originalXpath, 800)) {
+        const aEl = await driver.findElement(originalXpath);
+        await scrollIntoView(driver, aEl);
+        await aEl.click();
+        console.log(`[Row ${rowIndex}] Clicked detail anchor via original XPath`);
+        await sleep(500);
+        return;
+      }
+    } catch (e) {
+      console.warn(`[Row ${rowIndex}] Original XPath attempt failed: ${e.message}`);
+    }
+
+    // Nothing worked: capture a small HTML sample for diagnostics then throw
+    try {
+      const sample = await driver.executeScript(
+        `const node = document.querySelector('main') || document.body; return node ? node.outerHTML.slice(0,1200) : '';`
+      );
+      console.warn(`[Row ${rowIndex}] No detail anchor found; HTML sample: ${sample.slice(0,800)}`);
+    } catch (e) {
+      console.warn(`[Row ${rowIndex}] Could not capture HTML sample: ${e.message}`);
+    }
+
     throw new Error('Detail anchor not found in detailed account flow');
+  } catch (err) {
+    // bubble up so caller can handle marking the status
+    console.error(`[Row ${rowIndex}] handleDetailedAccountByIframe error: ${err.stack || err.message}`);
+    throw err;
+  } finally {
+    try { await driver.switchTo().defaultContent(); } catch {}
   }
 }
 
