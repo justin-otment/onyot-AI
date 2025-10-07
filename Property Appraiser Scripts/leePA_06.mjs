@@ -173,22 +173,7 @@ async function launchDriver() {
 
   if (HEADLESS) options.addArguments('--headless=new', '--disable-gpu', '--window-size=1200,900');
   else options.addArguments('--start-maximized');
-
-  options.addArguments(
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--disable-blink-features=AutomationControlled',
-    '--no-first-run',
-    '--no-default-browser-check',
-    '--disable-extensions'
-  );
-
-  options.setUserPreferences({
-    'profile.default_content_setting_values': { images: 2 },
-    'profile.managed_default_content_settings': { images: 2 }
-  });
-  options.addArguments('--blink-settings=imagesEnabled=false');
+  options.addArguments('--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled');
 
   // create a unique temp profile dir per process to avoid "user data dir already in use"
   const tmpBase = process.env.CHROME_TMP_DIR || os.tmpdir();
