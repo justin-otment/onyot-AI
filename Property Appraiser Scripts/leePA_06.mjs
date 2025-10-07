@@ -167,21 +167,15 @@ async function dismissPopupModalIfPresent(driver, rowIndex, timeout = 3000) {
   }
 }
 
+// -----------------------------
+// Selenium launcher
+// -----------------------------
 async function launchDriver() {
   console.log('[Browser] Launching Chrome driver, headless:', HEADLESS);
   const options = new chrome.Options();
-
   if (HEADLESS) options.addArguments('--headless=new', '--disable-gpu', '--window-size=1200,900');
   else options.addArguments('--start-maximized');
   options.addArguments('--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled');
-
-  // create a unique temp profile dir per process to avoid "user data dir already in use"
-  const tmpBase = process.env.CHROME_TMP_DIR || os.tmpdir();
-  const profileName = `selenium_profile_${process.pid}_${Date.now()}`;
-  const profileDir = path.join(tmpBase, profileName);
-  console.log('[Browser] Will use profile dir:', profileDir);
-  try { fs.mkdirSync(profileDir, { recursive: true }); } catch (e) { console.warn('[Browser] Failed creating profileDir:', e.message); }
-  options.addArguments(`--user-data-dir=${profileDir}`);
 
   let chromeBinary = CHROME_PATH;
   if (!chromeBinary) {
@@ -199,7 +193,6 @@ async function launchDriver() {
         chromeBinary = '/usr/bin/google-chrome';
     }
   }
-
   if (chromeBinary && fs.existsSync(chromeBinary)) {
     options.setChromeBinaryPath(chromeBinary);
     console.log(`[Browser] Using Chrome binary: ${chromeBinary}`);
@@ -208,8 +201,6 @@ async function launchDriver() {
   }
 
   const driver = await new Builder().forBrowser('chrome').setChromeOptions(options).build();
-  driver._seleniumProfileDir = profileDir; // attach for cleanup
-
   await driver.manage().setTimeouts({ implicit: 0, pageLoad: PAGE_LOAD_TIMEOUT_MS, script: 60000 });
   if (HEADLESS) await driver.manage().window().setRect({ width: 1200, height: 900, x: 0, y: 0 });
   console.log('[Browser] Chrome driver launched');
@@ -623,7 +614,15 @@ async function extractFromDetail(driver, sheets, rowIndexZeroBased, ranges) {
   console.log(`[Row ${row}] extractFromDetail: done`);
 }
 
+// -----------------------------
+// Updated fetchDataAndUpdateSheet
+// - Does not pre-write empty columns
+// - Launches browser, runs existing extraction flows
+// - Ensures all per-row A1 ranges are defined before use
+// - Writes per-row with robust try/catch and compact logs
+// -----------------------------
 async function fetchDataAndUpdateSheet() {
+  // define once, before processing rows
   const ranges = {
     dorOwnerPrefix: `${SHEET_NAME}!F`,
     saleDatePrefix: `${SHEET_NAME}!G`,
@@ -632,186 +631,146 @@ async function fetchDataAndUpdateSheet() {
     extraFieldPrefix: `${SHEET_NAME}!J`,
     statusPrefix: `${SHEET_NAME}!M`,
   };
-
   console.log('[Main] Starting fetchDataAndUpdateSheet');
   const sheets = await getSheetsClient();
-  console.log('[Sheets] Fetching addresses, urls and existing status column from sheet');
+  console.log('[Sheets] Fetching addresses and target URLs from sheet');
 
   const addressesRange = `${SHEET_NAME}!A${START_ROW}:A${END_ROW}`;
   const urlsRange = `${SHEET_NAME}!L${START_ROW}:L${END_ROW}`;
-  const statusRange = `${SHEET_NAME}!M${START_ROW}:M${END_ROW}`;
 
-  const [addressesRes, urlsRes, statusRes] = await Promise.all([
+  const [addressesRes, urlsRes] = await Promise.all([
     sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: addressesRange }),
     sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: urlsRange }),
-    sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: statusRange }),
   ]);
 
   const addresses = (addressesRes.data.values || []).map(r => (r[0] || '').trim());
   const urls = (urlsRes.data.values || []).map(r => (r[0] || '').trim());
-  const statuses = (statusRes.data.values || []).map(r => (r[0] || '').toString().trim());
 
-  console.log(`[Init] Fetched ${addresses.length} addresses, ${urls.length} urls, ${statuses.length} status cells.`);
+  console.log(`[Init] Fetched ${addresses.length} addresses and ${urls.length} urls.`);
 
   const driver = await launchDriver();
-  const writeBuffer = []; // {range, values}
-
-  function bufferWrite(range, values) { writeBuffer.push({ range, values }); }
-
-  async function flushWrites() {
-    if (writeBuffer.length === 0) return;
-    const data = writeBuffer.map(w => ({ range: w.range, values: w.values }));
-    try {
-      await sheets.spreadsheets.values.batchUpdate({
-        spreadsheetId: SHEET_ID,
-        requestBody: { valueInputOption: 'USER_ENTERED', data },
-      });
-      console.log(`[Sheets] Flushed ${data.length} batched writes`);
-    } catch (e) {
-      console.warn('[Sheets] Batch write failed:', e.message);
-      // fallback: try per-item writes
-      for (const w of writeBuffer) {
-        try {
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SHEET_ID,
-            range: w.range,
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: w.values },
-          });
-        } catch (e2) { console.warn('[Sheets] Fallback single write failed:', e2.message); }
-      }
-    } finally { writeBuffer.length = 0; }
-  }
 
   try {
-    const rowsToProcess = Math.max(addresses.length, urls.length, statuses.length);
-    // flush interval tuned to reduce API calls; adjust to taste
-    const FLUSH_INTERVAL = 25;
-    let pendingWrites = 0;
-
+    const rowsToProcess = Math.max(addresses.length, urls.length);
     for (let i = 0; i < rowsToProcess; i++) {
-      const sheetRow = START_ROW + i;
+      const rowIndex = START_ROW + i;
       const targetUrl = urls[i] || '';
       const targetAddress = addresses[i] || '';
-      const existingStatus = (statuses[i] || '').trim();
 
-      console.log(`\n[Row ${sheetRow}] === START ===`);
-
-      if (existingStatus) {
-        console.log(`[Row ${sheetRow}] Skipping because status column (M) already has value: "${existingStatus}"`);
-        console.log(`[Row ${sheetRow}] === END ===\n`);
-        continue;
-      }
-
-      if (!targetUrl) { console.log(`[Row ${sheetRow}] No URL found in sheet column L; skipping`); console.log(`[Row ${sheetRow}] === END ===\n`); continue; }
-      console.log(`[Row ${sheetRow}] Navigating to URL: ${targetUrl}`);
+      console.log(`\n[Row ${rowIndex}] === START ===`);
+      if (!targetUrl) { console.log(`[Row ${rowIndex}] No URL found in sheet column K; skipping`); console.log(`[Row ${rowIndex}] === END ===\n`); continue; }
+      console.log(`[Row ${rowIndex}] Navigating to URL: ${targetUrl}`);
 
       try {
+        // navigate with timeout
         try {
           await Promise.race([
             driver.get(targetUrl),
             timeoutPromise(PAGE_LOAD_TIMEOUT_MS, `Page load timeout after ${PAGE_LOAD_TIMEOUT_MS}ms`)
           ]);
-          console.log(`[Row ${sheetRow}] driver.get completed within ${PAGE_LOAD_TIMEOUT_MS}ms`);
+          console.log(`[Row ${rowIndex}] driver.get completed within ${PAGE_LOAD_TIMEOUT_MS}ms`);
         } catch (navErr) {
-          console.warn(`[Row ${sheetRow}] Navigation warning: ${navErr.message}`);
-          try { await driver.executeScript('if(window.stop) window.stop();'); console.log(`[Row ${sheetRow}] Invoked window.stop()`); } catch (e) { console.warn(`[Row ${sheetRow}] window.stop() failed: ${e.message}`); }
+          console.warn(`[Row ${rowIndex}] Navigation warning: ${navErr.message}`);
+          try { await driver.executeScript('if(window.stop) window.stop();'); console.log(`[Row ${rowIndex}] Invoked window.stop()`); } catch (e) { console.warn(`[Row ${rowIndex}] window.stop() failed: ${e.message}`); }
         }
 
-        // prefer small targeted wait; fallback to short sleep
-        try {
-          await driver.wait(until.elementLocated(By.css('body')), 2000);
-        } catch { await sleep(800); }
+        console.log(`[Row ${rowIndex}] Waiting briefly for DOM settlement`);
+        await sleep(15000);
 
+        // detect iframes and choose flow
         const iframes = await driver.findElements(By.css('iframe'));
         if (iframes.length > 0) {
-          console.log(`[Row ${sheetRow}] Iframe(s) detected (${iframes.length}) -> treating as Detailed account`);
+          console.log(`[Row ${rowIndex}] Iframe(s) detected (${iframes.length}) -> treating as Detailed account`);
           try {
-            await handleDetailedAccountByIframe(driver, sheetRow);
+            await handleDetailedAccountByIframe(driver, rowIndex);
             const handles = await driver.getAllWindowHandles();
             if (handles.length > 1) {
-              console.log(`[Row ${sheetRow}] Switching to newly opened tab for extraction`);
+              console.log(`[Row ${rowIndex}] Switching to newly opened tab for extraction`);
               await driver.switchTo().window(handles[handles.length - 1]);
-              await sleep(400);
-              await extractFromDetail(driver, sheets, i, ranges);
-              try { await driver.close(); console.log(`[Row ${sheetRow}] Closed detail tab`); } catch {}
+              await sleep(500);
+              await extractFromDetail(driver, sheets, i, ranges); // extractFromDetail expects zero-based index
+              try { await driver.close(); console.log(`[Row ${rowIndex}] Closed detail tab`); } catch {}
               await driver.switchTo().window(handles[0]);
             } else {
-              console.log(`[Row ${sheetRow}] No new tab opened; extracting on current page`);
+              console.log(`[Row ${rowIndex}] No new tab opened; extracting on current page`);
               await extractFromDetail(driver, sheets, i, ranges);
             }
-            // writer from extractFromDetail will have updated the sheet; mark processed if not set
-            bufferWrite(`${ranges.statusPrefix}${sheetRow}`, [['processed']]);
-            pendingWrites++;
           } catch (e) {
-            console.error(`[Row ${sheetRow}] Detailed flow error: ${e.stack || e.message}`);
-            bufferWrite(`${ranges.statusPrefix}${sheetRow}`, [[`error: ${String(e).slice(0,200)}`]]);
-            pendingWrites++;
+            console.error(`[Row ${rowIndex}] Detailed flow error: ${e.stack || e.message}`);
+            try { await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${statusPrefix}${rowIndex}`, valueInputOption: 'RAW', requestBody: { values: [[`error: ${String(e).slice(0,200)}`]] } }); } catch {}
           }
         } else {
-          console.log(`[Row ${sheetRow}] No iframe detected -> treating as Results list`);
+          console.log(`[Row ${rowIndex}] No iframe detected -> treating as Results list`);
           try {
-            const result = await handleResultsAndMatch(driver, targetAddress, sheetRow);
+            const result = await handleResultsAndMatch(driver, targetAddress, rowIndex);
             if (result && result.matched) {
-              console.log(`[Row ${sheetRow}] Match clicked; handling post-click extraction`);
-              await sleep(600); // allow quick settlement
-              const postIframes = await driver.findElements(By.css('iframe'));
-              if (postIframes.length > 0) {
+              console.log(`[Row ${rowIndex}] Match clicked; handling post-click extraction`);
+              await sleep(10000);
+              const handles = await driver.findElements(By.css('iframe'));
+              if (handles.length > 0) {
+                console.log(`[Row ${rowIndex}] Iframe(s) detected (${iframes.length}) -> treating as Detailed account`);
                 try {
-                  await handleDetailedAccountByIframe(driver, sheetRow);
+                  await handleDetailedAccountByIframe(driver, rowIndex);
                   const handles = await driver.getAllWindowHandles();
                   if (handles.length > 1) {
-                    console.log(`[Row ${sheetRow}] Switching to newly opened tab for extraction`);
+                    console.log(`[Row ${rowIndex}] Switching to newly opened tab for extraction`);
                     await driver.switchTo().window(handles[handles.length - 1]);
-                    await sleep(400);
-                    await extractFromDetail(driver, sheets, i, ranges);
-                    try { await driver.close(); console.log(`[Row ${sheetRow}] Closed detail tab`); } catch {}
+                    await sleep(500);
+                    await extractFromDetail(driver, sheets, i, ranges); // extractFromDetail expects zero-based index
+                    try { await driver.close(); console.log(`[Row ${rowIndex}] Closed detail tab`); } catch {}
                     await driver.switchTo().window(handles[0]);
                   } else {
-                    console.log(`[Row ${sheetRow}] No new tab opened; extracting on current page`);
+                    console.log(`[Row ${rowIndex}] No new tab opened; extracting on current page`);
                     await extractFromDetail(driver, sheets, i, ranges);
                   }
-                  bufferWrite(`${ranges.statusPrefix}${sheetRow}`, [['processed']]);
-                  pendingWrites++;
                 } catch (e) {
-                  console.error(`[Row ${sheetRow}] Detailed flow error: ${e.stack || e.message}`);
-                  bufferWrite(`${ranges.statusPrefix}${sheetRow}`, [[`error: ${String(e).slice(0,200)}`]]);
-                  pendingWrites++;
+                  console.error(`[Row ${rowIndex}] Detailed flow error: ${e.stack || e.message}`);
+                  try { await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${statusPrefix}${rowIndex}`, valueInputOption: 'RAW', requestBody: { values: [[`error: ${String(e).slice(0,200)}`]] } }); } catch {}
                 }
-              } else {
-                // matched but no iframe after click; mark processed
-                bufferWrite(`${ranges.statusPrefix}${sheetRow}`, [['processed']]);
-                pendingWrites++;
               }
             } else {
-              console.log(`[Row ${sheetRow}] No matched candidate found in results`);
+              console.log(`[Row ${rowIndex}] No matched candidate found in results`);
+              // Replace the problematic no-results block with this (inside your results branch)
               const noResultsXpath = By.xpath('//*[@id="index-search"]/div[1]/section/div[1]/div/div/div/div/div/p');
-              if (await exists(driver, noResultsXpath, 1200)) {
+              if (await exists(driver, noResultsXpath, 2000)) {
                 const txt = (await getTextSafe(driver, noResultsXpath)).toLowerCase();
                 if (txt.includes('no result') || txt.includes('no results') || txt.includes('nothing found')) {
-                  console.log(`[Row ${sheetRow}] Explicit no-results text found: "${txt}" -> marking no results`);
-                  bufferWrite(`${ranges.statusPrefix}${sheetRow}`, [['no results']]);
+                  console.log(`[Row ${rowIndex}] Explicit no-results text found: "${txt}" -> marking no results`);
+                  await sheets.spreadsheets.values.update({
+                    spreadsheetId: SHEET_ID,
+                    range: `${ranges.statusPrefix}${rowIndex}`,
+                    valueInputOption: 'RAW',
+                    requestBody: { values: [['no results']] },
+                  });
                 } else {
-                  console.log(`[Row ${sheetRow}] Results present but no match -> marking no match`);
-                  bufferWrite(`${ranges.statusPrefix}${sheetRow}`, [['no match']]);
+                  console.log(`[Row ${rowIndex}] Results present but no match -> marking no match`);
+                  await sheets.spreadsheets.values.update({
+                    spreadsheetId: SHEET_ID,
+                    range: `${ranges.statusPrefix}${rowIndex}`,
+                    valueInputOption: 'RAW',
+                    requestBody: { values: [['no match']] },
+                  });
                 }
               } else {
-                console.log(`[Row ${sheetRow}] No explicit no-results element; marking no match`);
-                bufferWrite(`${ranges.statusPrefix}${sheetRow}`, [['no match']]);
+                console.log(`[Row ${rowIndex}] No explicit no-results element; marking no match`);
+                await sheets.spreadsheets.values.update({
+                  spreadsheetId: SHEET_ID,
+                  range: `${ranges.statusPrefix}${rowIndex}`,
+                  valueInputOption: 'RAW',
+                  requestBody: { values: [['no match']] },
+                });
               }
-              pendingWrites++;
             }
           } catch (e) {
-            console.error(`[Row ${sheetRow}] Results flow error: ${e.stack || e.message}`);
-            bufferWrite(`${ranges.statusPrefix}${sheetRow}`, [[`error: ${String(e).slice(0,200)}`]]);
-            pendingWrites++;
+            console.error(`[Row ${rowIndex}] Results flow error: ${e.stack || e.message}`);
+            try { await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${statusPrefix}${rowIndex}`, valueInputOption: 'RAW', requestBody: { values: [[`error: ${String(e).slice(0,200)}`]] } }); } catch {}
           }
         }
       } catch (err) {
-        console.error(`[Row ${sheetRow}] Navigation/processing error: ${err.stack || err.message}`);
-        bufferWrite(`${ranges.statusPrefix}${sheetRow}`, [[`error: ${String(err).slice(0,200)}`]]);
-        pendingWrites++;
+        console.error(`[Row ${rowIndex}] Navigation/processing error: ${err.stack || err.message}`);
+        try { await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${statusPrefix}${rowIndex}`, valueInputOption: 'RAW', requestBody: { values: [[`error: ${String(err).slice(0,200)}`]] } }); } catch {}
       } finally {
+        // ensure no dangling detail tabs
         try {
           const handles = await driver.getAllWindowHandles();
           if (handles.length > 1) {
@@ -819,34 +778,15 @@ async function fetchDataAndUpdateSheet() {
             await driver.switchTo().window(handles[0]);
           }
         } catch (e) {
-          console.warn(`[Row ${sheetRow}] Tab cleanup warning: ${e.message}`);
+          console.warn(`[Row ${rowIndex}] Tab cleanup warning: ${e.message}`);
         }
       }
 
-      console.log(`[Row ${sheetRow}] === END ===\n`);
-
-      // periodic flush to minimize API calls and keep memory bounded
-      if (pendingWrites >= FLUSH_INTERVAL) {
-        await flushWrites();
-        pendingWrites = 0;
-      }
-
-      await sleep(200); // small polite pause between rows
+      console.log(`[Row ${rowIndex}] === END ===\n`);
+      await sleep(2000);
     }
-
-    // flush any remaining writes
-    await flushWrites();
   } finally {
-    await safeQuit(driver);
-  }
-}
-
-async function safeQuit(driver) {
-  if (!driver) return;
-  const profileDir = driver._seleniumProfileDir;
-  try { await driver.quit(); console.log('[Browser] Driver quit'); } catch (e) { console.warn('[Browser] Driver quit error:', e.message); }
-  if (profileDir) {
-    try { fs.rmSync(profileDir, { recursive: true, force: true }); console.log('[Browser] Removed profile dir', profileDir); } catch (e) { console.warn('[Browser] Failed removing profile dir:', e.message); }
+    try { await driver.quit(); console.log('[Browser] Driver quit'); } catch (e) { console.warn('[Browser] Driver quit error:', e.message); }
   }
 }
 
