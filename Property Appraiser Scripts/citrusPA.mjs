@@ -1,3 +1,4 @@
+
 // leePA.mjs
 // ESM, Selenium, reads addresses from SHEET_NAME!B2:B and target URLs from SHEET_NAME!K2:K
 // Classification: iframe present -> detailed account, otherwise results list
@@ -6,7 +7,7 @@
 import path from 'path';
 import { fileURLToPath } from "url";
 import fs from 'fs';
-import os from 'os'; 
+import os from 'os';
 import axios from 'axios';
 import https from 'https';
 import { google } from 'googleapis';
@@ -21,7 +22,7 @@ const SHEET_NAME = 'Citrus Springs';
 const START_ROW = 14;
 const END_ROW = 29273;
 const PAGE_LOAD_TIMEOUT_MS = 30000; // 30s page load
-const ELEMENT_TIMEOUT_MS = 5000; // 30s element waits (requested)
+const ELEMENT_TIMEOUT_MS = 10000; // 30s element waits (requested)
 const HEADLESS = String(process.env.HEADLESS || 'false').toLowerCase() === 'true';
 const CHROME_PATH = process.env.CHROME_PATH || null;
 const __filename = fileURLToPath(import.meta.url);
@@ -167,9 +168,6 @@ async function dismissPopupModalIfPresent(driver, rowIndex, timeout = 3000) {
   }
 }
 
-// -----------------------------
-// Selenium launcher
-// -----------------------------
 async function launchDriver({ headless = HEADLESS } = {}) {
   console.log('[Browser] Launching Chrome driver, headless:', headless);
 
@@ -302,7 +300,7 @@ async function handleDetailedAccountByIframe(driver, rowIndex) {
       By.xpath('/html/body/div[2]/main/section/div[2]/div[2]/div[3]/div[2]/a'),
       By.css('a[role="button"], a.button, button a, button'),
       By.xpath('//a[contains(translate(text(),"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"), "view")]'),
-      By.xpath('//a[contains(translate(text(),"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"), "details")]'),
+      By.xpath('//a[contains(translate(text(),"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"), "property")]'),
       By.xpath('//a[contains(translate(text(),"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"), "appraiser")]'),
       By.xpath('//a'), // last resort
     ];
@@ -500,57 +498,57 @@ async function extractFromDetail(driver, sheets, rowIndexZeroBased, ranges) {
     console.warn(`[Row ${row}] dismissPopupModalIfPresent error: ${e.message}`);
   }
 
-  // 1. Owner + Mailing Info (separate selectors)
-try {
-  const ownerSel = By.css('#datalet_header_row > td > table > tbody > tr.DataletHeaderBottom > td:nth-child(1)');
-  const mailingSel = By.css('#datalet_header_row > td > table > tbody > tr.DataletHeaderBottom > td:nth-child(2)');
-
-  console.log(`[Row ${row}] Waiting for owner selector`); 
-  await driver.wait(until.elementLocated(ownerSel), ELEMENT_TIMEOUT_MS);
-  const ownerEl = await driver.findElement(ownerSel);
-  await scrollIntoView(driver, ownerEl);
-  const ownerRaw = (await ownerEl.getText()).trim();
-  const ownerLines = ownerRaw.split('\n').map(s => s.trim()).filter(Boolean);
-  const dorOwner = ownerLines.join(' + '); // adjust joining logic if needed
-  console.log(`[Row ${row}] Owner text:`, ownerLines.slice(0,5).join(' | '));
-
-  console.log(`[Row ${row}] Waiting for mailing selector`);
-  await driver.wait(until.elementLocated(mailingSel), ELEMENT_TIMEOUT_MS);
-  const mailingEl = await driver.findElement(mailingSel);
-  await scrollIntoView(driver, mailingEl);
-  const mailingRaw = (await mailingEl.getText()).trim();
-  const mailingLines = mailingRaw.split('\n').map(s => s.trim()).filter(Boolean);
-  const mailingAddress = mailingLines.join(' '); // combine lines into single-line address
-  console.log(`[Row ${row}] Mailing address preview:`, mailingLines.slice(0,5).join(' | '));
-
-  // write dorOwner
+  // 1. Owner + Mailing Info
   try {
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SHEET_ID,
-      range: dorOwnerA1,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [[dorOwner]] },
-    });
-    console.log(`[Row ${row}] Wrote dorOwner to ${dorOwnerA1}`);
+    const ownerSel = By.css('#datalet_header_row > td > table > tbody > tr.DataletHeaderBottom > td:nth-child(1)');
+    const mailingSel = By.css('#datalet_header_row > td > table > tbody > tr.DataletHeaderBottom > td:nth-child(2)');
+  
+    console.log(`[Row ${row}] Waiting for owner selector`); 
+    await driver.wait(until.elementLocated(ownerSel), ELEMENT_TIMEOUT_MS);
+    const ownerEl = await driver.findElement(ownerSel);
+    await scrollIntoView(driver, ownerEl);
+    const ownerRaw = (await ownerEl.getText()).trim();
+    const ownerLines = ownerRaw.split('\n').map(s => s.trim()).filter(Boolean);
+    const dorOwner = ownerLines.join(' + '); // adjust joining logic if needed
+    console.log(`[Row ${row}] Owner text:`, ownerLines.slice(0,5).join(' | '));
+  
+    console.log(`[Row ${row}] Waiting for mailing selector`);
+    await driver.wait(until.elementLocated(mailingSel), ELEMENT_TIMEOUT_MS);
+    const mailingEl = await driver.findElement(mailingSel);
+    await scrollIntoView(driver, mailingEl);
+    const mailingRaw = (await mailingEl.getText()).trim();
+    const mailingLines = mailingRaw.split('\n').map(s => s.trim()).filter(Boolean);
+    const mailingAddress = mailingLines.join(' '); // combine lines into single-line address
+    console.log(`[Row ${row}] Mailing address preview:`, mailingLines.slice(0,5).join(' | '));
+  
+    // write dorOwner
+    try {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: dorOwnerA1,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [[dorOwner]] },
+      });
+      console.log(`[Row ${row}] Wrote dorOwner to ${dorOwnerA1}`);
+    } catch (e) {
+      console.error(`[Row ${row}] Failed writing dorOwner: ${e.message}`);
+    }
+  
+    // write mailingAddress
+    try {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: mailingAddrA1,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [[mailingAddress]] },
+      });
+      console.log(`[Row ${row}] Wrote mailingAddress to ${mailingAddrA1}`);
+    } catch (e) {
+      console.error(`[Row ${row}] Failed writing mailingAddress: ${e.message}`);
+    }
   } catch (e) {
-    console.error(`[Row ${row}] Failed writing dorOwner: ${e.message}`);
+    console.warn(`[Row ${row}] Owner/mailing extraction failed: ${e.message}`);
   }
-
-  // write mailingAddress
-  try {
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SHEET_ID,
-      range: mailingAddrA1,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [[mailingAddress]] },
-    });
-    console.log(`[Row ${row}] Wrote mailingAddress to ${mailingAddrA1}`);
-  } catch (e) {
-    console.error(`[Row ${row}] Failed writing mailingAddress: ${e.message}`);
-  }
-} catch (e) {
-  console.warn(`[Row ${row}] Owner/mailing extraction failed: ${e.message}`);
-}
 
   // 2. Extra field (optional)
   try {
@@ -659,6 +657,7 @@ try {
   console.log(`[Row ${row}] extractFromDetail: done`);
 }
 
+
 async function fetchDataAndUpdateSheet() {
   // define once, before processing rows
   const ranges = {
@@ -674,7 +673,7 @@ async function fetchDataAndUpdateSheet() {
   const sheets = await getSheetsClient();
   console.log('[Sheets] Fetching addresses, target URLs and statuses from sheet');
 
-  const addressesRange = `${SHEET_NAME}!A${START_ROW}:A${END_ROW}`;
+  const addressesRange = `${SHEET_NAME}!B${START_ROW}:B${END_ROW}`;
   const urlsRange = `${SHEET_NAME}!L${START_ROW}:L${END_ROW}`;
   const statusesRange = `${SHEET_NAME}!M${START_ROW}:M${END_ROW}`;
 
@@ -878,7 +877,7 @@ async function fetchDataAndUpdateSheet() {
 // -----------------------------
 (async () => {
   try {
-    console.log('[Entrypoint] Starting citrusPA run');
+    console.log('[Entrypoint] Starting leePA run');
     try { await makeRequestWithRetries('https://county-taxes.net', 2, 1000); } catch (e) { console.warn('[Entrypoint] Reachability quick-check failed:', e.message); }
     await fetchDataAndUpdateSheet();
     console.log('[Entrypoint] Completed leePA run');
