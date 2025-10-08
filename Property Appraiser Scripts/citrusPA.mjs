@@ -1,4 +1,3 @@
-
 // leePA.mjs
 // ESM, Selenium, reads addresses from SHEET_NAME!B2:B and target URLs from SHEET_NAME!K2:K
 // Classification: iframe present -> detailed account, otherwise results list
@@ -7,7 +6,6 @@
 import path from 'path';
 import { fileURLToPath } from "url";
 import fs from 'fs';
-import os from 'os';
 import axios from 'axios';
 import https from 'https';
 import { google } from 'googleapis';
@@ -168,42 +166,16 @@ async function dismissPopupModalIfPresent(driver, rowIndex, timeout = 3000) {
   }
 }
 
-async function launchDriver({ headless = HEADLESS } = {}) {
-  console.log('[Browser] Launching Chrome driver, headless:', headless);
-
-  // create unique temp profile directory to avoid "user data directory is already in use"
-  const tmpBase = os.tmpdir();
-  const profileDir = fs.mkdtempSync(path.join(tmpBase, 'chrome-profile-'));
-  console.log('[Browser] Created temp profile dir:', profileDir);
-
+// -----------------------------
+// Selenium launcher
+// -----------------------------
+async function launchDriver() {
+  console.log('[Browser] Launching Chrome driver, headless:', HEADLESS);
   const options = new chrome.Options();
+  if (HEADLESS) options.addArguments('--disable-gpu', '--window-size=1200,900');
+  else options.addArguments('--start-maximized');
+  options.addArguments('--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled');
 
-  // always use an isolated profile
-  options.addArguments(`--user-data-dir=${profileDir}`);
-
-  if (headless) {
-    // prefer the newer headless mode when available
-    options.addArguments('--headless=new', '--disable-gpu', '--window-size=1200,900');
-  } else {
-    options.addArguments('--start-maximized', '--window-size=1200,900');
-  }
-
-  // stability flags for containers and CI
-  options.addArguments(
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--disable-blink-features=AutomationControlled',
-    '--disable-background-networking',
-    '--disable-sync',
-    '--disable-translate',
-    '--disable-extensions',
-    '--disable-popup-blocking',
-    '--no-first-run',
-    '--no-default-browser-check'
-  );
-
-  // attempt to use provided binary when available
   let chromeBinary = CHROME_PATH;
   if (!chromeBinary) {
     switch (process.platform) {
@@ -217,10 +189,9 @@ async function launchDriver({ headless = HEADLESS } = {}) {
         chromeBinary = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
         break;
       default:
-        chromeBinary = '/usr/bin/google-chrome-stable';
+        chromeBinary = '/usr/bin/google-chrome';
     }
   }
-
   if (chromeBinary && fs.existsSync(chromeBinary)) {
     options.setChromeBinaryPath(chromeBinary);
     console.log(`[Browser] Using Chrome binary: ${chromeBinary}`);
@@ -229,15 +200,10 @@ async function launchDriver({ headless = HEADLESS } = {}) {
   }
 
   const driver = await new Builder().forBrowser('chrome').setChromeOptions(options).build();
-
-  // timeouts and viewport
   await driver.manage().setTimeouts({ implicit: 0, pageLoad: PAGE_LOAD_TIMEOUT_MS, script: 60000 });
-  if (headless) {
-    try { await driver.manage().window().setRect({ width: 1200, height: 900, x: 0, y: 0 }); } catch {}
-  }
-
+  if (HEADLESS) await driver.manage().window().setRect({ width: 1200, height: 900, x: 0, y: 0 });
   console.log('[Browser] Chrome driver launched');
-  return { driver, profileDir };
+  return driver;
 }
 
 // -----------------------------
@@ -657,7 +623,13 @@ async function extractFromDetail(driver, sheets, rowIndexZeroBased, ranges) {
   console.log(`[Row ${row}] extractFromDetail: done`);
 }
 
-
+// -----------------------------
+// Updated fetchDataAndUpdateSheet
+// - Does not pre-write empty columns
+// - Launches browser, runs existing extraction flows
+// - Ensures all per-row A1 ranges are defined before use
+// - Writes per-row with robust try/catch and compact logs
+// -----------------------------
 async function fetchDataAndUpdateSheet() {
   // define once, before processing rows
   const ranges = {
@@ -871,7 +843,6 @@ async function fetchDataAndUpdateSheet() {
     try { await driver.quit(); console.log('[Browser] Driver quit'); } catch (e) { console.warn('[Browser] Driver quit error:', e.message); }
   }
 }
-
 // -----------------------------
 // Entrypoint
 // -----------------------------
