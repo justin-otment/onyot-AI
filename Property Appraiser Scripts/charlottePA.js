@@ -273,37 +273,48 @@ async function processRow(url, i, sheets) {
 async function fetchDataAndUpdateSheet() {
   const sheets = await authenticateGoogleSheets();
 
-  const START_ROW = 18204;
+  const START_ROW = 11119;
   const grid = await getSheetGridProperties(sheets, SHEET_ID, SHEET_NAME);
   const maxRows = grid.rowCount;
 
-  const safeRange = `${SHEET_NAME}!A${START_ROW}:A${maxRows}`;
-  console.log(`Using safe range: ${safeRange}`);
+  const safeRangeA = `${SHEET_NAME}!A${START_ROW}:A${maxRows}`;
+  const safeRangeG = `${SHEET_NAME}!G${START_ROW}:G${maxRows}`;
 
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SHEET_ID,
-    range: safeRange,
-  });
+  console.log(`Using safe ranges: ${safeRangeA} and ${safeRangeG}`);
 
-  const rows = res.data.values || [];
+  // read column A (urls) and column G (existing outputs) in two calls
+  const [resA, resG] = await Promise.all([
+    sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: safeRangeA }),
+    sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: safeRangeG }),
+  ]);
 
-  // optional: simple concurrency limiter for local/self-hosted runners
+  const rowsA = resA.data.values || []; // array of rows, each row is [url]
+  const rowsG = resG.data.values || []; // array of rows, each row is [gValue]
+
+  // concurrency limiter
   const CONCURRENCY = Number(process.env.SCRAPE_CONCURRENCY || 1);
 
   const queue = [];
-  for (let idx = 0; idx < rows.length; idx++) {
-    const url = rows[idx][0]?.trim();
+  for (let idx = 0; idx < rowsA.length; idx++) {
+    const url = rowsA[idx][0]?.trim();
+    const gValue = rowsG[idx]?.[0]; // may be undefined if row absent
+
     const rowIndex = START_ROW + idx;
 
     if (!url) {
-      console.log(`Skipping empty row ${rowIndex}`);
+      console.log(`Skipping empty URL at row ${rowIndex}`);
+      continue;
+    }
+
+    // Skip if column G for this row already has any non-empty value
+    if (typeof gValue !== "undefined" && String(gValue).trim() !== "") {
+      console.log(`Skipping row ${rowIndex} because column G already has a value: "${gValue}"`);
       continue;
     }
 
     queue.push({ url, rowIndex });
   }
 
-  // process sequentially or with small parallelism based on CONCURRENCY
   const workers = new Array(CONCURRENCY).fill(null).map(async () => {
     while (queue.length) {
       const job = queue.shift();
