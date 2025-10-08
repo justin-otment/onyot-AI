@@ -169,13 +169,42 @@ async function dismissPopupModalIfPresent(driver, rowIndex, timeout = 3000) {
 // -----------------------------
 // Selenium launcher
 // -----------------------------
-async function launchDriver() {
-  console.log('[Browser] Launching Chrome driver, headless:', HEADLESS);
-  const options = new chrome.Options();
-  if (HEADLESS) options.addArguments('--disable-gpu', '--window-size=1200,900');
-  else options.addArguments('--start-maximized');
-  options.addArguments('--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled');
+async function launchDriver({ headless = HEADLESS } = {}) {
+  console.log('[Browser] Launching Chrome driver, headless:', headless);
 
+  // create unique temp profile directory to avoid "user data directory is already in use"
+  const tmpBase = os.tmpdir();
+  const profileDir = fs.mkdtempSync(path.join(tmpBase, 'chrome-profile-'));
+  console.log('[Browser] Created temp profile dir:', profileDir);
+
+  const options = new chrome.Options();
+
+  // always use an isolated profile
+  options.addArguments(`--user-data-dir=${profileDir}`);
+
+  if (headless) {
+    // prefer the newer headless mode when available
+    options.addArguments('--headless=new', '--disable-gpu', '--window-size=1200,900');
+  } else {
+    options.addArguments('--start-maximized', '--window-size=1200,900');
+  }
+
+  // stability flags for containers and CI
+  options.addArguments(
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-blink-features=AutomationControlled',
+    '--disable-background-networking',
+    '--disable-sync',
+    '--disable-translate',
+    '--disable-extensions',
+    '--disable-popup-blocking',
+    '--no-first-run',
+    '--no-default-browser-check'
+  );
+
+  // attempt to use provided binary when available
   let chromeBinary = CHROME_PATH;
   if (!chromeBinary) {
     switch (process.platform) {
@@ -189,9 +218,10 @@ async function launchDriver() {
         chromeBinary = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
         break;
       default:
-        chromeBinary = '/usr/bin/google-chrome';
+        chromeBinary = '/usr/bin/google-chrome-stable';
     }
   }
+
   if (chromeBinary && fs.existsSync(chromeBinary)) {
     options.setChromeBinaryPath(chromeBinary);
     console.log(`[Browser] Using Chrome binary: ${chromeBinary}`);
@@ -200,10 +230,15 @@ async function launchDriver() {
   }
 
   const driver = await new Builder().forBrowser('chrome').setChromeOptions(options).build();
+
+  // timeouts and viewport
   await driver.manage().setTimeouts({ implicit: 0, pageLoad: PAGE_LOAD_TIMEOUT_MS, script: 60000 });
-  if (HEADLESS) await driver.manage().window().setRect({ width: 1200, height: 900, x: 0, y: 0 });
+  if (headless) {
+    try { await driver.manage().window().setRect({ width: 1200, height: 900, x: 0, y: 0 }); } catch {}
+  }
+
   console.log('[Browser] Chrome driver launched');
-  return driver;
+  return { driver, profileDir };
 }
 
 // -----------------------------
