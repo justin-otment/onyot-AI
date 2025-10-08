@@ -6,6 +6,8 @@
 import path from 'path';
 import { fileURLToPath } from "url";
 import fs from 'fs';
+import os from "os";
+import { randomUUID } from "crypto";
 import axios from 'axios';
 import https from 'https';
 import { google } from 'googleapis';
@@ -166,16 +168,29 @@ async function dismissPopupModalIfPresent(driver, rowIndex, timeout = 3000) {
   }
 }
 
-// -----------------------------
-// Selenium launcher
-// -----------------------------
 async function launchDriver() {
   console.log('[Browser] Launching Chrome driver, headless:', HEADLESS);
   const options = new chrome.Options();
-  if (HEADLESS) options.addArguments('--headless-new', '--disable-gpu', '--window-size=1200,900');
-  else options.addArguments('--start-maximized');
-  options.addArguments('--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled');
 
+  // Generate a unique temporary Chrome user data directory for each run
+  const userDataDir = path.join(os.tmpdir(), `chrome-user-data-${randomUUID()}`);
+  options.addArguments(`--user-data-dir=${userDataDir}`);
+
+  // Headless or normal mode setup
+  if (HEADLESS)
+    options.addArguments('--headless=new', '--disable-gpu', '--window-size=1200,900');
+  else
+    options.addArguments('--start-maximized');
+
+  // General stability flags for CI/CD environments
+  options.addArguments(
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-blink-features=AutomationControlled'
+  );
+
+  // Detect Chrome binary location
   let chromeBinary = CHROME_PATH;
   if (!chromeBinary) {
     switch (process.platform) {
@@ -189,9 +204,10 @@ async function launchDriver() {
         chromeBinary = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
         break;
       default:
-        chromeBinary = '/usr/bin/google-chrome';
+        chromeBinary = '/usr/bin/google-chrome-stable';
     }
   }
+
   if (chromeBinary && fs.existsSync(chromeBinary)) {
     options.setChromeBinaryPath(chromeBinary);
     console.log(`[Browser] Using Chrome binary: ${chromeBinary}`);
@@ -201,10 +217,25 @@ async function launchDriver() {
 
   const driver = await new Builder().forBrowser('chrome').setChromeOptions(options).build();
   await driver.manage().setTimeouts({ implicit: 0, pageLoad: PAGE_LOAD_TIMEOUT_MS, script: 60000 });
-  if (HEADLESS) await driver.manage().window().setRect({ width: 1200, height: 900, x: 0, y: 0 });
+
+  if (HEADLESS)
+    await driver.manage().window().setRect({ width: 1200, height: 900, x: 0, y: 0 });
+
   console.log('[Browser] Chrome driver launched');
+
+  // Attach cleanup hook to safely remove temp user-data dir after use
+  driver.cleanupUserDataDir = () => {
+    try {
+      fs.rmSync(userDataDir, { recursive: true, force: true });
+      console.log('[Browser] Cleaned up user-data-dir');
+    } catch (e) {
+      console.warn('[Browser] Failed to clean up user-data-dir:', e.message);
+    }
+  };
+
   return driver;
 }
+
 
 // -----------------------------
 // DOM helpers (use ELEMENT_TIMEOUT_MS)
@@ -840,9 +871,20 @@ async function fetchDataAndUpdateSheet() {
       await sleep(2000);
     }
   } finally {
-    try { await driver.quit(); console.log('[Browser] Driver quit'); } catch (e) { console.warn('[Browser] Driver quit error:', e.message); }
+    try {
+      await driver.quit();
+      console.log('[Browser] Driver quit');
+    } catch (e) {
+      console.warn('[Browser] Driver quit error:', e.message);
+    }
+  
+    // Perform cleanup if available
+    if (driver.cleanupUserDataDir) driver.cleanupUserDataDir();
   }
+
+  console.log('[Main] fetchDataAndUpdateSheet completed');
 }
+  
 // -----------------------------
 // Entrypoint
 // -----------------------------
