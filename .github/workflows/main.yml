@@ -466,7 +466,7 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
         run: node leePA_11.mjs
 
-  Lee_PA_12:
+  Charlotte_PA:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -500,7 +500,7 @@ jobs:
         working-directory: "Property Appraiser Scripts"
         run: base64 -d service-account_base64.txt > service-account.json
 
-      - name: Run Lee_12 Appraiser script
+      - name: Run Charlotte County Appraiser script
         working-directory: "Property Appraiser Scripts"
         env:
           HEADLESS: 'true'
