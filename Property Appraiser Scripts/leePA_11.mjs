@@ -1,4 +1,3 @@
-
 // leePA.mjs
 // ESM, Selenium, reads addresses from SHEET_NAME!B2:B and target URLs from SHEET_NAME!K2:K
 // Classification: iframe present -> detailed account, otherwise results list
@@ -19,8 +18,8 @@ import chrome from 'selenium-webdriver/chrome.js';
 // -----------------------------
 const SHEET_ID = '1zvXxmncHa0MMggdgIWSFTtkoi5gyy6go-ozVea_4f54';
 const SHEET_NAME = 'Spec_Zipcode';
-const START_ROW = 7501;
-const END_ROW = 8000;
+const START_ROW = 10881;
+const END_ROW = 11230;
 const PAGE_LOAD_TIMEOUT_MS = 30000; // 30s page load
 const ELEMENT_TIMEOUT_MS = 30000; // 30s element waits (requested)
 const HEADLESS = String(process.env.HEADLESS || 'false').toLowerCase() === 'true';
