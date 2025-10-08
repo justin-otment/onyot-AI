@@ -1,3 +1,4 @@
+
 name: Run Scrapers
 
 on:
@@ -45,7 +46,6 @@ jobs:
           CHROME_PATH: '/usr/bin/google-chrome-stable'
           GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
         run: node leePA.mjs
-
   Lee_PA_02:
     runs-on: ubuntu-latest
     steps:
@@ -89,7 +89,6 @@ jobs:
         run: node leePA_02.mjs
 
   Citrus_PA:
-    needs: [Lee_PA, Lee_PA_02]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -100,7 +99,7 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install Chrome
+      - name: Install Chrome and Chromedriver
         run: |
           sudo apt-get update
           sudo apt-get install -y wget unzip xvfb libxi6 libxss1 libnss3 libatk-bridge2.0-0 libgtk-3-0
@@ -125,11 +124,4 @@ jobs:
           HEADLESS: 'true'
           CHROME_PATH: '/usr/bin/google-chrome-stable'
           GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
-        run: |
-          node citrusPA.mjs
-
-      - name: Cleanup possible leftover profile dirs (best-effort)
-        if: always()
-        run: |
-          # remove stale selenium-profile-* dirs older than 1 hour (adjust as needed)
-          find /tmp -maxdepth 1 -type d -name "selenium-profile-*" -mmin +60 -exec rm -rf {} + || true
+        run: node citrusPA.mjs
