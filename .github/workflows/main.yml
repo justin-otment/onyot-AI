@@ -124,4 +124,4 @@ jobs:
           HEADLESS: 'true'
           CHROME_PATH: '/usr/bin/google-chrome-stable'
           GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
-        run: node corpTracer.js
+        run: node citrusPA.mjs
