@@ -88,7 +88,7 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
         run: node leePA_02.mjs
 
-  CorpTracer:
+  Citrus PA:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -118,7 +118,7 @@ jobs:
         working-directory: "Property Appraiser Scripts"
         run: base64 -d service-account_base64.txt > service-account.json
 
-      - name: Run Corp Tracer Palm Bay County script
+      - name: Run Citrus County Property Appraiser script
         working-directory: "Property Appraiser Scripts"
         env:
           HEADLESS: 'true'
