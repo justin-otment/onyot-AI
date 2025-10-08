@@ -167,10 +167,11 @@ async function dismissPopupModalIfPresent(driver, rowIndex, timeout = 3000) {
 }
 
 // -----------------------------
-// Selenium launcher
+// Selenium launcher (updated: uses a unique user-data-dir per launch and falls back to ephemeral profile)
 // -----------------------------
 async function launchDriver() {
   console.log('[Browser] Launching Chrome driver, headless:', HEADLESS);
+
   const options = new chrome.Options();
   if (HEADLESS) options.addArguments('--disable-gpu', '--window-size=1200,900');
   else options.addArguments('--start-maximized');
@@ -199,11 +200,76 @@ async function launchDriver() {
     console.warn(`[Browser] Chrome binary not found at ${chromeBinary}. Selenium Manager will attempt resolution.`);
   }
 
-  const driver = await new Builder().forBrowser('chrome').setChromeOptions(options).build();
-  await driver.manage().setTimeouts({ implicit: 0, pageLoad: PAGE_LOAD_TIMEOUT_MS, script: 60000 });
-  if (HEADLESS) await driver.manage().window().setRect({ width: 1200, height: 900, x: 0, y: 0 });
-  console.log('[Browser] Chrome driver launched');
-  return driver;
+  // Try to launch with a unique profile directory to avoid "profile already in use" errors.
+  // If that fails after a couple attempts, fall back to launching without --user-data-dir (ephemeral).
+  const baseArgs = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled'];
+  const maxAttempts = 3;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    // create a unique profile dir name (avoid adding extra deps)
+    const profileDir = path.join(os.tmpdir(), `selenium-profile-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
+    try {
+      // ensure directory exists
+      fs.mkdirSync(profileDir, { recursive: true });
+      // add user-data-dir argument for this attempt
+      const args = [...baseArgs, `--user-data-dir=${profileDir}`];
+      options.addArguments(...args);
+
+      const driver = await new Builder().forBrowser('chrome').setChromeOptions(options).build();
+      await driver.manage().setTimeouts({ implicit: 0, pageLoad: PAGE_LOAD_TIMEOUT_MS, script: 60000 });
+      if (HEADLESS) await driver.manage().window().setRect({ width: 1200, height: 900, x: 0, y: 0 });
+
+      // attach profileDir so caller can cleanup later
+      try { driver._profileDir = profileDir; } catch {}
+
+      console.log('[Browser] Chrome driver launched with profileDir:', profileDir);
+      return driver;
+    } catch (err) {
+      lastError = err;
+      const msg = String(err && (err.message || err));
+      console.warn(`[Browser] launch attempt ${attempt} failed: ${msg}`);
+
+      // cleanup attempted profile dir
+      try { fs.rmSync(profileDir, { recursive: true, force: true }); } catch (e) {}
+
+      // retry on common profile-lock errors
+      if (msg.includes('user data directory is already in use') || msg.includes('Profile locked') || msg.includes('The process cannot access the file')) {
+        if (attempt < maxAttempts) {
+          console.log('[Browser] Retrying with a fresh profileDir...');
+          // small backoff
+          await sleep(200 + attempt * 100);
+          // create a fresh options object for next attempt to avoid duplicated args
+          // Note: recreate options to avoid accumulating arguments
+          options = new chrome.Options();
+          if (HEADLESS) options.addArguments('--disable-gpu', '--window-size=1200,900'); else options.addArguments('--start-maximized');
+          options.addArguments('--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled');
+          if (chromeBinary && fs.existsSync(chromeBinary)) options.setChromeBinaryPath(chromeBinary);
+          continue;
+        }
+      }
+      // non-retryable or last attempt -> break to fallback
+      break;
+    }
+  }
+
+  // Fallback: try launching without --user-data-dir (ephemeral profile)
+  try {
+    const fallbackOptions = new chrome.Options();
+    if (HEADLESS) fallbackOptions.addArguments('--disable-gpu', '--window-size=1200,900'); else fallbackOptions.addArguments('--start-maximized');
+    fallbackOptions.addArguments(...baseArgs);
+    if (chromeBinary && fs.existsSync(chromeBinary)) fallbackOptions.setChromeBinaryPath(chromeBinary);
+
+    const driver = await new Builder().forBrowser('chrome').setChromeOptions(fallbackOptions).build();
+    await driver.manage().setTimeouts({ implicit: 0, pageLoad: PAGE_LOAD_TIMEOUT_MS, script: 60000 });
+    if (HEADLESS) await driver.manage().window().setRect({ width: 1200, height: 900, x: 0, y: 0 });
+
+    console.log('[Browser] Chrome driver launched using ephemeral profile (no user-data-dir)');
+    return driver;
+  } catch (fallbackErr) {
+    console.error('[Browser] Fallback launch without user-data-dir failed:', fallbackErr && (fallbackErr.stack || fallbackErr.message));
+    throw lastError || fallbackErr;
+  }
 }
 
 // -----------------------------
