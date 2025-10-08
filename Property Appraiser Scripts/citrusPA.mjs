@@ -8,6 +8,7 @@ import { fileURLToPath } from "url";
 import fs from 'fs';
 import axios from 'axios';
 import https from 'https';
+import os from 'os';
 import { google } from 'googleapis';
 import { Builder, By, until, Key } from 'selenium-webdriver';
 import chrome from 'selenium-webdriver/chrome.js';
