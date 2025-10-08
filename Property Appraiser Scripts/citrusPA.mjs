@@ -168,12 +168,12 @@ async function dismissPopupModalIfPresent(driver, rowIndex, timeout = 3000) {
 }
 
 // -----------------------------
-// Selenium launcher (updated: uses a unique user-data-dir per launch and falls back to ephemeral profile)
+// Selenium launcher (fixed: options is let so it can be recreated on retries)
 // -----------------------------
 async function launchDriver() {
   console.log('[Browser] Launching Chrome driver, headless:', HEADLESS);
 
-  const options = new chrome.Options();
+  let options = new chrome.Options();
   if (HEADLESS) options.addArguments('--disable-gpu', '--window-size=1200,900');
   else options.addArguments('--start-maximized');
   options.addArguments('--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled');
@@ -201,21 +201,25 @@ async function launchDriver() {
     console.warn(`[Browser] Chrome binary not found at ${chromeBinary}. Selenium Manager will attempt resolution.`);
   }
 
-  // Try to launch with a unique profile directory to avoid "profile already in use" errors.
-  // If that fails after a couple attempts, fall back to launching without --user-data-dir (ephemeral).
   const baseArgs = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled'];
   const maxAttempts = 3;
   let lastError = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    // create a unique profile dir name (avoid adding extra deps)
+    // create a unique profile dir name
     const profileDir = path.join(os.tmpdir(), `selenium-profile-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
     try {
       // ensure directory exists
       fs.mkdirSync(profileDir, { recursive: true });
-      // add user-data-dir argument for this attempt
-      const args = [...baseArgs, `--user-data-dir=${profileDir}`];
-      options.addArguments(...args);
+
+      // recreate options fresh for each attempt to avoid accumulated args
+      options = new chrome.Options();
+      if (HEADLESS) options.addArguments('--disable-gpu', '--window-size=1200,900'); else options.addArguments('--start-maximized');
+      options.addArguments('--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled');
+      if (chromeBinary && fs.existsSync(chromeBinary)) options.setChromeBinaryPath(chromeBinary);
+
+      // add user-data-dir for this attempt
+      options.addArguments(`--user-data-dir=${profileDir}`, ...baseArgs);
 
       const driver = await new Builder().forBrowser('chrome').setChromeOptions(options).build();
       await driver.manage().setTimeouts({ implicit: 0, pageLoad: PAGE_LOAD_TIMEOUT_MS, script: 60000 });
@@ -238,14 +242,7 @@ async function launchDriver() {
       if (msg.includes('user data directory is already in use') || msg.includes('Profile locked') || msg.includes('The process cannot access the file')) {
         if (attempt < maxAttempts) {
           console.log('[Browser] Retrying with a fresh profileDir...');
-          // small backoff
           await sleep(200 + attempt * 100);
-          // create a fresh options object for next attempt to avoid duplicated args
-          // Note: recreate options to avoid accumulating arguments
-          options = new chrome.Options();
-          if (HEADLESS) options.addArguments('--disable-gpu', '--window-size=1200,900'); else options.addArguments('--start-maximized');
-          options.addArguments('--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled');
-          if (chromeBinary && fs.existsSync(chromeBinary)) options.setChromeBinaryPath(chromeBinary);
           continue;
         }
       }
