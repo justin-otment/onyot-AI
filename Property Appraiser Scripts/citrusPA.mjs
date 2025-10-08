@@ -623,13 +623,6 @@ try {
   console.log(`[Row ${row}] extractFromDetail: done`);
 }
 
-// -----------------------------
-// Updated fetchDataAndUpdateSheet
-// - Does not pre-write empty columns
-// - Launches browser, runs existing extraction flows
-// - Ensures all per-row A1 ranges are defined before use
-// - Writes per-row with robust try/catch and compact logs
-// -----------------------------
 async function fetchDataAndUpdateSheet() {
   // define once, before processing rows
   const ranges = {
@@ -640,34 +633,51 @@ async function fetchDataAndUpdateSheet() {
     extraFieldPrefix: `${SHEET_NAME}!J`,
     statusPrefix: `${SHEET_NAME}!M`,
   };
+
   console.log('[Main] Starting fetchDataAndUpdateSheet');
   const sheets = await getSheetsClient();
-  console.log('[Sheets] Fetching addresses and target URLs from sheet');
+  console.log('[Sheets] Fetching addresses, target URLs and statuses from sheet');
 
-  const addressesRange = `${SHEET_NAME}!B${START_ROW}:B${END_ROW}`;
+  const addressesRange = `${SHEET_NAME}!A${START_ROW}:A${END_ROW}`;
   const urlsRange = `${SHEET_NAME}!L${START_ROW}:L${END_ROW}`;
+  const statusesRange = `${SHEET_NAME}!M${START_ROW}:M${END_ROW}`;
 
-  const [addressesRes, urlsRes] = await Promise.all([
+  const [addressesRes, urlsRes, statusesRes] = await Promise.all([
     sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: addressesRange }),
     sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: urlsRange }),
+    sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: statusesRange }),
   ]);
 
   const addresses = (addressesRes.data.values || []).map(r => (r[0] || '').trim());
   const urls = (urlsRes.data.values || []).map(r => (r[0] || '').trim());
+  const statuses = (statusesRes.data.values || []).map(r => (r[0] || '').trim());
 
-  console.log(`[Init] Fetched ${addresses.length} addresses and ${urls.length} urls.`);
+  console.log(`[Init] Fetched ${addresses.length} addresses, ${urls.length} urls, ${statuses.length} status cells.`);
 
   const driver = await launchDriver();
 
   try {
-    const rowsToProcess = Math.max(addresses.length, urls.length);
+    const rowsToProcess = Math.max(addresses.length, urls.length, statuses.length);
     for (let i = 0; i < rowsToProcess; i++) {
       const rowIndex = START_ROW + i;
       const targetUrl = urls[i] || '';
       const targetAddress = addresses[i] || '';
+      const existingStatus = statuses[i] || '';
 
       console.log(`\n[Row ${rowIndex}] === START ===`);
-      if (!targetUrl) { console.log(`[Row ${rowIndex}] No URL found in sheet column K; skipping`); console.log(`[Row ${rowIndex}] === END ===\n`); continue; }
+
+      if (existingStatus) {
+        console.log(`[Row ${rowIndex}] Status exists ("${existingStatus}") — skipping row.`);
+        console.log(`[Row ${rowIndex}] === END ===\n`);
+        continue;
+      }
+
+      if (!targetUrl) {
+        console.log(`[Row ${rowIndex}] No URL found in sheet column L; skipping`);
+        console.log(`[Row ${rowIndex}] === END ===\n`);
+        continue;
+      }
+
       console.log(`[Row ${rowIndex}] Navigating to URL: ${targetUrl}`);
 
       try {
@@ -706,7 +716,14 @@ async function fetchDataAndUpdateSheet() {
             }
           } catch (e) {
             console.error(`[Row ${rowIndex}] Detailed flow error: ${e.stack || e.message}`);
-            try { await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${statusPrefix}${rowIndex}`, valueInputOption: 'RAW', requestBody: { values: [[`error: ${String(e).slice(0,200)}`]] } }); } catch {}
+            try {
+              await sheets.spreadsheets.values.update({
+                spreadsheetId: SHEET_ID,
+                range: `${ranges.statusPrefix}${rowIndex}`,
+                valueInputOption: 'RAW',
+                requestBody: { values: [[`error: ${String(e).slice(0,200)}`]] },
+              });
+            } catch {}
           }
         } else {
           console.log(`[Row ${rowIndex}] No iframe detected -> treating as Results list`);
@@ -715,9 +732,9 @@ async function fetchDataAndUpdateSheet() {
             if (result && result.matched) {
               console.log(`[Row ${rowIndex}] Match clicked; handling post-click extraction`);
               await sleep(10000);
-              const handles = await driver.findElements(By.css('iframe'));
-              if (handles.length > 0) {
-                console.log(`[Row ${rowIndex}] Iframe(s) detected (${iframes.length}) -> treating as Detailed account`);
+              const postIframes = await driver.findElements(By.css('iframe'));
+              if (postIframes.length > 0) {
+                console.log(`[Row ${rowIndex}] Iframe(s) detected after click (${postIframes.length}) -> treating as Detailed account`);
                 try {
                   await handleDetailedAccountByIframe(driver, rowIndex);
                   const handles = await driver.getAllWindowHandles();
@@ -725,7 +742,7 @@ async function fetchDataAndUpdateSheet() {
                     console.log(`[Row ${rowIndex}] Switching to newly opened tab for extraction`);
                     await driver.switchTo().window(handles[handles.length - 1]);
                     await sleep(500);
-                    await extractFromDetail(driver, sheets, i, ranges); // extractFromDetail expects zero-based index
+                    await extractFromDetail(driver, sheets, i, ranges);
                     try { await driver.close(); console.log(`[Row ${rowIndex}] Closed detail tab`); } catch {}
                     await driver.switchTo().window(handles[0]);
                   } else {
@@ -734,12 +751,19 @@ async function fetchDataAndUpdateSheet() {
                   }
                 } catch (e) {
                   console.error(`[Row ${rowIndex}] Detailed flow error: ${e.stack || e.message}`);
-                  try { await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${statusPrefix}${rowIndex}`, valueInputOption: 'RAW', requestBody: { values: [[`error: ${String(e).slice(0,200)}`]] } }); } catch {}
+                  try {
+                    await sheets.spreadsheets.values.update({
+                      spreadsheetId: SHEET_ID,
+                      range: `${ranges.statusPrefix}${rowIndex}`,
+                      valueInputOption: 'RAW',
+                      requestBody: { values: [[`error: ${String(e).slice(0,200)}`]] },
+                    });
+                  } catch {}
                 }
               }
             } else {
               console.log(`[Row ${rowIndex}] No matched candidate found in results`);
-              // Replace the problematic no-results block with this (inside your results branch)
+              // handle explicit no-results element
               const noResultsXpath = By.xpath('//*[@id="index-search"]/div[1]/section/div[1]/div/div/div/div/div/p');
               if (await exists(driver, noResultsXpath, 2000)) {
                 const txt = (await getTextSafe(driver, noResultsXpath)).toLowerCase();
@@ -772,12 +796,26 @@ async function fetchDataAndUpdateSheet() {
             }
           } catch (e) {
             console.error(`[Row ${rowIndex}] Results flow error: ${e.stack || e.message}`);
-            try { await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${statusPrefix}${rowIndex}`, valueInputOption: 'RAW', requestBody: { values: [[`error: ${String(e).slice(0,200)}`]] } }); } catch {}
+            try {
+              await sheets.spreadsheets.values.update({
+                spreadsheetId: SHEET_ID,
+                range: `${ranges.statusPrefix}${rowIndex}`,
+                valueInputOption: 'RAW',
+                requestBody: { values: [[`error: ${String(e).slice(0,200)}`]] },
+              });
+            } catch {}
           }
         }
       } catch (err) {
         console.error(`[Row ${rowIndex}] Navigation/processing error: ${err.stack || err.message}`);
-        try { await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${statusPrefix}${rowIndex}`, valueInputOption: 'RAW', requestBody: { values: [[`error: ${String(err).slice(0,200)}`]] } }); } catch {}
+        try {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SHEET_ID,
+            range: `${ranges.statusPrefix}${rowIndex}`,
+            valueInputOption: 'RAW',
+            requestBody: { values: [[`error: ${String(err).slice(0,200)}`]] },
+          });
+        } catch {}
       } finally {
         // ensure no dangling detail tabs
         try {
