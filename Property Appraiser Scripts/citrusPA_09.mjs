@@ -19,8 +19,8 @@ import chrome from 'selenium-webdriver/chrome.js';
 // -----------------------------
 const SHEET_ID = '19mkuw_zM_054b6zv6uHP98_ijASh-Jl3cYCDnim92I4';
 const SHEET_NAME = 'Citrus Springs';
-const START_ROW = 9346;
-const END_ROW = 10346;
+const START_ROW = 28346;
+const END_ROW = 29273;
 const PAGE_LOAD_TIMEOUT_MS = 30000; // 30s page load
 const ELEMENT_TIMEOUT_MS = 10000; // 30s element waits (requested)
 const HEADLESS = String(process.env.HEADLESS || 'false').toLowerCase() === 'true';
