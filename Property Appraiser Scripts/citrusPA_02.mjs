@@ -17,10 +17,10 @@ import chrome from 'selenium-webdriver/chrome.js';
 // -----------------------------
 // Config
 // -----------------------------
-const SHEET_ID = '19mkuw_zM_054b6zv6uHP98_ijASh-Jl3cYCDnim92I4';
-const SHEET_NAME = 'Citrus Springs';
-const START_ROW = 20346;
-const END_ROW = 21346;
+const SHEET_ID = '1dC9H5V_iY_wUwJn3Sf34la4Xe7pETd87QNAh4NP_cSs';
+const SHEET_NAME = 'Englewood';
+const START_ROW = 1001;
+const END_ROW = 2000;
 const PAGE_LOAD_TIMEOUT_MS = 30000; // 30s page load
 const ELEMENT_TIMEOUT_MS = 10000; // 30s element waits (requested)
 const HEADLESS = String(process.env.HEADLESS || 'false').toLowerCase() === 'true';
