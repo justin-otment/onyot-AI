@@ -19,8 +19,8 @@ import chrome from 'selenium-webdriver/chrome.js';
 // -----------------------------
 const SHEET_ID = '1dC9H5V_iY_wUwJn3Sf34la4Xe7pETd87QNAh4NP_cSs';
 const SHEET_NAME = 'Englewood';
-const START_ROW = 2001;
-const END_ROW = 3000;
+const START_ROW = 1301;
+const END_ROW = 1901;
 const PAGE_LOAD_TIMEOUT_MS = 30000; // 30s page load
 const ELEMENT_TIMEOUT_MS = 10000; // 30s element waits (requested)
 const HEADLESS = String(process.env.HEADLESS || 'false').toLowerCase() === 'true';
@@ -708,8 +708,8 @@ async function fetchDataAndUpdateSheet() {
   const sheets = await getSheetsClient();
   console.log('[Sheets] Fetching addresses, target URLs and statuses from sheet');
 
-  const addressesRange = `${SHEET_NAME}!B${START_ROW}:B${END_ROW}`;
-  const urlsRange = `${SHEET_NAME}!L${START_ROW}:L${END_ROW}`;
+  const addressesRange = `${SHEET_NAME}!A${START_ROW}:A${END_ROW}`;
+  const urlsRange = `${SHEET_NAME}!K${START_ROW}:K${END_ROW}`;
   const statusesRange = `${SHEET_NAME}!M${START_ROW}:M${END_ROW}`;
 
   const [addressesRes, urlsRes, statusesRes] = await Promise.all([
