@@ -708,7 +708,7 @@ async function fetchDataAndUpdateSheet() {
   const sheets = await getSheetsClient();
   console.log('[Sheets] Fetching addresses, target URLs and statuses from sheet');
 
-  const addressesRange = `${SHEET_NAME}!B${START_ROW}:B${END_ROW}`;
+  const addressesRange = `${SHEET_NAME}!A${START_ROW}:A${END_ROW}`;
   const urlsRange = `${SHEET_NAME}!L${START_ROW}:L${END_ROW}`;
   const statusesRange = `${SHEET_NAME}!M${START_ROW}:M${END_ROW}`;
 
