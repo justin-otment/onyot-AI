@@ -7,8 +7,8 @@ import chrome from "selenium-webdriver/chrome.js";
 // ==========================
 // Google Sheets Configuration
 // ==========================
-const SHEET_ID = "140GOtFSLYBk4FC50Jd9__Y6SaKSHhfb2PIeap4lKXPE";
-const SHEET_NAME = "Port Charlotte";
+const SHEET_ID = "1zvXxmncHa0MMggdgIWSFTtkoi5gyy6go-ozVea_4f54";
+const SHEET_NAME = "Spec_Zipcode";
 
 // ==========================
 // Authenticate Google Sheets (Service Account)
@@ -247,7 +247,7 @@ async function scrapeCompanyDetails(driver) {
 // ==========================
 async function getCompanyNames(auth) {
   const sheets = google.sheets({ version: "v4", auth });
-  const range = `${SHEET_NAME}!M2:M`;
+  const range = `${SHEET_NAME}!F2:F`;
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
