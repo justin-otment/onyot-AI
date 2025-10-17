@@ -7,8 +7,8 @@ import chrome from "selenium-webdriver/chrome.js";
 // ==========================
 // Google Sheets Configuration
 // ==========================
-const SHEET_ID = "1zvXxmncHa0MMggdgIWSFTtkoi5gyy6go-ozVea_4f54";
-const SHEET_NAME = "Spec_Zipcode";
+const SHEET_ID = "140GOtFSLYBk4FC50Jd9__Y6SaKSHhfb2PIeap4lKXPE";
+const SHEET_NAME = "Port Charlotte";
 
 // ==========================
 // Authenticate Google Sheets (Service Account)
@@ -30,11 +30,11 @@ async function authenticateGoogleSheets() {
 async function updateSheet(auth, officerNames, rowIndex) {
   const sheets = google.sheets({ version: "v4", auth });
 
-  const maxCols = 7; // N..T
+  const maxCols = 7; // F..L
   const trimmed = officerNames.slice(0, maxCols);
   while (trimmed.length < maxCols) trimmed.push("");
 
-  const range = `${SHEET_NAME}!N${rowIndex}:T${rowIndex}`;
+  const range = `${SHEET_NAME}!F${rowIndex}:L${rowIndex}`;
 
   try {
     await sheets.spreadsheets.values.update({
@@ -54,7 +54,7 @@ async function updateSheet(auth, officerNames, rowIndex) {
 async function updateCompanyDetails(auth, details, rowIndex) {
   const sheets = google.sheets({ version: "v4", auth });
 
-  const range = `${SHEET_NAME}!U${rowIndex}:X${rowIndex}`;
+  const range = `${SHEET_NAME}!M${rowIndex}:P${rowIndex}`;
   const values = [[details.registered_name, details.status, details.mail, details.agent]];
 
   try {
