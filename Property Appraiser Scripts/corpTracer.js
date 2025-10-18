@@ -75,7 +75,7 @@ async function updateCompanyDetails(auth, details, rowIndex) {
 async function updateCommonAddress(auth, street, zip, rowIndex) {
   const sheets = google.sheets({ version: "v4", auth });
 
-  const range = `${SHEET_NAME}!Y${rowIndex}:Z${rowIndex}`;
+  const range = `${SHEET_NAME}!R${rowIndex}:S${rowIndex}`;
   const values = [[street, zip]];
 
   try {
@@ -247,7 +247,7 @@ async function scrapeCompanyDetails(driver) {
 // ==========================
 async function getCompanyNames(auth) {
   const sheets = google.sheets({ version: "v4", auth });
-  const range = `${SHEET_NAME}!F2:F`;
+  const range = `${SHEET_NAME}!E2:E`;
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
