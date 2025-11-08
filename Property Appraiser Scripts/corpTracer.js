@@ -279,6 +279,9 @@ function isBusinessEntity(name) {
     "ENTERPRISES",
     "ASSOCIATES",
     "GROUP",
+    "INVESTMENTS",
+    "HOLDING",
+    "CAPITAL"
   ];
   return businessKeywords.some((kw) => (name || "").toLowerCase().includes(kw.toLowerCase()));
 }
