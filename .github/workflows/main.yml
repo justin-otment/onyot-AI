@@ -42,7 +42,7 @@ jobs:
           HEADLESS: 'true'
           CHROME_PATH: '/usr/bin/google-chrome-stable'
           GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
-        run: node citrusPA_04.mjs
+        run: // ----- uncomment to activate---- // node citrusPA_04.mjs
 
   CorpTracer_Port-Charlotte:
     runs-on: ubuntu-latest
