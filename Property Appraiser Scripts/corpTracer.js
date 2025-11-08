@@ -7,8 +7,8 @@ import chrome from "selenium-webdriver/chrome.js";
 // ==========================
 // Google Sheets Configuration
 // ==========================
-const SHEET_ID = "1zvXxmncHa0MMggdgIWSFTtkoi5gyy6go-ozVea_4f54";
-const SHEET_NAME = "Spec_Zipcode";
+const SHEET_ID = "19mkuw_zM_054b6zv6uHP98_ijASh-Jl3cYCDnim92I4";
+const SHEET_NAME = "Citrus Springs";
 
 // ==========================
 // Authenticate Google Sheets (Service Account)
