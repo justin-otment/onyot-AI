@@ -17,43 +17,23 @@ const TOKEN_PATH = path.join(process.cwd(), "token.json");
 // ==========================
 // Authenticate Google Sheets
 // ==========================
+// ==========================
+// Authenticate Google Sheets (Service Account)
+// ==========================
 async function authenticateGoogleSheets() {
-  const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH));
-  const { client_id, client_secret, redirect_uris } = credentials.installed;
-  const oAuth2Client = new google.auth.OAuth2(
-    client_id,
-    client_secret,
-    redirect_uris[0]
-  );
+  // Point to your downloaded service account JSON key
+  const SERVICE_ACCOUNT_PATH = path.join(process.cwd(), "service-account.json");
 
-  if (fs.existsSync(TOKEN_PATH)) {
-    const token = JSON.parse(fs.readFileSync(TOKEN_PATH));
-    oAuth2Client.setCredentials(token);
-  } else {
-    const authUrl = oAuth2Client.generateAuthUrl({
-      access_type: "offline",
-      scope: SCOPES,
-    });
-    console.log("Authorize this app by visiting this URL:", authUrl);
+  // Create a GoogleAuth client using the service account
+  const auth = new google.auth.GoogleAuth({
+    keyFile: SERVICE_ACCOUNT_PATH,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+  });
 
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
+  // Get an authenticated client
+  const client = await auth.getClient();
 
-    const code = await new Promise((resolve) =>
-      rl.question("Enter the code from the page here: ", (code) => {
-        rl.close();
-        resolve(code);
-      })
-    );
-
-    const { tokens } = await oAuth2Client.getToken(code);
-    oAuth2Client.setCredentials(tokens);
-    fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens));
-    console.log("Token stored to", TOKEN_PATH);
-  }
-  return oAuth2Client;
+  return client;
 }
 
 // ==========================
