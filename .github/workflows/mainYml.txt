@@ -1,0 +1,83 @@
+name: Run Scrapers
+
+on:
+  workflow_dispatch:
+
+jobs:
+  Citrus_PA-04:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install Chrome and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip xvfb libxi6 libxss1 libnss3 libatk-bridge2.0-0 libgtk-3-0
+          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
+
+      - name: Install Node dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Decode Service Account JSON
+        working-directory: "Property Appraiser Scripts"
+        run: |
+          tr -d '\n\r' < service-account_base64.txt | base64 -d > service-account.json
+          echo "✅ Service account JSON decoded."
+
+      - name: Run Citrus County Property Appraiser script
+        working-directory: "Property Appraiser Scripts"
+        env:
+          HEADLESS: 'true'
+          CHROME_PATH: '/usr/bin/google-chrome-stable'
+          GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
+        run: // ----- uncomment to activate---- // node citrusPA_04.mjs
+
+  CorpTracer_Port-Charlotte:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install Chrome and Chromedriver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip xvfb libxi6 libxss1 libnss3 libatk-bridge2.0-0 libgtk-3-0
+          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
+
+      - name: Install dependencies (fallback to npm install if no lockfile)
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Decode Service Account JSON
+        working-directory: "Property Appraiser Scripts"
+        run: base64 -d service-account_base64.txt > service-account.json
+
+      - name: Run Corp Tracer Port Charlotte script
+        working-directory: "Property Appraiser Scripts"
+        env:
+          HEADLESS: 'true'
+          CHROME_PATH: '/usr/bin/google-chrome-stable'
+          GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
+        run: node corpTracer.js
