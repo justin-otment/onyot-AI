@@ -2,26 +2,58 @@ import { Builder, By, until, Key } from "selenium-webdriver";
 import { google } from "googleapis";
 import fs from "fs";
 import path from "path";
+import readline from "readline";
 import chrome from "selenium-webdriver/chrome.js";
 
 // ==========================
 // Google Sheets Configuration
 // ==========================
-const SHEET_ID = "19mkuw_zM_054b6zv6uHP98_ijASh-Jl3cYCDnim92I4";
-const SHEET_NAME = "Citrus Springs";
+const SHEET_ID = "140GOtFSLYBk4FC50Jd9__Y6SaKSHhfb2PIeap4lKXPE";
+const SHEET_NAME = "Port Charlotte";
+const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
+const CREDENTIALS_PATH = path.join(process.cwd(), "credentials.json");
+const TOKEN_PATH = path.join(process.cwd(), "token.json");
 
 // ==========================
-// Authenticate Google Sheets (Service Account)
+// Authenticate Google Sheets
 // ==========================
 async function authenticateGoogleSheets() {
-  const keyFile = path.join(process.cwd(), "service-account.json");
+  const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH));
+  const { client_id, client_secret, redirect_uris } = credentials.installed;
+  const oAuth2Client = new google.auth.OAuth2(
+    client_id,
+    client_secret,
+    redirect_uris[0]
+  );
 
-  const auth = new google.auth.GoogleAuth({
-    keyFile,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
+  if (fs.existsSync(TOKEN_PATH)) {
+    const token = JSON.parse(fs.readFileSync(TOKEN_PATH));
+    oAuth2Client.setCredentials(token);
+  } else {
+    const authUrl = oAuth2Client.generateAuthUrl({
+      access_type: "offline",
+      scope: SCOPES,
+    });
+    console.log("Authorize this app by visiting this URL:", authUrl);
 
-  return auth;
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    const code = await new Promise((resolve) =>
+      rl.question("Enter the code from the page here: ", (code) => {
+        rl.close();
+        resolve(code);
+      })
+    );
+
+    const { tokens } = await oAuth2Client.getToken(code);
+    oAuth2Client.setCredentials(tokens);
+    fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens));
+    console.log("Token stored to", TOKEN_PATH);
+  }
+  return oAuth2Client;
 }
 
 // ==========================
@@ -30,7 +62,7 @@ async function authenticateGoogleSheets() {
 async function updateSheet(auth, officerNames, rowIndex) {
   const sheets = google.sheets({ version: "v4", auth });
 
-  const maxCols = 7; // F..L
+  const maxCols = 7; // N..T
   const trimmed = officerNames.slice(0, maxCols);
   while (trimmed.length < maxCols) trimmed.push("");
 
@@ -75,7 +107,7 @@ async function updateCompanyDetails(auth, details, rowIndex) {
 async function updateCommonAddress(auth, street, zip, rowIndex) {
   const sheets = google.sheets({ version: "v4", auth });
 
-  const range = `${SHEET_NAME}!R${rowIndex}:S${rowIndex}`;
+  const range = `${SHEET_NAME}!Q${rowIndex}:R${rowIndex}`;
   const values = [[street, zip]];
 
   try {
@@ -102,7 +134,7 @@ function normalizeName(name) {
 }
 
 // ==========================
-// Fuzzy String Similarity
+// Fuzzy String Similarity (uses normalized input)
 // ==========================
 function stringSimilarity(a, b) {
   a = normalizeName(a);
@@ -133,7 +165,7 @@ function stringSimilarity(a, b) {
 }
 
 // ==========================
-// Company Name Matching
+// Company Name Matching (explicitly ignores commas)
 // ==========================
 function namesMatch(foundName, searchName) {
   const fn = normalizeName(foundName);
@@ -156,6 +188,40 @@ async function scrapeOfficerData(driver) {
 
     const badStarts = [/^title\b/i, /^authorized person/i, /^name & address/i];
 
+    // Dictionary: Street Name → Abbreviation
+    const streetTerms = {
+      "Alley": "ALY", "Apartment": "APT", "Arcade": "ARC", "Avenue": "AVE",
+      "Bay": "BA", "Beach": "BCH", "Boulevard": "BLVD", "Building": "BLDG",
+      "Bypass": "BYPS", "Camp": "CMP", "Canyon": "CYN", "Cape": "CPE",
+      "Causeway": "CSWY", "Center": "CTR", "Circle": "CIR", "Cliff": "CLF",
+      "Close": "CL", "Common": "CMN", "Court": "CT", "Cove": "CV", "Creek": "CRK",
+      "Crescent": "CRES", "Crossing": "XING", "Drive": "DR", "Expressway": "EXPY",
+      "Extension": "EXT", "Fall": "FALL", "Field": "FLD", "Flat": "FLT",
+      "Forest": "FRST", "Fort": "FT", "Freeway": "FWY", "Grove": "GRV",
+      "Heights": "HTS", "Highway": "HWY", "Hollow": "HOLW", "Hospital": "HOSP",
+      "Island": "IS", "Junction": "JCT", "Key": "KEY", "Lake": "LK",
+      "Lane": "LN", "Library": "LBRY", "Light": "LGT", "Manor": "MR",
+      "Mount": "MT", "Overpass": "OPAS", "Park": "PK", "Parkway": "PKWY",
+      "Passage": "PS", "Path": "PH", "Place": "PL", "Plain": "PLAIN",
+      "Plaza": "PLZ", "Point": "PT", "Post Office": "PO", "Pond": "PND",
+      "Range": "RNG", "Road": "RD", "Rural Route": "RR", "Ridge": "RDGE",
+      "River": "RV", "Run": "RN", "School": "SCH", "Shore": "SH",
+      "Spring": "SPG", "Square": "SQ", "Station": "STA", "Street": "ST",
+      "Summit": "SUMMIT", "Terrace": "TER", "Throughway": "THRWAY", "Tower": "TWR",
+      "Trail": "TRL", "Tunnel": "TUNL", "Turnpike": "TPKE", "Union": "UN",
+      "Valley": "VLY", "Village": "VLG", "Way": "WAY", "Wharf": "WHF",
+      "Woods": "WDS", "Work": "WRK"
+    };
+
+    // Build regex that matches either full term or abbreviation
+    const streetPattern = Object.entries(streetTerms)
+      .map(([full, abbr]) => `${full}\\b|${abbr}\\b`)
+      .join("|");
+    const streetRegex = new RegExp(`\\b(${streetPattern})\\b`, "i");
+
+    const looksLikeAddress = (s) => /\d/.test(s) || streetRegex.test(s);
+    const looksLikeStreet = (s) => /^\d+\s+/.test(s) && streetRegex.test(s);
+
     const officerNames = [];
     const addresses = [];
     const zipCounts = {};
@@ -165,21 +231,25 @@ async function scrapeOfficerData(driver) {
       if (badStarts.some((re) => re.test(line))) continue;
       if (/^[-–—]+$/.test(line)) continue;
 
-      if (/^[A-Za-z ,.'-]+$/.test(line) && line.replace(/[^A-Za-z]/g, "").length >= 3) {
+      // Detect officer names
+      if (/^[A-Za-z ,.'-]+$/.test(line) && line.replace(/[^A-Za-z]/g, "").length >= 3 && !looksLikeAddress(line)) {
         const cleanName = line.replace(/[.,'"]/g, "").trim();
         if (!officerNames.includes(cleanName)) officerNames.push(cleanName);
       }
 
-      if (/\d/.test(line)) {
+      // Detect addresses
+      if (looksLikeAddress(line)) {
         addresses.push(line);
 
+        // Count zip
         const zipMatch = line.match(/\b\d{5}(?:-\d{4})?\b/);
         if (zipMatch) {
           const zip = zipMatch[0];
           zipCounts[zip] = (zipCounts[zip] || 0) + 1;
         }
 
-        if (/^\d+\s+/.test(line)) {
+        // Count streets
+        if (looksLikeStreet(line)) {
           const street = line.trim();
           streetCounts[street] = (streetCounts[street] || 0) + 1;
         }
@@ -202,7 +272,7 @@ async function scrapeOfficerData(driver) {
       commonStreet,
       commonZip,
     };
-  } catch {
+  } catch (err) {
     return {
       officerNames: ["No Officers Found"],
       commonStreet: "No Street Found",
@@ -237,7 +307,8 @@ async function scrapeCompanyDetails(driver) {
       .catch(() => "No Data");
 
     return { registered_name, status, mail, agent };
-  } catch {
+  } catch (err) {
+    console.error("❌ Error scraping company details:", err.message);
     return { registered_name: "No Data", status: "No Data", mail: "No Data", agent: "No Data" };
   }
 }
@@ -249,20 +320,25 @@ async function getCompanyNames(auth) {
   const sheets = google.sheets({ version: "v4", auth });
   const range = `${SHEET_NAME}!E2:E`;
 
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: SHEET_ID,
-    range,
-  });
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range,
+    });
 
-  const values = response.data.values || [];
+    const values = response.data.values || [];
 
-  return values
-    .map((val, index) => ({
-      name: val[0]?.trim() || null,
-      rowIndex: index + 2,
-      isBusiness: isBusinessEntity(val[0]?.trim() || ""),
-    }))
-    .filter((entry) => entry.name);
+    return values
+      .map((val, index) => ({
+        name: val[0]?.trim() || null,
+        rowIndex: index + 2,
+        isBusiness: isBusinessEntity(val[0]?.trim() || ""),
+      }))
+      .filter((entry) => entry.name);
+  } catch (error) {
+    console.error("❌ Error fetching company names:", error.message);
+    throw error;
+  }
 }
 
 // ==========================
@@ -279,9 +355,6 @@ function isBusinessEntity(name) {
     "ENTERPRISES",
     "ASSOCIATES",
     "GROUP",
-    "INVESTMENTS",
-    "HOLDING",
-    "CAPITAL"
   ];
   return businessKeywords.some((kw) => (name || "").toLowerCase().includes(kw.toLowerCase()));
 }
@@ -298,40 +371,39 @@ async function retryWait(driver, locator, retries = 3, timeout = 30000) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       return await driver.wait(until.elementLocated(locator), timeout);
-    } catch {
-      if (attempt === retries) throw new Error("Element not found after retries");
+    } catch (err) {
+      if (attempt === retries) throw err;
       console.log(`🔁 Retry ${attempt}/${retries} waiting for element ${locator}...`);
     }
   }
 }
 
 // ==========================
-// Process a single company
+// Resolve businesses recursively to individuals
 // ==========================
-async function processCompany(auth, driver, companyName, rowIndex = null, visited = new Set()) {
-  const normName = normalizeName(companyName);
-  if (visited.has(normName)) return [];
-  visited.add(normName);
+async function resolveToIndividuals(driver, auth, companyName, visited = new Set()) {
+  if (visited.has(normalizeName(companyName))) {
+    console.log(`🔄 Skipping circular lookup for ${companyName}`);
+    return [];
+  }
+  visited.add(normalizeName(companyName));
 
-  console.log(`🔍 Processing: ${companyName} (Row ${rowIndex || "N/A"})`);
+  console.log(`🔍 Resolving officers for: ${companyName}`);
+
   await driver.get("https://search.sunbiz.org/Inquiry/CorporationSearch/ByName");
-
   const search = await driver.wait(until.elementLocated(By.id("SearchTerm")), 20000);
   await search.clear();
   await search.sendKeys(companyName, Key.RETURN);
 
+  // Bail out if no results
   try {
-    await driver.wait(until.elementLocated(By.css("#search-results table tbody tr")), 20000);
+    await driver.wait(until.elementLocated(By.css("#search-results table tbody tr")), 15000);
   } catch {
     console.log(`⚠️ No results for ${companyName}`);
-    if (rowIndex) {
-      await updateSheet(auth, ["No Data"], rowIndex);
-      await updateCompanyDetails(auth, { registered_name: "No Data", status: "No Data", mail: "No Data", agent: "No Data" }, rowIndex);
-      await updateCommonAddress(auth, "No Address Found", "No Zip Found", rowIndex);
-    }
     return [];
   }
 
+  // Find first matching row
   const rows = await driver.findElements(By.xpath('//*[@id="search-results"]/table/tbody/tr'));
   let found = false;
   for (const row of rows) {
@@ -344,30 +416,143 @@ async function processCompany(auth, driver, companyName, rowIndex = null, visite
   }
   if (!found) return [];
 
-  await retryWait(driver, By.id("main"), 3, 30000);
+  await retryWait(driver, By.id("main"), 3, 20000);
 
-  const details = await scrapeCompanyDetails(driver);
-  const { officerNames, commonStreet, commonZip } = await scrapeOfficerData(driver);
+  // Scrape officers
+  const { officerNames } = await scrapeOfficerData(driver);
   const cleanNames = officerNames.map(n => n.replace(/[.,'"]/g, "").trim());
 
-  const resolved = [];
+  let resolved = [];
   for (const officer of cleanNames) {
     if (isBusinessEntity(officer)) {
-      const subNames = await processCompany(auth, driver, officer, null, visited);
+      const subNames = await resolveToIndividuals(driver, auth, officer, visited);
       resolved.push(...subNames);
     } else {
       resolved.push(officer);
     }
   }
+  return resolved;
+}
 
-  if (rowIndex) {
-    await updateSheet(auth, resolved.length ? resolved : ["No Data"], rowIndex);
-    await updateCompanyDetails(auth, details, rowIndex);
-    await updateCommonAddress(auth, commonStreet, commonZip, rowIndex);
+// ==========================
+// Process a single company (recursive to individuals)
+// ==========================
+async function processCompany(auth, driver, companyName, rowIndex = null, visited = new Set()) {
+  const normName = normalizeName(companyName);
+
+  if (visited.has(normName)) {
+    console.log(`🔄 Skipping circular/duplicate lookup for ${companyName}`);
+    return [];
+  }
+  visited.add(normName);
+
+  console.log(`🔍 Processing: ${companyName} (Row ${rowIndex || "N/A"})`);
+  await driver.get("https://search.sunbiz.org/Inquiry/CorporationSearch/ByName");
+
+  // --- Perform search
+  const search = await driver.wait(until.elementLocated(By.id("SearchTerm")), 20000);
+  await search.clear();
+  await search.sendKeys(companyName, Key.RETURN);
+
+  // --- Handle search results
+  try {
+    await driver.wait(until.elementLocated(By.css("#search-results table tbody tr")), 20000);
+  } catch {
+    console.log(`⚠️ No search results for ${companyName}`);
+    if (rowIndex) {
+      await updateSheet(auth, ["No Data"], rowIndex);
+      await updateCompanyDetails(auth, {
+        registered_name: "No Data",
+        status: "No Data",
+        mail: "No Data",
+        agent: "No Data"
+      }, rowIndex);
+      await updateCommonAddress(auth, "No Address Found", "No Zip Found", rowIndex);
+    }
+    return [];
   }
 
-  console.log(`✅ Logged individuals for ${companyName}:`, resolved);
-  return resolved;
+  // --- Try to match rows
+  const rows = await driver.findElements(By.xpath('//*[@id="search-results"]/table/tbody/tr'));
+  let companyFound = false;
+
+  for (const row of rows) {
+    const foundName = await row.findElement(By.xpath("./td[1]/a")).getText();
+    if (namesMatch(foundName, companyName)) {
+      await row.findElement(By.xpath("./td[1]/a")).click();
+      companyFound = true;
+      break;
+    }
+  }
+
+  if (!companyFound) {
+    console.log(`⚠️ No close match for ${companyName}`);
+    if (rowIndex) {
+      await updateSheet(auth, ["No Data"], rowIndex);
+      await updateCompanyDetails(auth, {
+        registered_name: "No Data",
+        status: "No Data",
+        mail: "No Data",
+        agent: "No Data"
+      }, rowIndex);
+      await updateCommonAddress(auth, "No Address Found", "No Zip Found", rowIndex);
+    }
+    return [];
+  }
+
+  // --- Wait for detail page
+  const pageReady = await retryWait(driver, By.id("main"), 3, 30000);
+  if (!pageReady) {
+    console.log(`❌ Failed to load details page for ${companyName}`);
+    if (rowIndex) {
+      await updateSheet(auth, ["No Data"], rowIndex);
+      await updateCompanyDetails(auth, {
+        registered_name: "No Data",
+        status: "No Data",
+        mail: "No Data",
+        agent: "No Data"
+      }, rowIndex);
+      await updateCommonAddress(auth, "No Address Found", "No Zip Found", rowIndex);
+    }
+    return [];
+  }
+
+  // --- Scrape details + officers
+  const details = await scrapeCompanyDetails(driver);
+  const { officerNames, commonStreet, commonZip } = await scrapeOfficerData(driver);
+  const cleanNames = officerNames.map(n => n.replace(/[.,'"]/g, "").trim());
+
+  // --- Resolve businesses → individuals
+  const resolvedNames = [];
+  for (const officer of cleanNames) {
+    if (isBusinessEntity(officer)) {
+      // recurse into sub-company
+      const subNames = await processCompany(auth, driver, officer, null, visited);
+      if (subNames?.length) resolvedNames.push(...subNames);
+    } else {
+      resolvedNames.push(officer);
+    }
+  }
+
+  // --- Recurse into agent if it’s a business
+  if (details.agent && isBusinessEntity(details.agent)) {
+    console.log(`↪️ Recursing into agent entity: ${details.agent}`);
+    await wait(1500);
+    const agentNames = await processCompany(auth, driver, details.agent, null, visited);
+    if (agentNames?.length) resolvedNames.push(...agentNames);
+  }
+
+  // --- Update Google Sheets
+  if (rowIndex) {
+    await updateSheet(auth, resolvedNames.length ? resolvedNames : ["No Data"], rowIndex);
+    await updateCommonAddress(auth, commonStreet || "No Address Found", commonZip || "No Zip Found", rowIndex);
+    await updateCompanyDetails(auth, details, rowIndex);
+  }
+
+  console.log(`✅ Logged individuals for ${companyName}:`, resolvedNames);
+
+  // Return officers for recursive calls (only individuals)
+  return resolvedNames;
 }
 
 // ==========================
@@ -393,16 +578,18 @@ async function processCompany(auth, driver, companyName, rowIndex = null, visite
 
   try {
     const visited = new Set();
+
     for (const { name: companyName, rowIndex, isBusiness } of companies) {
       if (!isBusiness) {
         console.log(`⏩ Skipping personal name: ${companyName} (Row ${rowIndex})`);
         continue;
       }
+
       await processCompany(auth, driver, companyName, rowIndex, visited);
       await wait(1500);
     }
-  } catch (err) {
-    console.error("❌ Error during execution:", err.message);
+  } catch (error) {
+    console.error("❌ Error during execution:", error.message);
   } finally {
     await driver.quit();
   }
