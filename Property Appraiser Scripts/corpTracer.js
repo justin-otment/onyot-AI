@@ -8,8 +8,8 @@ import chrome from "selenium-webdriver/chrome.js";
 // ==========================
 // Google Sheets Configuration
 // ==========================
-const SHEET_ID = "1rHU_8_9toBx02wsOUTpIbwDOn_0MmLUNTjVmxTPyDhs";
-const SHEET_NAME = "Reprocessing";
+const SHEET_ID = "1GOOaezkaEU5B1fqOi_fw5HB4vsj-eVB6WpaSvjjoF2w";
+const SHEET_NAME = "Port Charlotte FL";
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 const CREDENTIALS_PATH = path.join(process.cwd(), "credentials.json");
 const TOKEN_PATH = path.join(process.cwd(), "token.json");
@@ -46,7 +46,7 @@ async function updateSheet(auth, officerNames, rowIndex) {
   const trimmed = officerNames.slice(0, maxCols);
   while (trimmed.length < maxCols) trimmed.push("");
 
-  const range = `${SHEET_NAME}!F${rowIndex}:L${rowIndex}`;
+  const range = `${SHEET_NAME}!E${rowIndex}:K${rowIndex}`;
 
   try {
     await sheets.spreadsheets.values.update({
@@ -66,7 +66,7 @@ async function updateSheet(auth, officerNames, rowIndex) {
 async function updateCompanyDetails(auth, details, rowIndex) {
   const sheets = google.sheets({ version: "v4", auth });
 
-  const range = `${SHEET_NAME}!M${rowIndex}:P${rowIndex}`;
+  const range = `${SHEET_NAME}!L${rowIndex}:O${rowIndex}`;
   const values = [[details.registered_name, details.status, details.mail, details.agent]];
 
   try {
@@ -87,7 +87,7 @@ async function updateCompanyDetails(auth, details, rowIndex) {
 async function updateCommonAddress(auth, street, zip, rowIndex) {
   const sheets = google.sheets({ version: "v4", auth });
 
-  const range = `${SHEET_NAME}!Q${rowIndex}:R${rowIndex}`;
+  const range = `${SHEET_NAME}!P${rowIndex}:Q${rowIndex}`;
   const values = [[street, zip]];
 
   try {
@@ -298,7 +298,7 @@ async function scrapeCompanyDetails(driver) {
 // ==========================
 async function getCompanyNames(auth) {
   const sheets = google.sheets({ version: "v4", auth });
-  const range = `${SHEET_NAME}!E2:E`;
+  const range = `${SHEET_NAME}!B2:B`;
 
   try {
     const response = await sheets.spreadsheets.values.get({
