@@ -8,8 +8,8 @@ import chrome from "selenium-webdriver/chrome.js";
 // ==========================
 // Google Sheets Configuration
 // ==========================
-const SHEET_ID = "1GOOaezkaEU5B1fqOi_fw5HB4vsj-eVB6WpaSvjjoF2w";
-const SHEET_NAME = "Port Charlotte FL";
+const SHEET_ID = "1zvXxmncHa0MMggdgIWSFTtkoi5gyy6go-ozVea_4f54";
+const SHEET_NAME = "Reprocessing";
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 const CREDENTIALS_PATH = path.join(process.cwd(), "credentials.json");
 const TOKEN_PATH = path.join(process.cwd(), "token.json");
@@ -298,7 +298,7 @@ async function scrapeCompanyDetails(driver) {
 // ==========================
 async function getCompanyNames(auth) {
   const sheets = google.sheets({ version: "v4", auth });
-  const range = `${SHEET_NAME}!B2:B`;
+  const range = `${SHEET_NAME}!E2:E`;
 
   try {
     const response = await sheets.spreadsheets.values.get({
