@@ -11,12 +11,7 @@ import chrome from "selenium-webdriver/chrome.js";
 const SHEET_ID = "1zvXxmncHa0MMggdgIWSFTtkoi5gyy6go-ozVea_4f54";
 const SHEET_NAME = "Reprocessing";
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
-const CREDENTIALS_PATH = path.join(process.cwd(), "credentials.json");
-const TOKEN_PATH = path.join(process.cwd(), "token.json");
 
-// ==========================
-// Authenticate Google Sheets
-// ==========================
 // ==========================
 // Authenticate Google Sheets (Service Account)
 // ==========================
