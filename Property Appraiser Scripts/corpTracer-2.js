@@ -15,15 +15,9 @@ const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 const CREDENTIALS_PATH = path.join(process.cwd(), "credentials.json");
 const TOKEN_PATH = path.join(process.cwd(), "token.json");
 
-// ==========================
-// Authenticate Google Sheets
-// ==========================
-// ==========================
-// Authenticate Google Sheets (Service Account)
-// ==========================
 async function authenticateGoogleSheets() {
   // Point to your downloaded service account JSON key
-  const SERVICE_ACCOUNT_PATH = path.join(process.cwd(), "service-account.json");
+  const SERVICE_ACCOUNT_PATH = path.join(process.cwd(), "service-account_base64.txt");
 
   // Create a GoogleAuth client using the service account
   const auth = new google.auth.GoogleAuth({
