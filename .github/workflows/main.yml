@@ -9,7 +9,6 @@ jobs:
     strategy:
       matrix:
         script: [corpTracer.js, corpTracer-1.js, corpTracer-2.js]
-        name: [Lehigh-Acres, Charlotte, Citrus]
 
     steps:
       - name: Checkout repository
@@ -36,7 +35,7 @@ jobs:
         working-directory: "Property Appraiser Scripts"
         run: echo "${{ secrets.GCP_KEY_BASE64 }}" | base64 -d > service-account.json
 
-      - name: Run CorpTracer ${{ matrix.name }}
+      - name: Run ${{ matrix.script }}
         working-directory: "Property Appraiser Scripts"
         env:
           HEADLESS: 'true'
