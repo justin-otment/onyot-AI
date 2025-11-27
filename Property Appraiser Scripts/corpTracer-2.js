@@ -9,7 +9,7 @@ import chrome from "selenium-webdriver/chrome.js";
 // ==========================
 // Google Sheets Configuration
 // ==========================
-const SHEET_ID = "140GOtFSLYBk4FC50Jd9__Y6SaKSHhfb2PIeap4lKXPE";
+const SHEET_ID = "19mkuw_zM_054b6zv6uHP98_ijASh-Jl3cYCDnim92I4";
 const SHEET_NAME = "Reprocessing";
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 const CREDENTIALS_PATH = path.join(process.cwd(), "credentials.json");
