@@ -5,7 +5,7 @@ on:
 
 jobs:
 
-  CorpTracer_Port-Charlotte:
+  CorpTracer_Lehigh-Acres:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -42,3 +42,79 @@ jobs:
           CHROME_PATH: '/usr/bin/google-chrome-stable'
           GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
         run: node corpTracer.js
+
+  CorpTracer_Charlotte:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install Chrome and Chromedriver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip xvfb libxi6 libxss1 libnss3 libatk-bridge2.0-0 libgtk-3-0
+          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
+
+      - name: Install dependencies (fallback to npm install if no lockfile)
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Decode Service Account JSON
+        working-directory: "Property Appraiser Scripts"
+        run: base64 -d service-account_base64.txt > service-account.json
+
+      - name: Run Corp Tracer Cape Coral + Palm Bay
+        working-directory: "Property Appraiser Scripts"
+        env:
+          HEADLESS: 'true'
+          CHROME_PATH: '/usr/bin/google-chrome-stable'
+          GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
+        run: node corpTracer-1.js
+
+  CorpTracer_Citrus:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install Chrome and Chromedriver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip xvfb libxi6 libxss1 libnss3 libatk-bridge2.0-0 libgtk-3-0
+          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
+
+      - name: Install dependencies (fallback to npm install if no lockfile)
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Decode Service Account JSON
+        working-directory: "Property Appraiser Scripts"
+        run: base64 -d service-account_base64.txt > service-account.json
+
+      - name: Run Corp Tracer Cape Coral + Palm Bay
+        working-directory: "Property Appraiser Scripts"
+        env:
+          HEADLESS: 'true'
+          CHROME_PATH: '/usr/bin/google-chrome-stable'
+          GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
+        run: node corpTracer-2.js
