@@ -8,7 +8,7 @@ import chrome from "selenium-webdriver/chrome.js";
 // ==========================
 // Google Sheets Configuration
 // ==========================
-const SHEET_ID = "1rHU_8_9toBx02wsOUTpIbwDOn_0MmLUNTjVmxTPyDhs";
+const SHEET_ID = "19mkuw_zM_054b6zv6uHP98_ijASh-Jl3cYCDnim92I4";
 const SHEET_NAME = "Reprocessing";
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
@@ -293,7 +293,7 @@ async function scrapeCompanyDetails(driver) {
 // ==========================
 async function getCompanyNames(auth) {
   const sheets = google.sheets({ version: "v4", auth });
-  const range = `${SHEET_NAME}!E2:E`;
+  const range = `${SHEET_NAME}!D2:E`;
 
   try {
     const response = await sheets.spreadsheets.values.get({
