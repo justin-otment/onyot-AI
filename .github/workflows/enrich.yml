@@ -19,9 +19,14 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Configure service account
-        run: |
-          echo "${{ secrets.SERVICE_ACCOUNT_JSON }}" > service-account.json
+      # Decode the base64-encoded service account JSON secret
+      - name: Decode Service Account JSON
+        run: echo "${{ secrets.GCP_KEY_BASE64 }}" | base64 -d > service-account.json
 
-      - name: Run enrichment
+      # Run your enrichment script with environment variables
+      - name: Run fullAddress.js
+        env:
+          HEADLESS: 'true'
+          CHROME_PATH: '/usr/bin/google-chrome-stable'
+          GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
         run: node fullAddress.js
