@@ -27,13 +27,17 @@ async function scrapePage(browser, url) {
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
 
-    // Extract the first target element
-    const firstResult = await page.$eval("h3.LC20lb.MBeuO.DKV0Md", el => el.innerText);
+    // Wait for search results to appear
+    await page.waitForSelector("a h3", { timeout: 10000 });
+
+    // Extract title and link of the first result
+    const firstResult = await page.$eval("a h3", el => el.innerText);
+    const firstLink = await page.$eval("a", el => el.closest("a").href);
 
     await page.close();
-    return { text: firstResult, status: "OK" };
+    return { text: firstResult, link: firstLink, status: "OK" };
   } catch (err) {
-    return { text: "", status: "NOT FOUND" };
+    return { text: "", link: "", status: "NOT FOUND" };
   }
 }
 
