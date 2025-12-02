@@ -28,7 +28,7 @@ async function scrapePage(browser, url) {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
 
     // Wait for search results to appear
-    await page.waitForSelector("a h3", { timeout: 10000 });
+    await page.waitForSelector("h3", { timeout: 10000 });
 
     // Extract title and link of the first result
     const firstResult = await page.$eval("a h3", el => el.innerText);
