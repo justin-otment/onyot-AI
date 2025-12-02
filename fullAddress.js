@@ -9,7 +9,7 @@ const BATCH_SIZE = 50; // smaller batch for headless browsing
 
 async function getSheetsClient() {
   const auth = new google.auth.GoogleAuth({
-    keyFile: "service-account.json", // written by GitHub Actions from secrets
+    keyFile: "service-account.json", // created from GitHub secret
     scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
   return google.sheets({ version: "v4", auth: await auth.getClient() });
