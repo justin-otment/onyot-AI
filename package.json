@@ -1,23 +1,20 @@
 {
-  "name": "otment",
+  "name": "otment-3",
   "version": "1.0.0",
-  "description": "",
-  "main": "leePA.mjs",
-  "type": "module",
+  "description": "The following instructions below is a MUST devtools configuration prior to activating Browser Extensions:",
+  "main": "fullAddress.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "type": "commonjs",
   "dependencies": {
-    "axios": "^1.6.0",
-    "chromedriver": "^140.0.4",
-    "dotenv": "^17.2.1",
-    "express": "^5.1.0",
-    "googleapis": "^159.0.0",
-    "selenium-webdriver": "^4.35.0",
-    "uuidv4": "^6.2.13",
-    "puppeteer-core": "^22.0.0"
+    "axios": "^1.13.2",
+    "cheerio": "^1.1.2",
+    "googleapis": "^166.0.0",
+    "p-limit": "^7.2.0",
+    "puppeteer": "^24.31.0"
   }
 }
