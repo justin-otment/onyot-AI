@@ -64,40 +64,41 @@ async function main() {
   const endRow = Math.min(startRow - 2 + BATCH_SIZE, rows.length);
 
   const browser = await puppeteer.launch({ headless: true });
-  const textOutput = [];
-  const statusOutput = [];
 
   for (let i = startRow - 2; i < endRow; i++) {
+    const rowIndex = i + 2; // actual sheet row number
     const url = rows[i][0];
-    if (!url || url.trim() === "") {
-      textOutput.push([""]);
-      statusOutput.push(["SKIPPED"]);
-    } else {
-      const { text, status } = await scrapePage(browser, url);
-      textOutput.push([text]);
-      statusOutput.push([status]);
+
+    let text = "";
+    let status = "SKIPPED";
+
+    if (url && url.trim() !== "") {
+      const result = await scrapePage(browser, url);
+      text = result.text;
+      status = result.status;
+    }
+
+    // Write results row by row with error handling
+    try {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: `${SHEET_NAME}!H${rowIndex}`,
+        valueInputOption: "RAW",
+        resource: { values: [[text]] },
+      });
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: `${SHEET_NAME}!I${rowIndex}`,
+        valueInputOption: "RAW",
+        resource: { values: [[status]] },
+      });
+    } catch (error) {
+      console.error(`❌ Error updating sheet at row ${rowIndex}:`, error.message);
     }
   }
 
   await browser.close();
-
-  // Write results into column H and I
-  await sheets.spreadsheets.values.batchUpdate({
-    spreadsheetId: SHEET_ID,
-    requestBody: {
-      valueInputOption: "RAW",
-      data: [
-        {
-          range: `${SHEET_NAME}!H${startRow}:H${endRow + 1}`,
-          values: textOutput,
-        },
-        {
-          range: `${SHEET_NAME}!I${startRow}:I${endRow + 1}`,
-          values: statusOutput,
-        },
-      ],
-    },
-  });
 
   saveProgress(endRow + 2);
   console.log(`Processed rows ${startRow} to ${endRow + 1}`);
