@@ -1,10 +1,10 @@
-name: Run Search Extractor
+name: Run Full Address Scraper
 
 on:
   workflow_dispatch:
 
 jobs:
-  googleSearchExtractor:
+  fullAddressJob:
     runs-on: ubuntu-latest
 
     steps:
@@ -16,9 +16,6 @@ jobs:
         with:
           node-version: 20
 
-      - name: Ensure Chrome is installed
-        run: google-chrome --version || sudo apt-get install -y google-chrome-stable
-
       - name: Install dependencies
         run: |
           if [ -f package-lock.json ]; then
@@ -27,19 +24,14 @@ jobs:
             npm install
           fi
 
-      - name: Decode Service Account JSON
-        working-directory: "Google Scripts"
-        run: echo "${{ secrets.SERVICE_ACCOUNT_JSON }}" | base64 -d > service-account.json
+      - name: Decode service-account.json
+        run: echo "${{ secrets.SERVICE_ACCOUNT_JSON_BASE64 }}" | base64 -d > service-account.json
 
-      - name: Decode Google Token JSON
-        working-directory: "Google Scripts"
-        run: echo "${{ secrets.GOOGLE_TOKEN_JSON }}" | base64 -d > google-token.json
+      - name: Decode google-token.json
+        run: echo "${{ secrets.GOOGLE_TOKEN_JSON_BASE64 }}" | base64 -d > google-token.json
 
       - name: Run fullAddress.js
-        working-directory: "Google Scripts"
         env:
-          HEADLESS: 'true'
-          CHROME_PATH: '/usr/bin/google-chrome-stable'
-          GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
-          GOOGLE_TOKEN_PATH: './google-token.json'
+          GOOGLE_APPLICATION_CREDENTIALS: "./service-account.json"
+          GOOGLE_TOKEN_JSON: "./google-token.json"
         run: node fullAddress.js
