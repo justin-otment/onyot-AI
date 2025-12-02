@@ -23,10 +23,5 @@ jobs:
         run: |
           echo "${{ secrets.SERVICE_ACCOUNT_JSON }}" > service-account.json
 
-      - name: Install Puppeteer dependencies
-        run: sudo apt-get update && sudo apt-get install -y \
-          libnss3 libatk1.0-0 libx11-xcb1 libxcomposite1 \
-          libxdamage1 libxrandr2 libgbm1 libasound2
-
       - name: Run enrichment
         run: node fullAddress.js
