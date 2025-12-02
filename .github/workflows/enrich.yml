@@ -1,32 +1,27 @@
-name: Enrich Addresses
+name: Google Search Extractor
 
 on:
-  workflow_dispatch:   # manual trigger only
+  workflow_dispatch:
 
 jobs:
-  enrich:
+  run-search:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v3
         with:
-          node-version: "20"
+          node-version: 20
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          npm install googleapis puppeteer-extra puppeteer-extra-plugin-stealth puppeteer
 
-      # Decode the base64-encoded service account JSON secret
-      - name: Decode Service Account JSON
-        run: echo "${{ secrets.GCP_KEY_BASE64 }}" | base64 -d > service-account.json
+      - name: Create service account key
+        run: |
+          echo "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" > service-account.json
 
-      # Run your enrichment script with environment variables
-      - name: Run fullAddress.js
-        env:
-          HEADLESS: 'true'
-          CHROME_PATH: '/usr/bin/google-chrome-stable'
-          GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
+      - name: Run script
         run: node fullAddress.js
