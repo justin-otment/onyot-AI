@@ -6,7 +6,6 @@ const { google } = require("googleapis");
 const SHEET_ID = "1xPmFJ8yHfuqu2DrLpl5bCRlFO7vRn7BJJtKBdC6pdvk";
 const SHEET_NAME = "Main File";
 const RANGE = "G2:G8540";
-const BATCH_SIZE = 50; // smaller batch for headless browsing
 
 // ==========================
 // Authenticate Google Sheets (Service Account)
@@ -21,17 +20,6 @@ async function authenticateGoogleSheets() {
 
   const client = await auth.getClient();
   return google.sheets({ version: "v4", auth: client });
-}
-
-function loadProgress() {
-  if (fs.existsSync("progress.json")) {
-    return JSON.parse(fs.readFileSync("progress.json", "utf8")).lastRow || 2;
-  }
-  return 2;
-}
-
-function saveProgress(lastRow) {
-  fs.writeFileSync("progress.json", JSON.stringify({ lastRow }));
 }
 
 async function scrapePage(browser, url) {
@@ -51,7 +39,6 @@ async function scrapePage(browser, url) {
 
 async function main() {
   const sheets = await authenticateGoogleSheets();
-  const startRow = loadProgress();
 
   // Read column G (URLs)
   const res = await sheets.spreadsheets.values.get({
@@ -60,12 +47,17 @@ async function main() {
   });
 
   const rows = res.data.values || [];
-  const endRow = Math.min(startRow - 2 + BATCH_SIZE, rows.length);
 
-  const browser = await puppeteer.launch({ headless: true });
+  // ✅ Launch Puppeteer with sandbox disabled for CI/CD
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    executablePath: process.env.CHROME_PATH || undefined,
+  });
 
-  for (let i = startRow - 2; i < endRow; i++) {
-    const rowIndex = i + 2; // actual sheet row number
+  // Process ALL rows sequentially
+  for (let i = 0; i < rows.length; i++) {
+    const rowIndex = i + 2; // actual sheet row number (since we start at G2)
     const url = rows[i][0];
 
     let text = "";
@@ -100,9 +92,7 @@ async function main() {
   }
 
   await browser.close();
-
-  saveProgress(endRow + 2);
-  console.log(`Processed rows ${startRow} to ${endRow + 1}`);
+  console.log(`Finished processing ${rows.length} rows sequentially.`);
 }
 
 main().catch(console.error);
