@@ -107,171 +107,226 @@ function colLetter(n) {
   return s;
 }
 
-  async function organizeData() {
-    try {
-      const authClient = await authenticate();
-      const sheetsApi = google.sheets({ version: "v4", auth: authClient });
-  
-      // Read all relevant columns from Main File
-      const [ownersResp, mailResp, addrResp, cityResp, stateResp] =
-        await Promise.all([
-          sheetsApi.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: `${SOURCE_SHEET}!${OWNER_COL}` }),
-          sheetsApi.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: `${SOURCE_SHEET}!${FULL_MAIL_COL}` }),
-          sheetsApi.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: `${SOURCE_SHEET}!${SITE_ADDRESS_COL}` }),
-          sheetsApi.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: `${SOURCE_SHEET}!${SITE_CITY_COL}` }),
-          sheetsApi.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: `${SOURCE_SHEET}!${SITE_STATEZIP_COL}` }),
-        ]);
-  
-      const owners = ownersResp.data.values || [];
-      const mails = mailResp.data.values || [];
-      const addrs = addrResp.data.values || [];
-      const cities = cityResp.data.values || [];
-      const states = stateResp.data.values || [];
-  
-      const individuals = [];
-      const companies = [];
-      const trusts = [];
-  
-      const ownerMap = new Map();
-  
-      for (let i = 0; i < owners.length; i++) {
-        const name = normalize(owners[i][0]);
-        const mailing = normalize(mails[i]?.[0]);
-        const siteAddress = normalize(addrs[i]?.[0]);
-        const siteCity = normalize(cities[i]?.[0]);
-        const siteStateZip = normalize(states[i]?.[0]);
-  
-        if (!name) continue;
-  
-        const type = getType(name);
-        if (type === "individual") individuals.push(name);
-        else if (type === "company") companies.push(name);
-        else if (type === "trust") trusts.push(name);
-  
-        if (!ownerMap.has(name)) {
-          ownerMap.set(name, {
-            mailing: mailing || "",
-            properties: new Set(),
-          });
-        }
-  
-        const propertyStr = [siteAddress, siteCity, siteStateZip].filter(Boolean).join(", ");
-        if (propertyStr.trim() !== "") {
-          ownerMap.get(name).properties.add(propertyStr);
-        }
-      }
-  
-      // Write A2 owners
-      await writeToSheet(sheetsApi, SHEETS.individual, individuals);
-      await writeToSheet(sheetsApi, SHEETS.company, companies);
-      await writeToSheet(sheetsApi, SHEETS.trust, trusts);
-  
-      // Transpose into B2...
-      for (const sheet of Object.values(SHEETS)) {
-        await transposeSheetData(sheetsApi, sheet);
-      }
-  
-      // ==========================
-      // Fetch Traced sheet data
-      // ==========================
-      const tracedResp = await sheetsApi.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `Traced!A2:D`, // street address in col A, phone in col D
-      });
-  
-      const tracedRows = tracedResp.data.values || [];
-      const tracedMap = new Map();
-  
-      function isValidPhone(val) {
-        if (!val) return false;
-        const digits = val.replace(/\D/g, "");
-        return digits.length >= 7; // basic sanity check
-      }
-  
-      for (let i = 0; i < tracedRows.length; i++) {
-        const street = normalize(tracedRows[i][0]);
-        const phone = normalize(tracedRows[i][3]);
-        if (street) {
-          tracedMap.set(street, isValidPhone(phone));
-        }
-      }
-  
-      // ==========================
-      // Add new columns by header
-      // ==========================
-      for (const sheetName of Object.values(SHEETS)) {
-        const headerResp = await sheetsApi.spreadsheets.values.get({
-          spreadsheetId: SPREADSHEET_ID,
-          range: `${sheetName}!1:1`,
+async function organizeData() {
+  try {
+    const authClient = await authenticate();
+    const sheetsApi = google.sheets({ version: "v4", auth: authClient });
+
+    // Read all relevant columns from Main File
+    const [ownersResp, mailResp, addrResp, cityResp, stateResp] =
+      await Promise.all([
+        sheetsApi.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: `${SOURCE_SHEET}!${OWNER_COL}` }),
+        sheetsApi.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: `${SOURCE_SHEET}!${FULL_MAIL_COL}` }),
+        sheetsApi.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: `${SOURCE_SHEET}!${SITE_ADDRESS_COL}` }),
+        sheetsApi.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: `${SOURCE_SHEET}!${SITE_CITY_COL}` }),
+        sheetsApi.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: `${SOURCE_SHEET}!${SITE_STATEZIP_COL}` }),
+      ]);
+
+    const owners = ownersResp.data.values || [];
+    const mails = mailResp.data.values || [];
+    const addrs = addrResp.data.values || [];
+    const cities = cityResp.data.values || [];
+    const states = stateResp.data.values || [];
+
+    const individuals = [];
+    const companies = [];
+    const trusts = [];
+
+    const ownerMap = new Map();
+
+    for (let i = 0; i < owners.length; i++) {
+      const name = normalize(owners[i][0]);
+      const mailing = normalize(mails[i]?.[0]);
+      const siteAddress = normalize(addrs[i]?.[0]);
+      const siteCity = normalize(cities[i]?.[0]);
+      const siteStateZip = normalize(states[i]?.[0]);
+
+      if (!name) continue;
+
+      const type = getType(name);
+      if (type === "individual") individuals.push(name);
+      else if (type === "company") companies.push(name);
+      else if (type === "trust") trusts.push(name);
+
+      if (!ownerMap.has(name)) {
+        ownerMap.set(name, {
+          mailing: mailing || "",
+          properties: new Set(),
         });
-  
-        const headers = headerResp.data.values?.[0] || [];
-        const headerMap = {};
-        headers.forEach((h, i) => {
-          headerMap[h.trim().toLowerCase()] = colLetter(i);
-        });
-  
-        const mailingCol = [];
-        const propertiesCol = [];
-        const multiPropCol = [];
-        const tracedCol = [];
-  
-        const sheetOwners = sheetName === SHEETS.individual
-          ? individuals
-          : sheetName === SHEETS.company
-          ? companies
-          : trusts;
-  
-        for (const owner of sheetOwners) {
-          const entry = ownerMap.get(owner);
-          const props = Array.from(entry?.properties || []);
-  
-          mailingCol.push([entry?.mailing || ""]);
-          propertiesCol.push([props.join("; ")]);
-          multiPropCol.push([props.length > 1 ? "Y" : "N"]);
-  
-          // Determine traced status
-          let tracedFlag = "N";
-          for (const p of props) {
-            const streetOnly = p.split(",")[0].trim();
-            if (tracedMap.has(streetOnly) && tracedMap.get(streetOnly)) {
-              tracedFlag = "Y";
-              break;
-            }
-          }
-          tracedCol.push([tracedFlag]);
-        }
-  
-        const updates = [
-          { label: "Full Mailing Address", data: mailingCol },
-          { label: "Properties", data: propertiesCol },
-          { label: "Multiple Properties (Y / N)", data: multiPropCol },
-          { label: "Traced (Y/N)", data: tracedCol },
-        ];
-  
-        for (const u of updates) {
-          const headerKey = u.label.trim().toLowerCase();
-          const targetCol = headerMap[headerKey];
-          if (!targetCol) {
-            console.warn(`⚠️ Header "${u.label}" not found in ${sheetName}, skipping`);
-            continue;
-          }
-  
-          await sheetsApi.spreadsheets.values.update({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `${sheetName}!${targetCol}2`,
-            valueInputOption: "RAW",
-            resource: { values: u.data },
-          });
-          console.log(`✅ Wrote ${u.label} → ${sheetName}!${targetCol}`);
-        }
       }
-  
-      console.log("✅ All tasks complete.");
-    } catch (error) {
-      console.error("❌ Error organizing data:", error);
+
+      const propertyStr = [siteAddress, siteCity, siteStateZip].filter(Boolean).join(", ");
+      if (propertyStr.trim() !== "") {
+        ownerMap.get(name).properties.add(propertyStr);
+      }
     }
+
+    // Write A2 owners
+    await writeToSheet(sheetsApi, SHEETS.individual, individuals);
+    await writeToSheet(sheetsApi, SHEETS.company, companies);
+    await writeToSheet(sheetsApi, SHEETS.trust, trusts);
+
+    // Transpose into B2...
+    for (const sheet of Object.values(SHEETS)) {
+      await transposeSheetData(sheetsApi, sheet);
+    }
+
+    // ==========================
+    // Fetch Traced sheet data
+    // ==========================
+    const tracedResp = await sheetsApi.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `Traced!A2:D`, // street address in col A, phone in col D
+    });
+
+    const tracedRows = tracedResp.data.values || [];
+    const tracedMap = new Map();
+
+    function isValidPhone(val) {
+      if (!val) return false;
+      const digits = val.replace(/\D/g, "");
+      return digits.length >= 7; // basic sanity check
+    }
+
+    for (let i = 0; i < tracedRows.length; i++) {
+      const street = normalize(tracedRows[i][0]);
+      const phone = normalize(tracedRows[i][3]);
+      if (street) {
+        tracedMap.set(street, isValidPhone(phone));
+      }
+    }
+
+    // ==========================
+    // Add new columns by header
+    // ==========================
+    for (const sheetName of Object.values(SHEETS)) {
+      const headerResp = await sheetsApi.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheetName}!1:1`,
+      });
+
+      const headers = headerResp.data.values?.[0] || [];
+      const headerMap = {};
+      headers.forEach((h, i) => {
+        headerMap[h.trim().toLowerCase()] = colLetter(i);
+      });
+
+      const mailingCol = [];
+      const propertiesCol = [];
+      const multiPropCol = [];
+      const tracedCol = [];
+
+      const sheetOwners = sheetName === SHEETS.individual
+        ? individuals
+        : sheetName === SHEETS.company
+        ? companies
+        : trusts;
+
+      for (const owner of sheetOwners) {
+        const entry = ownerMap.get(owner);
+        const props = Array.from(entry?.properties || []);
+
+        mailingCol.push([entry?.mailing || ""]);
+        propertiesCol.push([props.join("; ")]);
+        multiPropCol.push([props.length > 1 ? "Y" : "N"]);
+
+        // Determine traced status
+        let tracedFlag = "N";
+        for (const p of props) {
+          const streetOnly = p.split(",")[0].trim();
+          if (tracedMap.has(streetOnly) && tracedMap.get(streetOnly)) {
+            tracedFlag = "Y";
+            break;
+          }
+        }
+        tracedCol.push([tracedFlag]);
+      }
+
+      const updates = [
+        { label: "Full Mailing Address", data: mailingCol },
+        { label: "Properties", data: propertiesCol },
+        { label: "Multiple Properties (Y / N)", data: multiPropCol },
+        { label: "Traced (Y/N)", data: tracedCol },
+      ];
+
+      for (const u of updates) {
+        const headerKey = u.label.trim().toLowerCase();
+        const targetCol = headerMap[headerKey];
+        if (!targetCol) {
+          console.warn(`⚠️ Header "${u.label}" not found in ${sheetName}, skipping`);
+          continue;
+        }
+
+        await sheetsApi.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheetName}!${targetCol}2`,
+          valueInputOption: "RAW",
+          resource: { values: u.data },
+        });
+        console.log(`✅ Wrote ${u.label} → ${sheetName}!${targetCol}`);
+      }
+    }
+
+    // ==========================
+    // Update Summary sheet
+    // ==========================
+    const summaryUpdates = [];
+
+    // 1. Total Properties (Main File!B2:B)
+    const mainPropsResp = await sheetsApi.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${SOURCE_SHEET}!B2:B`,
+    });
+    const totalProperties = (mainPropsResp.data.values || []).filter(r => normalize(r[0])).length;
+    summaryUpdates.push({ range: "Summary!A4", values: [["Total Properties:"]] });
+    summaryUpdates.push({ range: "Summary!C4", values: [[totalProperties]] });
+
+    // 2. Total Entities (Individuals, Companies, Trusts A2:A)
+    let totalEntities = 0;
+    for (const sheetName of Object.values(SHEETS)) {
+      const resp = await sheetsApi.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheetName}!A2:A`,
+      });
+      totalEntities += (resp.data.values || []).filter(r => normalize(r[0])).length;
+    }
+    summaryUpdates.push({ range: "Summary!A5", values: [["Total Entities:"]] });
+    summaryUpdates.push({ range: "Summary!C5", values: [[totalEntities]] });
+
+    // 3 & 4. Traced / Untraced Entities (Individuals, Companies, Trusts L2:L)
+    let tracedCount = 0;
+    let untracedCount = 0;
+    for (const sheetName of Object.values(SHEETS)) {
+      const resp = await sheetsApi.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheetName}!L2:L`,
+      });
+      const vals = resp.data.values || [];
+      for (const [val] of vals) {
+        if (val === "Y") tracedCount++;
+        else if (val === "N") untracedCount++;
+      }
+    }
+    summaryUpdates.push({ range: "Summary!A6", values: [["Traced Entities:"]] });
+    summaryUpdates.push({ range: "Summary!C6", values: [[tracedCount]] });
+    summaryUpdates.push({ range: "Summary!A7", values: [["Untraced Entities:"]] });
+    summaryUpdates.push({ range: "Summary!C7", values: [[untracedCount]] });
+
+    // Batch update all summary cells
+    await sheetsApi.spreadsheets.values.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      resource: {
+        valueInputOption: "RAW",
+        data: summaryUpdates,
+      },
+    });
+
+    console.log("✅ Summary sheet updated.");
+    console.log("✅ All tasks complete.");
+  } catch (error) {
+    console.error("❌ Error organizing data:", error);
   }
+}
 
 // ==========================
 // RUN
