@@ -1,100 +1,110 @@
-const fs = require("fs");
-const path = require("path");
-const puppeteer = require("puppeteer");
-const { google } = require("googleapis");
+import { google } from "googleapis";
+import puppeteer from "puppeteer-extra";
+import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
-const SHEET_ID = "1xPmFJ8yHfuqu2DrLpl5bCRlFO7vRn7BJJtKBdC6pdvk";
-const SHEET_NAME = "Main File";
-const RANGE = "G2:G8540";
+puppeteer.use(StealthPlugin());
 
-// ==========================
-// Authenticate Google Sheets (Service Account)
-// ==========================
-async function authenticateGoogleSheets() {
-  const SERVICE_ACCOUNT_PATH = path.join(process.cwd(), "service-account.json");
+// ------------------------------------------------------
+// Google Sheets Auth Setup
+// ------------------------------------------------------
+const auth = new google.auth.GoogleAuth({
+  keyFile: "service-account.json",
+  scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+});
 
-  const auth = new google.auth.GoogleAuth({
-    keyFile: SERVICE_ACCOUNT_PATH,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
+const SPREADSHEET_ID = "1xPmFJ8yHfuqu2DrLpl5bCRlFO7vRn7BJJtKBdC6pdvk";
+const RANGE = "Main File!F2:F";
 
-  const client = await auth.getClient();
-  return google.sheets({ version: "v4", auth: client });
-}
-
-// ==========================
-// Scrape first result title from Google Search
-// ==========================
-async function scrapePage(browser, url) {
-  try {
-    const page = await browser.newPage();
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
-
-    await page.waitForSelector("div.g h3", { timeout: 10000 });
-    const title = await page.$eval("div.g h3", el => el.innerText);
-
-    await page.close();
-    return { text: title, status: "OK" };
-  } catch (err) {
-    return { text: "", status: "NOT FOUND" };
-  }
-}
-
-// ==========================
-// Main loop: process all rows sequentially
-// ==========================
-async function main() {
-  const sheets = await authenticateGoogleSheets();
+// ------------------------------------------------------
+// Read Data From Sheet
+// ------------------------------------------------------
+async function readSheet() {
+  const sheets = google.sheets({ version: "v4", auth: await auth.getClient() });
 
   const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SHEET_ID,
-    range: `${SHEET_NAME}!${RANGE}`,
+    spreadsheetId: SPREADSHEET_ID,
+    range: RANGE,
   });
 
-  const rows = res.data.values || [];
+  return res.data.values ? res.data.values.flat() : [];
+}
+
+// ------------------------------------------------------
+// Write Result Back to Sheet
+// ------------------------------------------------------
+async function writeResult(row, value) {
+  const sheets = google.sheets({ version: "v4", auth: await auth.getClient() });
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `Main File!G${row}`, // writes to column G next to F
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [[value]],
+    },
+  });
+}
+
+// ------------------------------------------------------
+// Perform Google Search and Extract First <h3>
+// ------------------------------------------------------
+async function getFirstH3(query, browser) {
+  const page = await browser.newPage();
+
+  await page.goto(`https://www.google.com/search?q=${encodeURIComponent(query)}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 60000
+  });
+
+  // Wait for at least 1 h3
+  await page.waitForSelector("h3", { timeout: 10000 }).catch(() => null);
+
+  const result = await page.evaluate(() => {
+    const h3 = document.querySelector("h3");
+    return h3 ? h3.innerText.trim() : null;
+  });
+
+  await page.close();
+  return result || "No H3 Found";
+}
+
+// ------------------------------------------------------
+// Main Runner
+// ------------------------------------------------------
+async function run() {
+  const data = await readSheet();
+  console.log(`Loaded ${data.length} items from column F`);
 
   const browser = await puppeteer.launch({
     headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    executablePath: process.env.CHROME_PATH || undefined,
   });
 
-  for (let i = 0; i < rows.length; i++) {
-    const rowIndex = i + 2;
-    const url = rows[i][0];
+  for (let i = 0; i < data.length; i++) {
+    const query = data[i];
 
-    let text = "";
-    let status = "SKIPPED";
-
-    if (url && url.trim() !== "") {
-      const result = await scrapePage(browser, url);
-      text = result.text;
-      status = result.status;
+    if (!query || query.trim() === "") {
+      console.log(`Row ${i + 2}: Empty cell, skipping...`);
+      continue;
     }
 
-    try {
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_ID,
-        range: `${SHEET_NAME}!H${rowIndex}`,
-        valueInputOption: "RAW",
-        resource: { values: [[text]] },
-      });
+    console.log(`Row ${i + 2}: Searching "${query}"...`);
 
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_ID,
-        range: `${SHEET_NAME}!I${rowIndex}`,
-        valueInputOption: "RAW",
-        resource: { values: [[status]] },
-      });
+    const h3 = await getFirstH3(query, browser);
+    console.log(` → Found H3: ${h3}`);
 
-      console.log(`✅ Updated row ${rowIndex}: ${status}`);
-    } catch (error) {
-      console.error(`❌ Error updating sheet at row ${rowIndex}:`, error.message);
-    }
+    // Write to Column G (same row)
+    await writeResult(i + 2, h3);
+
+    // Small delay to avoid Google rate-limit
+    await new Promise(r => setTimeout(r, 1500));
   }
 
   await browser.close();
-  console.log(`🎉 Finished processing ${rows.length} rows.`);
+  console.log("All done!");
 }
 
-main().catch(console.error);
+run().catch(err => {
+  console.error("Error:", err);
+  process.exit(1);
+});
