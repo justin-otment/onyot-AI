@@ -20,7 +20,7 @@ async function authenticateGoogleSheets() {
   });
 
   const client = await auth.getClient();
-  return client;
+  return google.sheets({ version: "v4", auth: client });
 }
 
 function loadProgress() {
@@ -50,8 +50,7 @@ async function scrapePage(browser, url) {
 }
 
 async function main() {
-  const client = await authenticateGoogleSheets();
-  const sheets = google.sheets({ version: "v4", auth: client });
+  const sheets = await authenticateGoogleSheets();
   const startRow = loadProgress();
 
   // Read column G (URLs)
@@ -93,6 +92,8 @@ async function main() {
         valueInputOption: "RAW",
         resource: { values: [[status]] },
       });
+
+      console.log(`✅ Updated row ${rowIndex}: ${status}`);
     } catch (error) {
       console.error(`❌ Error updating sheet at row ${rowIndex}:`, error.message);
     }
