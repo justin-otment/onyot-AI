@@ -22,29 +22,30 @@ async function authenticateGoogleSheets() {
   return google.sheets({ version: "v4", auth: client });
 }
 
+// ==========================
+// Scrape first result title from Google Search
+// ==========================
 async function scrapePage(browser, url) {
   try {
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
 
-    // Wait for search results to appear
-    await page.waitForSelector("h3", { timeout: 10000 });
-
-    // Extract title and link of the first result
-    const firstResult = await page.$eval("a h3", el => el.innerText);
-    const firstLink = await page.$eval("a", el => el.closest("a").href);
+    await page.waitForSelector("div.g h3", { timeout: 10000 });
+    const title = await page.$eval("div.g h3", el => el.innerText);
 
     await page.close();
-    return { text: firstResult, link: firstLink, status: "OK" };
+    return { text: title, status: "OK" };
   } catch (err) {
-    return { text: "", link: "", status: "NOT FOUND" };
+    return { text: "", status: "NOT FOUND" };
   }
 }
 
+// ==========================
+// Main loop: process all rows sequentially
+// ==========================
 async function main() {
   const sheets = await authenticateGoogleSheets();
 
-  // Read column G (URLs)
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
     range: `${SHEET_NAME}!${RANGE}`,
@@ -52,16 +53,14 @@ async function main() {
 
   const rows = res.data.values || [];
 
-  // ✅ Launch Puppeteer with sandbox disabled for CI/CD
   const browser = await puppeteer.launch({
     headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
     executablePath: process.env.CHROME_PATH || undefined,
   });
 
-  // Process ALL rows sequentially
   for (let i = 0; i < rows.length; i++) {
-    const rowIndex = i + 2; // actual sheet row number (since we start at G2)
+    const rowIndex = i + 2;
     const url = rows[i][0];
 
     let text = "";
@@ -73,7 +72,6 @@ async function main() {
       status = result.status;
     }
 
-    // Write results row by row with error handling
     try {
       await sheets.spreadsheets.values.update({
         spreadsheetId: SHEET_ID,
@@ -96,7 +94,7 @@ async function main() {
   }
 
   await browser.close();
-  console.log(`Finished processing ${rows.length} rows sequentially.`);
+  console.log(`🎉 Finished processing ${rows.length} rows.`);
 }
 
 main().catch(console.error);
