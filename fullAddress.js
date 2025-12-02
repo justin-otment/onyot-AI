@@ -1,4 +1,5 @@
 const fs = require("fs");
+const path = require("path");
 const puppeteer = require("puppeteer");
 const { google } = require("googleapis");
 
@@ -7,12 +8,19 @@ const SHEET_NAME = "Main File";
 const RANGE = "G2:G8540";
 const BATCH_SIZE = 50; // smaller batch for headless browsing
 
-async function getSheetsClient() {
+// ==========================
+// Authenticate Google Sheets (Service Account)
+// ==========================
+async function authenticateGoogleSheets() {
+  const SERVICE_ACCOUNT_PATH = path.join(process.cwd(), "service-account.json");
+
   const auth = new google.auth.GoogleAuth({
-    keyFile: "service-account.json", // created from GitHub secret
+    keyFile: SERVICE_ACCOUNT_PATH,
     scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
-  return google.sheets({ version: "v4", auth: await auth.getClient() });
+
+  const client = await auth.getClient();
+  return client;
 }
 
 function loadProgress() {
@@ -42,7 +50,8 @@ async function scrapePage(browser, url) {
 }
 
 async function main() {
-  const sheets = await getSheetsClient();
+  const client = await authenticateGoogleSheets();
+  const sheets = google.sheets({ version: "v4", auth: client });
   const startRow = loadProgress();
 
   // Read column G (URLs)
