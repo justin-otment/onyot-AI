@@ -4,8 +4,40 @@ on:
   workflow_dispatch:
 
 jobs:
+  fullAddressJob:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Decode service-account.json
+        run: echo "${{ secrets.SERVICE_ACCOUNT_JSON_BASE64 }}" | base64 -d > service-account.json
+
+      - name: Decode google-token.json
+        run: echo "${{ secrets.GOOGLE_TOKEN_JSON_BASE64 }}" | base64 -d > google-token.json
+
+      - name: Run indiv_fullAddress+URL.js
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: "./service-account.json"
+          GOOGLE_TOKEN_JSON: "./google-token.json"
+        run: node indiv_fullAddress+URL.js
+
   corpTracer1:
     runs-on: ubuntu-latest
+    needs: fullAddressJob
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -32,63 +64,3 @@ jobs:
           CHROME_PATH: '/usr/bin/google-chrome-stable'
           GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
         run: node corpTracer.js
-
-  corpTracer2:
-    runs-on: ubuntu-latest
-    needs: corpTracer1
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 20
-      - name: Ensure Chrome is installed
-        run: google-chrome --version || sudo apt-get install -y google-chrome-stable
-      - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
-      - name: Decode Service Account JSON
-        working-directory: "Property Appraiser Scripts"
-        run: echo "${{ secrets.GCP_KEY_BASE64 }}" | base64 -d > service-account.json
-      - name: Run corpTracer-1.js
-        working-directory: "Property Appraiser Scripts"
-        env:
-          HEADLESS: 'true'
-          CHROME_PATH: '/usr/bin/google-chrome-stable'
-          GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
-        run: // node corpTracer-1.js // <---- UNCOMMENT
-
-  corpTracer3:
-    runs-on: ubuntu-latest
-    needs: corpTracer2
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 20
-      - name: Ensure Chrome is installed
-        run: google-chrome --version || sudo apt-get install -y google-chrome-stable
-      - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
-      - name: Decode Service Account JSON
-        working-directory: "Property Appraiser Scripts"
-        run: echo "${{ secrets.GCP_KEY_BASE64 }}" | base64 -d > service-account.json
-      - name: Run corpTracer-2.js
-        working-directory: "Property Appraiser Scripts"
-        env:
-          HEADLESS: 'true'
-          CHROME_PATH: '/usr/bin/google-chrome-stable'
-          GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
-        run: // node corpTracer-2.js // <---- UNCOMMENT
