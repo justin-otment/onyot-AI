@@ -1,4 +1,4 @@
-name: Run Scrapers
+name: Run builder
 
 on:
   workflow_dispatch:
