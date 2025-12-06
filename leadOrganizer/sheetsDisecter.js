@@ -64,6 +64,51 @@ async function writeToSheet(sheetsApi, sheetName, data) {
   console.log(`✅ Written ${data.length} rows to ${sheetName}`);
 }
 
+// Business indicators that should prevent cleaning
+const businessKeywords = [
+  " LLC",
+  " CORP",
+  " INC",
+  " LTD",
+  " CO ",
+  " COMPANY",
+  " ENTERPRISES",
+  " ASSOCIATES",
+  " GROUP",
+];
+
+// Helper: check if a value contains any business keyword
+function containsBusinessKeyword(value) {
+  return businessKeywords.some((kw) =>
+    value.toUpperCase().includes(kw.toUpperCase())
+  );
+}
+
+// Helper: clean unwanted substrings
+function cleanValue(value) {
+  if (!value) return "";
+
+  let cleaned = value;
+
+  // Always strip these substrings, regardless of case or business indicator
+  cleaned = cleaned
+    .replace(/\*tr/gi, "")
+    .replace(/\*trust/gi, "")
+    .replace(/\(tr\)/gi, "")
+    .replace(/\btrust\b/gi, "")
+    .replace(/\btrustee\b/gi, "")
+    .replace(/\btrustees\b/gi, "")
+    .replace(/\bliving\b/gi, "")
+    .replace(/\birrevocable\b/gi, "")
+    .replace(/\brevocable\b/gi, "")
+    .replace(/\bfamily\b/gi, "")
+    .replace(/\bestate\b/gi, "")
+    .replace(/\bjoint\b/gi, "")          // 🔑 new addition
+    .replace(/\d+/g, "");                // 🔑 strip all numerical values
+
+  return cleaned.trim();
+}
+
 // Transpose multi-name cells in column A
 async function transposeSheetData(sheetsApi, sheetName) {
   try {
@@ -75,15 +120,34 @@ async function transposeSheetData(sheetsApi, sheetName) {
     const rows = response.data.values || [];
     if (!rows.length) return;
 
-    const transposed = rows.map(([cellValue]) => {
-      if (!cellValue) return [];
+    const transposed = [];
+    const businessFlags = [];
+
+    rows.forEach(([cellValue]) => {
+      if (!cellValue) {
+        transposed.push([]);
+        businessFlags.push([""]);
+        return;
+      }
+
       const splitValues = cellValue
         .split(/[\r\n;&]+/)
-        .map((v) => v.trim())
+        .map((v) => cleanValue(v))
         .filter(Boolean);
-      return [...new Set(splitValues)];
+
+      const uniqueValues = [...new Set(splitValues)];
+      transposed.push(uniqueValues);
+
+      // 🔑 Only mark "Y" if sheet is Trusts
+      if (sheetName === "Trusts") {
+        const isBusiness = splitValues.some((v) => containsBusinessKeyword(v));
+        businessFlags.push([isBusiness ? "Y" : ""]);
+      } else {
+        businessFlags.push([""]);
+      }
     });
 
+    // Write transposed values into column B
     await sheetsApi.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
       range: `${sheetName}!B2`,
@@ -91,7 +155,21 @@ async function transposeSheetData(sheetsApi, sheetName) {
       resource: { values: transposed },
     });
 
-    console.log(`✅ Transposed data for sheet ${sheetName} (duplicates removed)`);
+    // Write business flags into column M only if sheet is Trusts
+    if (sheetName === "Trusts") {
+      await sheetsApi.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheetName}!M2`,
+        valueInputOption: "RAW",
+        resource: { values: businessFlags },
+      });
+    }
+
+    console.log(
+      `✅ Transposed data for sheet ${sheetName} (duplicates removed + cleaned${
+        sheetName === "Trusts" ? ", businesses flagged in M" : ""
+      })`
+    );
   } catch (error) {
     console.error(`❌ Error transposing sheet ${sheetName}:`, error);
   }
@@ -107,7 +185,121 @@ function colLetter(n) {
   return s;
 }
 
-async function organizeData() {
+// Append all rows flagged "Y" in Trusts!M2:M into Companies sheet (A–L values)
+async function appendBusinessesToCompanies(sheetsApi) {
+  try {
+    // 1. Read all rows from Trusts up to column L
+    const resRows = await sheetsApi.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `Trusts!A2:L`,
+    });
+    const trustsRows = resRows.data.values || [];
+
+    if (!trustsRows.length) {
+      console.log("⚠️ No rows found in Trusts!A2:L");
+      return;
+    }
+
+    // 2. Read flags from Trusts!M2:M
+    const resFlags = await sheetsApi.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `Trusts!M2:M`,
+    });
+    const flags = resFlags.data.values || [];
+
+    if (!flags.length) {
+      console.log("⚠️ No flags found in Trusts!M2:M");
+      return;
+    }
+
+    // 3. Collect all rows where flag == "Y"
+    const companies = [];
+    for (let i = 0; i < trustsRows.length; i++) {
+      const row = trustsRows[i] || [];
+      const flag = flags[i] && flags[i][0];
+      if (flag === "Y") {
+        companies.push(row); // append the entire row A–L
+      }
+    }
+
+    if (!companies.length) {
+      console.log("⚠️ No companies flagged with Y in Trusts sheet");
+      return;
+    }
+
+    // 4. Append to Companies sheet (acts like a log)
+    await sheetsApi.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `Companies!A2`,
+      valueInputOption: "RAW",
+      insertDataOption: "INSERT_ROWS", // ensures rows are appended
+      resource: { values: companies },
+    });
+
+    console.log(`✅ Appended ${companies.length} full rows (A–L) into Companies sheet`);
+  } catch (error) {
+    console.error("❌ Error appending businesses to Companies sheet:", error);
+  }
+}
+
+// Append all rows NOT flagged "Y" in Trusts!M2:M into Individuals sheet (A–L values)
+async function appendIndividualsFromTrusts(sheetsApi) {
+  try {
+    // 1. Read all rows from Trusts up to column L
+    const resRows = await sheetsApi.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `Trusts!A2:L`,
+    });
+    const trustsRows = resRows.data.values || [];
+
+    if (!trustsRows.length) {
+      console.log("⚠️ No rows found in Trusts!A2:L");
+      return;
+    }
+
+    // 2. Read flags from Trusts!M2:M
+    const resFlags = await sheetsApi.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `Trusts!M2:M`,
+    });
+    const flags = resFlags.data.values || [];
+
+    if (!flags.length) {
+      console.log("⚠️ No flags found in Trusts!M2:M");
+      return;
+    }
+
+    // 3. Collect all rows where flag != "Y"
+    const individuals = [];
+    for (let i = 0; i < trustsRows.length; i++) {
+      const row = trustsRows[i] || [];
+      const flag = flags[i] && flags[i][0];
+      if (flag !== "Y") {
+        individuals.push(row); // append the entire row A–L
+      }
+    }
+
+    if (!individuals.length) {
+      console.log("⚠️ No unmarked individuals found in Trusts sheet");
+      return;
+    }
+
+    // 4. Append to Individuals sheet (acts like a log)
+    await sheetsApi.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `Individuals!A2`,
+      valueInputOption: "RAW",
+      insertDataOption: "INSERT_ROWS", // ensures rows are appended
+      resource: { values: individuals },
+    });
+
+    console.log(`✅ Appended ${individuals.length} full rows (A–L) into Individuals sheet`);
+  } catch (error) {
+    console.error("❌ Error appending individuals to Individuals sheet:", error);
+  }
+}
+
+  async function organizeData() {
   try {
     const authClient = await authenticate();
     const sheetsApi = google.sheets({ version: "v4", auth: authClient });
@@ -322,6 +514,9 @@ async function organizeData() {
     });
 
     console.log("✅ Summary sheet updated.");
+    // Step 2: append flagged businesses into Companies sheet
+    await appendBusinessesToCompanies(sheetsApi, SHEETS.company, companies);
+    await appendIndividualsFromTrusts(sheetsApi, SHEETS.individual, individuals);
     console.log("✅ All tasks complete.");
   } catch (error) {
     console.error("❌ Error organizing data:", error);
