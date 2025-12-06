@@ -26,17 +26,18 @@ jobs:
             npm install
           fi
 
+      - name: Verify selenium-webdriver install
+        run: ls -R node_modules/selenium-webdriver || echo "selenium-webdriver not found"
+
       - name: Decode Service Account JSON
-        working-directory: "Property Appraiser Scripts"
-        run: echo "${{ secrets.GCP_KEY_BASE64 }}" | base64 -d > service-account.json
+        run: echo "${{ secrets.GCP_KEY_BASE64 }}" | base64 -d > "Property Appraiser Scripts/service-account.json"
 
       - name: Run corpTracer.js
-        working-directory: "Property Appraiser Scripts"
         env:
           HEADLESS: 'true'
           CHROME_PATH: '/usr/bin/google-chrome-stable'
-          GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
-        run: node corpTracer.js
+          GOOGLE_APPLICATION_CREDENTIALS: './Property Appraiser Scripts/service-account.json'
+        run: node "Property Appraiser Scripts/corpTracer.js"
 
   corpTracer2:
     runs-on: ubuntu-latest
