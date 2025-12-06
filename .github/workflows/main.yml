@@ -23,13 +23,11 @@ jobs:
             npm install
           fi
 
-      - name: Decode service-account.json
-        run: echo "${{ secrets.SERVICE_ACCOUNT_JSON_BASE64 }}" | base64 -d > service-account.json
-
-      - name: Decode google-token.json
-        run: echo "${{ secrets.GOOGLE_TOKEN_JSON_BASE64 }}" | base64 -d > google-token.json
-
-      - name: Run leadOrganizer/indiv_fullAddress+URL.js
+      - name: Decode Service Account JSON
+        working-directory: "leadOrganizer"
+        run: echo "${{ secrets.GCP_KEY_BASE64 }}" | base64 -d > service-account.json
+      - name: Run corpTracer-1.js
+        working-directory: "leadOrganizer"
         env:
           GOOGLE_APPLICATION_CREDENTIALS: "./service-account.json"
           GOOGLE_TOKEN_JSON: "./google-token.json"
