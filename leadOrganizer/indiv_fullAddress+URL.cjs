@@ -2,8 +2,10 @@ const { google } = require("googleapis");
 // If Node < 18, install node-fetch: npm install node-fetch@2
 const fetch = require("node-fetch");
 
+const SERVICE_ACCOUNT_PATH = path.join(process.cwd(), "service-account.json");
+
 const auth = new google.auth.GoogleAuth({
-  keyFile: "C:/Users/DELL/Desktop/OTMenT-3/service-account.json",
+  keyFile: SERVICE_ACCOUNT_PATH,
   scopes: ["https://www.googleapis.com/auth/spreadsheets"],
 });
 
@@ -208,4 +210,5 @@ async function processSheet() {
 }
 
 processSheet();
+
 
