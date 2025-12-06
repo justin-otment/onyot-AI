@@ -16,8 +16,12 @@
     "express": "5.1.0",
     "googleapis": "159.0.0",
     "puppeteer-core": "22.0.0",
-    "selenium-webdriver": "4.35.0",
-    "uuidv4": "6.2.13"
+    "selenium-webdriver":
+    "4.35.0",
+    "uuidv4": "6.2.13",
+    "node-fetch": "^2.7.0",
+    "p-limit": "^7.2.0",
+    "cheerio": "^1.1.2"
   },
   "engines": {
     "node": ">=20"
