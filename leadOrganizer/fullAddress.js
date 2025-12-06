@@ -1,106 +1,192 @@
-const fs = require("fs");
-const path = require("path");
-const puppeteer = require("puppeteer");
 const { google } = require("googleapis");
+// If Node < 18, install node-fetch: npm install node-fetch@2
+const fetch = require("node-fetch");
 
-const SHEET_ID = "1xPmFJ8yHfuqu2DrLpl5bCRlFO7vRn7BJJtKBdC6pdvk";
-const SHEET_NAME = "Main File";
-const RANGE = "G2:G8540";
-const BATCH_SIZE = 50; // smaller batch for headless browsing
+const auth = new google.auth.GoogleAuth({
+  keyFile: "C:/Users/DELL/Desktop/OTMenT-3/service-account.json",
+  scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+});
 
-// ==========================
-// Authenticate Google Sheets (Service Account)
-// ==========================
-async function authenticateGoogleSheets() {
-  const SERVICE_ACCOUNT_PATH = path.join(process.cwd(), "service-account.json");
+const sheets = google.sheets({ version: "v4", auth });
 
-  const auth = new google.auth.GoogleAuth({
-    keyFile: SERVICE_ACCOUNT_PATH,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
+const SPREADSHEET_ID = "1xPmFJ8yHfuqu2DrLpl5bCRlFO7vRn7BJJtKBdC6pdvk";
+const INPUT_RANGE = "Main File!F2:F8540";
+const OUTPUT_COL = "G"; // normalized enriched address
+const URL_COL = "H";    // generated URL
 
-  const client = await auth.getClient();
-  return client;
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function loadProgress() {
-  if (fs.existsSync("progress.json")) {
-    return JSON.parse(fs.readFileSync("progress.json", "utf8")).lastRow || 2;
-  }
-  return 2;
-}
+// USPS state abbreviation map
+const STATE_ABBREVIATIONS = {
+  "Alabama": "AL","Alaska": "AK","Arizona": "AZ","Arkansas": "AR","California": "CA",
+  "Colorado": "CO","Connecticut": "CT","Delaware": "DE","Florida": "FL","Georgia": "GA",
+  "Hawaii": "HI","Idaho": "ID","Illinois": "IL","Indiana": "IN","Iowa": "IA","Kansas": "KS",
+  "Kentucky": "KY","Louisiana": "LA","Maine": "ME","Maryland": "MD","Massachusetts": "MA",
+  "Michigan": "MI","Minnesota": "MN","Mississippi": "MS","Missouri": "MO","Montana": "MT",
+  "Nebraska": "NE","Nevada": "NV","New Hampshire": "NH","New Jersey": "NJ","New Mexico": "NM",
+  "New York": "NY","North Carolina": "NC","North Dakota": "ND","Ohio": "OH","Oklahoma": "OK",
+  "Oregon": "OR","Pennsylvania": "PA","Rhode Island": "RI","South Carolina": "SC",
+  "South Dakota": "SD","Tennessee": "TN","Texas": "TX","Utah": "UT","Vermont": "VT",
+  "Virginia": "VA","Washington": "WA","West Virginia": "WV","Wisconsin": "WI","Wyoming": "WY"
+};
 
-function saveProgress(lastRow) {
-  fs.writeFileSync("progress.json", JSON.stringify({ lastRow }));
-}
+// Primary lookup: ZIP → City, State
+async function lookupZip(zip) {
+  if (!zip) return null;
+  if (/^\d{4}$/.test(zip)) zip = zip.padStart(5, "0"); // pad 4-digit ZIPs
 
-async function scrapePage(browser, url) {
   try {
-    const page = await browser.newPage();
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
-
-    // Extract the first target element
-    const firstResult = await page.$eval("h3.LC20lb.MBeuO.DKV0Md", el => el.innerText);
-
-    await page.close();
-    return { text: firstResult, status: "OK" };
-  } catch (err) {
-    return { text: "", status: "NOT FOUND" };
+    const res = await fetch(`https://api.zippopotam.us/us/${zip}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const place = data.places[0];
+    return `${place["place name"]} ${place["state abbreviation"]}`;
+  } catch {
+    return null;
   }
 }
 
-async function main() {
-  const client = await authenticateGoogleSheets();
-  const sheets = google.sheets({ version: "v4", auth: client });
-  const startRow = loadProgress();
+// Fallback lookup: Street address → City, State (OpenStreetMap Nominatim)
+async function lookupAddress(address) {
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(address)}`;
+    const res = await fetch(url, { headers: { "User-Agent": "Node.js script" } });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.length) return null;
 
-  // Read column G (URLs)
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SHEET_ID,
-    range: `${SHEET_NAME}!${RANGE}`,
-  });
+    const result = data[0];
+    let city = result.address.city || result.address.town || result.address.village || "";
+    let state = result.address.state || "";
 
-  const rows = res.data.values || [];
-  const endRow = Math.min(startRow - 2 + BATCH_SIZE, rows.length);
+    // 🔑 Strip "City of" completely
+    city = city.replace(/^City of\s+/i, "").trim();
 
-  const browser = await puppeteer.launch({ headless: true });
-  const textOutput = [];
-  const statusOutput = [];
-
-  for (let i = startRow - 2; i < endRow; i++) {
-    const url = rows[i][0];
-    if (!url || url.trim() === "") {
-      textOutput.push([""]);
-      statusOutput.push(["SKIPPED"]);
-    } else {
-      const { text, status } = await scrapePage(browser, url);
-      textOutput.push([text]);
-      statusOutput.push([status]);
+    // Normalize to abbreviation if possible
+    if (STATE_ABBREVIATIONS[state]) {
+      state = STATE_ABBREVIATIONS[state];
     }
+
+    return city && state ? `${city} ${state}` : null;
+  } catch {
+    return null;
   }
-
-  await browser.close();
-
-  // Write results into column H and I
-  await sheets.spreadsheets.values.batchUpdate({
-    spreadsheetId: SHEET_ID,
-    requestBody: {
-      valueInputOption: "RAW",
-      data: [
-        {
-          range: `${SHEET_NAME}!H${startRow}:H${endRow + 1}`,
-          values: textOutput,
-        },
-        {
-          range: `${SHEET_NAME}!I${startRow}:I${endRow + 1}`,
-          values: statusOutput,
-        },
-      ],
-    },
-  });
-
-  saveProgress(endRow + 2);
-  console.log(`Processed rows ${startRow} to ${endRow + 1}`);
 }
 
-main().catch(console.error);
+// Normalization helper
+function normalizeOutput(addressPart, cityStatePart) {
+  // Remove ZIP from address part
+  const strippedAddr = addressPart.replace(/,\s*\d{4,5}.*$/, "");
+
+  // Clean: keep only letters, numbers, spaces
+  const cleanAddr = strippedAddr.replace(/[^a-zA-Z0-9\s]/g, "").trim();
+  const cleanCityState = cityStatePart.replace(/[^a-zA-Z0-9\s]/g, "").trim();
+
+  // Replace spaces with "-" inside each part
+  const addrNorm = cleanAddr.replace(/\s+/g, "-");
+  const cityStateNorm = cleanCityState.replace(/\s+/g, "-");
+
+  // Join with underscore
+  return `${addrNorm}_${cityStateNorm}`;
+}
+
+async function processSheet() {
+  try {
+    // 1. Read values from column F (addresses)
+    const resInput = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: INPUT_RANGE,
+    });
+    const rows = resInput.data.values || [];
+
+    // 2. Read existing values from column G and H (outputs + URLs)
+    const resOutput = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `Main File!${OUTPUT_COL}2:${OUTPUT_COL}${rows.length + 1}`,
+    });
+    const existingOutput = resOutput.data.values || [];
+
+    const resUrls = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `Main File!${URL_COL}2:${URL_COL}${rows.length + 1}`,
+    });
+    const existingUrls = resUrls.data.values || [];
+
+    console.log(`Fetched ${rows.length} rows from ${INPUT_RANGE}`);
+
+    // 3. Process each address and log immediately
+    for (let i = 0; i < rows.length; i++) {
+      const addr = rows[i][0];
+      const alreadyOutput = existingOutput[i] && existingOutput[i][0];
+      const alreadyUrl = existingUrls[i] && existingUrls[i][0];
+
+      // Skip if already has both output and URL
+      if ((alreadyOutput && alreadyOutput.trim() !== "") &&
+          (alreadyUrl && alreadyUrl.trim() !== "")) {
+        console.log(`Row ${i + 2}: skipped (already has output + URL)`);
+        continue;
+      }
+
+      let cityState = null;
+      if (addr) {
+        // Extract ZIP
+        const match = addr.match(/\b\d{4,5}(?:-\d{4})?\b/);
+        if (match) {
+          let zip = match[0];
+          cityState = await lookupZip(zip);
+        }
+
+        // Fallback if ZIP lookup failed
+        if (!cityState) {
+          cityState = await lookupAddress(addr);
+          if (!cityState) {
+            const stripped = addr.replace(/,\s*\d{4,5}.*$/, "");
+            cityState = await lookupAddress(stripped);
+          }
+        }
+      }
+
+      // Build final normalized output
+      let finalOutput = "Lookup-failed";
+      if (addr && cityState) {
+        finalOutput = normalizeOutput(addr, cityState);
+      }
+
+      // Generate URL
+      const generatedUrl = finalOutput !== "Lookup-failed"
+        ? `https://www.peoplesearchnow.com/address/${finalOutput}`
+        : "";
+
+      const targetRow = i + 2;
+
+      // Write normalized address to column G
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `Main File!${OUTPUT_COL}${targetRow}`,
+        valueInputOption: "RAW",
+        requestBody: { values: [[finalOutput]] },
+      });
+
+      // Write generated URL to column H
+      if (generatedUrl) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `Main File!${URL_COL}${targetRow}`,
+          valueInputOption: "RAW",
+          requestBody: { values: [[generatedUrl]] },
+        });
+      }
+
+      console.log(`Row ${targetRow}: ${finalOutput} | URL: ${generatedUrl}`);
+      await sleep(1000); // delay between lookups/writes
+    }
+
+    console.log("Completed incremental logging with normalized output + URL logging.");
+  } catch (err) {
+    console.error("Error processing sheet:", err);
+  }
+}
+
+processSheet();
