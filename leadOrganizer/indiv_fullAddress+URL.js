@@ -10,9 +10,12 @@ const auth = new google.auth.GoogleAuth({
 const sheets = google.sheets({ version: "v4", auth });
 
 const SPREADSHEET_ID = "1xPmFJ8yHfuqu2DrLpl5bCRlFO7vRn7BJJtKBdC6pdvk";
-const INPUT_RANGE = "Main File!F2:F8540";
-const OUTPUT_COL = "G"; // normalized enriched address
-const URL_COL = "H";    // generated URL
+const SHEET_NAME = "Individuals"; // 🔑 unified sheet name
+
+const INPUT_RANGE = `${SHEET_NAME}!K2:K`;   // addresses
+const FILTER_RANGE = `${SHEET_NAME}!L2:L`; // filter column
+const OUTPUT_COL = "M"; // normalized enriched address
+const URL_COL = "N";    // generated URL
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -94,23 +97,30 @@ function normalizeOutput(addressPart, cityStatePart) {
 
 async function processSheet() {
   try {
-    // 1. Read values from column F (addresses)
+    // 1. Read values from column K (addresses)
     const resInput = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: INPUT_RANGE,
     });
     const rows = resInput.data.values || [];
 
-    // 2. Read existing values from column G and H (outputs + URLs)
+    // 1b. Read filter values from column L
+    const resFilter = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: FILTER_RANGE,
+    });
+    const filterValues = resFilter.data.values || [];
+
+    // 2. Read existing values from column M and N (outputs + URLs)
     const resOutput = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `Main File!${OUTPUT_COL}2:${OUTPUT_COL}${rows.length + 1}`,
+      range: `${SHEET_NAME}!${OUTPUT_COL}2:${OUTPUT_COL}${rows.length + 1}`,
     });
     const existingOutput = resOutput.data.values || [];
 
     const resUrls = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `Main File!${URL_COL}2:${URL_COL}${rows.length + 1}`,
+      range: `${SHEET_NAME}!${URL_COL}2:${URL_COL}${rows.length + 1}`,
     });
     const existingUrls = resUrls.data.values || [];
 
@@ -119,6 +129,14 @@ async function processSheet() {
     // 3. Process each address and log immediately
     for (let i = 0; i < rows.length; i++) {
       const addr = rows[i][0];
+      const filterVal = filterValues[i] && filterValues[i][0];
+
+      // 🔑 Skip if filter column L is not "N"
+      if (filterVal !== "N") {
+        console.log(`Row ${i + 2}: skipped (filter column L != "N")`);
+        continue;
+      }
+
       const alreadyOutput = existingOutput[i] && existingOutput[i][0];
       const alreadyUrl = existingUrls[i] && existingUrls[i][0];
 
@@ -161,19 +179,19 @@ async function processSheet() {
 
       const targetRow = i + 2;
 
-      // Write normalized address to column G
+      // Write normalized address to column M
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `Main File!${OUTPUT_COL}${targetRow}`,
+        range: `${SHEET_NAME}!${OUTPUT_COL}${targetRow}`,
         valueInputOption: "RAW",
         requestBody: { values: [[finalOutput]] },
       });
 
-      // Write generated URL to column H
+      // Write generated URL to column N
       if (generatedUrl) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `Main File!${URL_COL}${targetRow}`,
+          range: `${SHEET_NAME}!${URL_COL}${targetRow}`,
           valueInputOption: "RAW",
           requestBody: { values: [[generatedUrl]] },
         });
