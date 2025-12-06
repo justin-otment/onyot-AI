@@ -1,12 +1,12 @@
-name: Run Full Address Scraper
+name: Run Scrapers
 
 on:
   workflow_dispatch:
 
 jobs:
-  fullAddressJob:
-    runs-on: ubuntu-latest
 
+  LinkBuilder:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -24,14 +24,12 @@ jobs:
             npm install
           fi
 
-      - name: Decode service-account.json
-        run: echo "${{ secrets.SERVICE_ACCOUNT_JSON_BASE64 }}" | base64 -d > service-account.json
-
-      - name: Decode google-token.json
-        run: echo "${{ secrets.GOOGLE_TOKEN_JSON_BASE64 }}" | base64 -d > google-token.json
-
-      - name: Run fullAddress.js
+      - name: Decode Service Account JSON
+        working-directory: "leadOrganizer"
+        run: echo "${{ secrets.GCP_KEY_BASE64 }}" | base64 -d > service-account.json
+      - name: Run corpTracer-1.js
+        working-directory: "leadOrganizer"
         env:
           GOOGLE_APPLICATION_CREDENTIALS: "./service-account.json"
           GOOGLE_TOKEN_JSON: "./google-token.json"
-        run: node fullAddress.js
+        run: node urlBuilder.cjs
