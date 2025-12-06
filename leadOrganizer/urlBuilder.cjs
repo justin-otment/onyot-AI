@@ -9,20 +9,18 @@ const auth = new google.auth.GoogleAuth({
   scopes: ["https://www.googleapis.com/auth/spreadsheets"],
 });
 
-// 🔑 Unified sheets variable
-const sheetsApi = google.sheets({ version: "v4", auth });
+const sheets = google.sheets({ version: "v4", auth });
 
-const SPREADSHEET_ID = "1xPmFJ8yHfuqu2DrLpl5bCRlFO7vRn7BJJtKBdC6pdvk";
-const INPUT_RANGE = "Main File!F2:F8540"; // source addresses
-const OUTPUT_COL = "G"; // normalized enriched address
-const URL_COL = "H";    // generated URL
+const SPREADSHEET_ID = "1HRA7wT6_ozDhjn5_BZSMuqVVFh4vxl23B_0DUf63oSE";
+const INPUT_RANGE = "Individuals!K2:K"; // source addresses
+const URL_COL = "M"; // generated URL output
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // USPS state abbreviation map
-const STATE_ABBREVIATIONS = { /* same map as before */ };
+const STATE_ABBREVIATIONS = { /* ... same as before ... */ };
 
 // ZIP lookup
 async function lookupZip(zip) {
@@ -61,8 +59,8 @@ async function lookupAddress(address) {
   }
 }
 
-// Normalization helper
-function normalizeOutput(addressPart, cityStatePart) {
+// Linkbuilder helper
+function buildLink(addressPart, cityStatePart) {
   const strippedAddr = addressPart.replace(/,\s*\d{4,5}.*$/, "");
   const cleanAddr = strippedAddr.replace(/[^a-zA-Z0-9\s]/g, "").trim();
   const cleanCityState = cityStatePart.replace(/[^a-zA-Z0-9\s]/g, "").trim();
@@ -70,28 +68,22 @@ function normalizeOutput(addressPart, cityStatePart) {
   const addrNorm = cleanAddr.replace(/\s+/g, "-");
   const cityStateNorm = cleanCityState.replace(/\s+/g, "-");
 
-  return `${addrNorm}_${cityStateNorm}`;
+  return `https://www.peoplesearchnow.com/address/${addrNorm}_${cityStateNorm}`;
 }
 
 async function processSheet() {
   try {
-    // 1. Read values from column F (addresses)
-    const resInput = await sheetsApi.spreadsheets.values.get({
+    // 1. Read addresses from column F
+    const resInput = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: INPUT_RANGE,
     });
     const rows = resInput.data.values || [];
 
-    // 2. Read existing values from column G and H
-    const resOutput = await sheetsApi.spreadsheets.values.get({
+    // 2. Read existing URLs from column H
+    const resUrls = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `Main File!${OUTPUT_COL}2:${OUTPUT_COL}${rows.length + 1}`,
-    });
-    const existingOutput = resOutput.data.values || [];
-
-    const resUrls = await sheetsApi.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `Main File!${URL_COL}2:${URL_COL}${rows.length + 1}`,
+      range: `Individuals!${URL_COL}2:${URL_COL}${rows.length + 1}`,
     });
     const existingUrls = resUrls.data.values || [];
 
@@ -100,12 +92,10 @@ async function processSheet() {
     // 3. Process each address
     for (let i = 0; i < rows.length; i++) {
       const addr = rows[i][0];
-      const alreadyOutput = existingOutput[i] && existingOutput[i][0];
       const alreadyUrl = existingUrls[i] && existingUrls[i][0];
 
-      if ((alreadyOutput && alreadyOutput.trim() !== "") &&
-          (alreadyUrl && alreadyUrl.trim() !== "")) {
-        console.log(`Row ${i + 2}: skipped (already has output + URL)`);
+      if (alreadyUrl && alreadyUrl.trim() !== "") {
+        console.log(`Row ${i + 2}: skipped (already has URL)`);
         continue;
       }
 
@@ -118,40 +108,28 @@ async function processSheet() {
         }
       }
 
-      let finalOutput = "Lookup-failed";
+      let generatedUrl = "";
       if (addr && cityState) {
-        finalOutput = normalizeOutput(addr, cityState);
+        generatedUrl = buildLink(addr, cityState);
       }
-
-      const generatedUrl = finalOutput !== "Lookup-failed"
-        ? `https://www.peoplesearchnow.com/address/${finalOutput}`
-        : "";
 
       const targetRow = i + 2;
 
-      // Write normalized address to column G
-      await sheetsApi.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `Main File!${OUTPUT_COL}${targetRow}`,
-        valueInputOption: "RAW",
-        requestBody: { values: [[finalOutput]] },
-      });
-
       // Write generated URL to column H
       if (generatedUrl) {
-        await sheetsApi.spreadsheets.values.update({
+        await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `Main File!${URL_COL}${targetRow}`,
+          range: `Individuals!${URL_COL}${targetRow}`,
           valueInputOption: "RAW",
           requestBody: { values: [[generatedUrl]] },
         });
       }
 
-      console.log(`Row ${targetRow}: ${finalOutput} | URL: ${generatedUrl}`);
+      console.log(`Row ${targetRow}: ${generatedUrl}`);
       await sleep(1000);
     }
 
-    console.log("Completed incremental logging with normalized output + URL logging.");
+    console.log("Completed linkbuilding and URL logging.");
   } catch (err) {
     console.error("Error processing sheet:", err);
   }
