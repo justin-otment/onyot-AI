@@ -1,5 +1,4 @@
 const { google } = require("googleapis");
-const fetch = require("node-fetch");
 const path = require("path");
 
 const SERVICE_ACCOUNT_PATH = path.join(process.cwd(), "service-account.json");
@@ -19,79 +18,31 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// USPS state abbreviation map
-const STATE_ABBREVIATIONS = {
-  "Alabama": "AL","Alaska": "AK","Arizona": "AZ","Arkansas": "AR","California": "CA",
-  "Colorado": "CO","Connecticut": "CT","Delaware": "DE","Florida": "FL","Georgia": "GA",
-  "Hawaii": "HI","Idaho": "ID","Illinois": "IL","Indiana": "IN","Iowa": "IA","Kansas": "KS",
-  "Kentucky": "KY","Louisiana": "LA","Maine": "ME","Maryland": "MD","Massachusetts": "MA",
-  "Michigan": "MI","Minnesota": "MN","Mississippi": "MS","Missouri": "MO","Montana": "MT",
-  "Nebraska": "NE","Nevada": "NV","New Hampshire": "NH","New Jersey": "NJ","New Mexico": "NM",
-  "New York": "NY","North Carolina": "NC","North Dakota": "ND","Ohio": "OH","Oklahoma": "OK",
-  "Oregon": "OR","Pennsylvania": "PA","Rhode Island": "RI","South Carolina": "SC",
-  "South Dakota": "SD","Tennessee": "TN","Texas": "TX","Utah": "UT","Vermont": "VT",
-  "Virginia": "VA","Washington": "WA","West Virginia": "WV","Wisconsin": "WI","Wyoming": "WY"
-};
-
-// ZIP lookup
-async function lookupZip(zip) {
-  if (!zip) return null;
-  if (/^\d{4}$/.test(zip)) zip = zip.padStart(5, "0");
-  try {
-    const res = await fetch(`https://api.zippopotam.us/us/${zip}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const place = data.places[0];
-    return `${place["place name"]} ${place["state abbreviation"]}`;
-  } catch {
-    return null;
-  }
-}
-
-// Address lookup
-async function lookupAddress(address) {
-  try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(address)}`;
-    const res = await fetch(url, { headers: { "User-Agent": "Node.js script" } });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data.length) return null;
-
-    const result = data[0];
-    let city = result.address.city || result.address.town || result.address.village || "";
-    let state = result.address.state || "";
-
-    city = city.replace(/^City of\s+/i, "").trim();
-    if (STATE_ABBREVIATIONS[state]) state = STATE_ABBREVIATIONS[state];
-
-    return city && state ? `${city} ${state}` : null;
-  } catch {
-    return null;
-  }
-}
-
-// Linkbuilder helper
-function buildLink(addressPart, cityStatePart) {
+// Linkbuilder helper (no lookups)
+function buildLink(addressPart) {
+  // Remove ZIP if present
   const strippedAddr = addressPart.replace(/,\s*\d{4,5}.*$/, "");
+
+  // Clean: keep only letters, numbers, spaces
   const cleanAddr = strippedAddr.replace(/[^a-zA-Z0-9\s]/g, "").trim();
-  const cleanCityState = cityStatePart.replace(/[^a-zA-Z0-9\s]/g, "").trim();
 
-  const addrNorm = cleanAddr.replace(/\s+/g, "-").replace(/#/g, ""); // trim "#"
-  const cityStateNorm = cleanCityState.replace(/\s+/g, "-").replace(/#/g, "");
+  // Replace spaces with "-" and trim "#"
+  const addrNorm = cleanAddr.replace(/\s+/g, "-").replace(/#/g, "");
 
-  return `https://www.peoplesearchnow.com/address/${addrNorm}_${cityStateNorm}`;
+  // Build URL using only normalized address
+  return `https://www.peoplesearchnow.com/address/${addrNorm}`;
 }
 
 async function processSheet() {
   try {
-    // 1. Read addresses from column F
+    // 1. Read addresses from column K
     const resInput = await sheetsApi.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: INPUT_RANGE,
     });
     const rows = resInput.data.values || [];
 
-    // 2. Read existing URLs from column H
+    // 2. Read existing URLs from column M
     const resUrls = await sheetsApi.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: `Individuals!${URL_COL}2:${URL_COL}${rows.length + 1}`,
@@ -110,23 +61,14 @@ async function processSheet() {
         continue;
       }
 
-      let cityState = null;
-      if (addr) {
-        const match = addr.match(/\b\d{4,5}(?:-\d{4})?\b/);
-        if (match) cityState = await lookupZip(match[0]);
-        if (!cityState) {
-          cityState = await lookupAddress(addr) || await lookupAddress(addr.replace(/,\s*\d{4,5}.*$/, ""));
-        }
-      }
-
       let generatedUrl = "";
-      if (addr && cityState) {
-        generatedUrl = buildLink(addr, cityState);
+      if (addr) {
+        generatedUrl = buildLink(addr);
       }
 
       const targetRow = i + 2;
 
-      // Write generated URL to column H
+      // Write generated URL to column M
       if (generatedUrl) {
         await sheetsApi.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
