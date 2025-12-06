@@ -129,7 +129,11 @@ async function processSheet() {
 
     console.log(`Fetched ${rows.length} rows from ${INPUT_RANGE}`);
 
-    // 3. Process each address and log immediately
+    // Arrays to hold batch results
+    const outputs = [];
+    const urls = [];
+
+    // 3. Process each address
     for (let i = 0; i < rows.length; i++) {
       const addr = rows[i][0];
       const filterVal = filterValues[i] && filterValues[i][0];
@@ -137,6 +141,8 @@ async function processSheet() {
       // 🔑 Skip if filter column L is not "N"
       if (filterVal !== "N") {
         console.log(`Row ${i + 2}: skipped (filter column L != "N")`);
+        outputs.push([existingOutput[i] ? existingOutput[i][0] : ""]);
+        urls.push([existingUrls[i] ? existingUrls[i][0] : ""]);
         continue;
       }
 
@@ -147,6 +153,8 @@ async function processSheet() {
       if ((alreadyOutput && alreadyOutput.trim() !== "") &&
           (alreadyUrl && alreadyUrl.trim() !== "")) {
         console.log(`Row ${i + 2}: skipped (already has output + URL)`);
+        outputs.push([alreadyOutput]);
+        urls.push([alreadyUrl]);
         continue;
       }
 
@@ -180,37 +188,38 @@ async function processSheet() {
         ? `https://www.peoplesearchnow.com/address/${finalOutput}`
         : "";
 
-      const targetRow = i + 2;
+      outputs.push([finalOutput]);
+      urls.push([generatedUrl]);
 
-      // Write normalized address to column M
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${SHEET_NAME}!${OUTPUT_COL}${targetRow}`,
-        valueInputOption: "RAW",
-        requestBody: { values: [[finalOutput]] },
-      });
-
-      // Write generated URL to column N
-      if (generatedUrl) {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SPREADSHEET_ID,
-          range: `${SHEET_NAME}!${URL_COL}${targetRow}`,
-          valueInputOption: "RAW",
-          requestBody: { values: [[generatedUrl]] },
-        });
-      }
-
-      console.log(`Row ${targetRow}: ${finalOutput} | URL: ${generatedUrl}`);
-      await sleep(1000); // delay between lookups/writes
+      console.log(`Row ${i + 2}: ${finalOutput} | URL: ${generatedUrl}`);
     }
 
-    console.log("Completed incremental logging with normalized output + URL logging.");
+    // 4. Batch update both columns M and N in one call
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody: {
+        valueInputOption: "RAW",
+        data: [
+          {
+            range: `${SHEET_NAME}!${OUTPUT_COL}2:${OUTPUT_COL}${rows.length + 1}`,
+            values: outputs,
+          },
+          {
+            range: `${SHEET_NAME}!${URL_COL}2:${URL_COL}${rows.length + 1}`,
+            values: urls,
+          },
+        ],
+      },
+    });
+
+    console.log(`✅ Wrote ${rows.length} outputs + URLs in batch`);
   } catch (err) {
     console.error("Error processing sheet:", err);
   }
 }
 
 processSheet();
+
 
 
 
