@@ -9,7 +9,7 @@ const auth = new google.auth.GoogleAuth({
   scopes: ["https://www.googleapis.com/auth/spreadsheets"],
 });
 
-const sheets = google.sheets({ version: "v4", auth });
+const sheetsApi = google.sheets({ version: "v4", auth });
 
 const SPREADSHEET_ID = "1HRA7wT6_ozDhjn5_BZSMuqVVFh4vxl23B_0DUf63oSE";
 const INPUT_RANGE = "Individuals!K2:K"; // source addresses
@@ -20,7 +20,18 @@ function sleep(ms) {
 }
 
 // USPS state abbreviation map
-const STATE_ABBREVIATIONS = { /* ... same as before ... */ };
+const STATE_ABBREVIATIONS = {
+  "Alabama": "AL","Alaska": "AK","Arizona": "AZ","Arkansas": "AR","California": "CA",
+  "Colorado": "CO","Connecticut": "CT","Delaware": "DE","Florida": "FL","Georgia": "GA",
+  "Hawaii": "HI","Idaho": "ID","Illinois": "IL","Indiana": "IN","Iowa": "IA","Kansas": "KS",
+  "Kentucky": "KY","Louisiana": "LA","Maine": "ME","Maryland": "MD","Massachusetts": "MA",
+  "Michigan": "MI","Minnesota": "MN","Mississippi": "MS","Missouri": "MO","Montana": "MT",
+  "Nebraska": "NE","Nevada": "NV","New Hampshire": "NH","New Jersey": "NJ","New Mexico": "NM",
+  "New York": "NY","North Carolina": "NC","North Dakota": "ND","Ohio": "OH","Oklahoma": "OK",
+  "Oregon": "OR","Pennsylvania": "PA","Rhode Island": "RI","South Carolina": "SC",
+  "South Dakota": "SD","Tennessee": "TN","Texas": "TX","Utah": "UT","Vermont": "VT",
+  "Virginia": "VA","Washington": "WA","West Virginia": "WV","Wisconsin": "WI","Wyoming": "WY"
+};
 
 // ZIP lookup
 async function lookupZip(zip) {
@@ -65,8 +76,8 @@ function buildLink(addressPart, cityStatePart) {
   const cleanAddr = strippedAddr.replace(/[^a-zA-Z0-9\s]/g, "").trim();
   const cleanCityState = cityStatePart.replace(/[^a-zA-Z0-9\s]/g, "").trim();
 
-  const addrNorm = cleanAddr.replace(/\s+/g, "-");
-  const cityStateNorm = cleanCityState.replace(/\s+/g, "-");
+  const addrNorm = cleanAddr.replace(/\s+/g, "-").replace(/#/g, ""); // trim "#"
+  const cityStateNorm = cleanCityState.replace(/\s+/g, "-").replace(/#/g, "");
 
   return `https://www.peoplesearchnow.com/address/${addrNorm}_${cityStateNorm}`;
 }
@@ -74,14 +85,14 @@ function buildLink(addressPart, cityStatePart) {
 async function processSheet() {
   try {
     // 1. Read addresses from column F
-    const resInput = await sheets.spreadsheets.values.get({
+    const resInput = await sheetsApi.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: INPUT_RANGE,
     });
     const rows = resInput.data.values || [];
 
     // 2. Read existing URLs from column H
-    const resUrls = await sheets.spreadsheets.values.get({
+    const resUrls = await sheetsApi.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: `Individuals!${URL_COL}2:${URL_COL}${rows.length + 1}`,
     });
@@ -117,7 +128,7 @@ async function processSheet() {
 
       // Write generated URL to column H
       if (generatedUrl) {
-        await sheets.spreadsheets.values.update({
+        await sheetsApi.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
           range: `Individuals!${URL_COL}${targetRow}`,
           valueInputOption: "RAW",
