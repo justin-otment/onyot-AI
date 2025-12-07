@@ -10,8 +10,8 @@ const auth = new google.auth.GoogleAuth({
 // ---------------------
 const SPREADSHEET_ID = "1HRA7wT6_ozDhjn5_BZSMuqVVFh4vxl23B_0DUf63oSE";
 const CITIES_RANGE   = "Cities!A1:A";
-const AJ_RANGE       = "Individuals!K2:K";
-const OUTPUT_RANGE   = "Individuals!N2:N";
+const AJ_RANGE       = "Companies!S2:S";
+const OUTPUT_RANGE   = "Companies!T2:T";
 
 // ------------------------
 // CLEANERS
