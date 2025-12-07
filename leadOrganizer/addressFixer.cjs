@@ -13,7 +13,7 @@ const auth = new google.auth.GoogleAuth({
 const sheets = google.sheets({ version: "v4", auth });
 
 const SPREADSHEET_ID = "1xPmFJ8yHfuqu2DrLpl5bCRlFO7vRn7BJJtKBdC6pdvk";
-const INPUT_RANGE = "Main File!F2:F8540";
+const INPUT_RANGE = "Main File!F2056:F8540";
 const OUTPUT_COL = "G"; // normalized enriched address
 
 function sleep(ms) {
@@ -119,7 +119,7 @@ async function processSheet() {
 
       // Skip if already has output
       if (alreadyOutput && alreadyOutput.trim() !== "") {
-        console.log(`Row ${i + 2}: skipped (already has output)`);
+        console.log(`Row ${i + 2056}: skipped (already has output)`);
         continue;
       }
 
@@ -148,7 +148,7 @@ async function processSheet() {
         finalOutput = normalizeOutput(addr, cityState);
       }
 
-      const targetRow = i + 2;
+      const targetRow = i + 2056;
 
       // Write normalized address to column G
       await sheets.spreadsheets.values.update({
