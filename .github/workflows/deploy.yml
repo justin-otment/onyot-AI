@@ -30,7 +30,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Update config.json on Windows VPS
+      - name: Update config.json and launch Chrome
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -47,3 +47,6 @@ jobs:
               \"config_urlRange\": \"${{ github.event.inputs.urlRange }}\",
               \"config_startRow\": ${{ github.event.inputs.startRow }}
             }" > config.json
+
+            # Launch Chrome with options.html so you can see the pre-set values
+            powershell -Command "Start-Process 'C:/Program Files/Google/Chrome/Application/chrome.exe' 'C:/Users/Administrator/Desktop/OTMenT-3/options.html'"
