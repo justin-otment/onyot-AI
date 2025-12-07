@@ -13,15 +13,21 @@ const auth = new google.auth.GoogleAuth({
 
 const sheets = google.sheets({ version: "v4", auth });
 
+// ======================
+// Configuration
+// ======================
 const SPREADSHEET_ID = "1xPmFJ8yHfuqu2DrLpl5bCRlFO7vRn7BJJtKBdC6pdvk";
-const INPUT_RANGE = "Main File!F2056:F8540"; // Addresses
-const OUTPUT_COL = "G"; // Normalized enriched address
+const START_ROW = 2056; // Start processing from this row
+const INPUT_RANGE = `Main File!F${START_ROW}:F8540`; // Addresses
+const OUTPUT_COL = "G"; // Column for normalized output
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// USPS state abbreviation map
+// ======================
+// State abbreviations
+// ======================
 const STATE_ABBREVIATIONS = {
   "Alabama": "AL","Alaska": "AK","Arizona": "AZ","Arkansas": "AR","California": "CA",
   "Colorado": "CO","Connecticut": "CT","Delaware": "DE","Florida": "FL","Georgia": "GA",
@@ -35,7 +41,9 @@ const STATE_ABBREVIATIONS = {
   "Virginia": "VA","Washington": "WA","West Virginia": "WV","Wisconsin": "WI","Wyoming": "WY"
 };
 
-// Lookup ZIP → City, State
+// ======================
+// ZIP lookup
+// ======================
 async function lookupZip(zip) {
   if (!zip) return null;
   if (/^\d{4}$/.test(zip)) zip = zip.padStart(5, "0"); // pad 4-digit ZIPs
@@ -57,7 +65,9 @@ async function lookupZip(zip) {
   }
 }
 
-// Fallback: Address → City, State (OpenStreetMap)
+// ======================
+// Address lookup (fallback)
+// ======================
 async function lookupAddress(address) {
   if (!address) return null;
   try {
@@ -90,7 +100,9 @@ async function lookupAddress(address) {
   }
 }
 
+// ======================
 // Normalize final output
+// ======================
 function normalizeOutput(addressPart, cityStatePart) {
   const strippedAddr = addressPart.replace(/,\s*\d{4,5}.*$/, "");
   const cleanAddr = strippedAddr.replace(/[^a-zA-Z0-9\s]/g, "").trim();
@@ -100,7 +112,9 @@ function normalizeOutput(addressPart, cityStatePart) {
   return `${addrNorm}_${cityStateNorm}`;
 }
 
+// ======================
 // Main processing
+// ======================
 async function processSheet() {
   try {
     console.log("Fetching input addresses...");
@@ -116,18 +130,18 @@ async function processSheet() {
       return;
     }
 
+    // Fetch existing outputs aligned to START_ROW
     console.log("Fetching existing outputs...");
     const resOutput = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `Main File!${OUTPUT_COL}2:${OUTPUT_COL}${rows.length + 1}`,
+      range: `Main File!${OUTPUT_COL}${START_ROW}:${OUTPUT_COL}${START_ROW + rows.length - 1}`,
     });
     const existingOutput = resOutput.data.values || [];
 
     for (let i = 0; i < rows.length; i++) {
       const addr = rows[i][0];
       const alreadyOutput = existingOutput[i] && existingOutput[i][0];
-
-      const targetRow = i + 2056;
+      const targetRow = START_ROW + i;
 
       if (alreadyOutput && alreadyOutput.trim() !== "") {
         console.log(`Row ${targetRow}: skipped (already has output)`);
@@ -137,13 +151,9 @@ async function processSheet() {
       let cityState = null;
 
       if (addr) {
-        // Try ZIP first
         const match = addr.match(/\b\d{4,5}(?:-\d{4})?\b/);
-        if (match) {
-          cityState = await lookupZip(match[0]);
-        }
+        if (match) cityState = await lookupZip(match[0]);
 
-        // Fallback address lookup
         if (!cityState) {
           cityState = await lookupAddress(addr);
           if (!cityState) {
@@ -153,10 +163,7 @@ async function processSheet() {
         }
       }
 
-      let finalOutput = "Lookup-failed";
-      if (addr && cityState) {
-        finalOutput = normalizeOutput(addr, cityState);
-      }
+      const finalOutput = (addr && cityState) ? normalizeOutput(addr, cityState) : "Lookup-failed";
 
       try {
         await sheets.spreadsheets.values.update({
@@ -170,7 +177,7 @@ async function processSheet() {
         console.error(`Row ${targetRow} update failed:`, err);
       }
 
-      await sleep(1000); // Delay between lookups/writes
+      await sleep(1000);
     }
 
     console.log("Processing completed.");
@@ -179,5 +186,5 @@ async function processSheet() {
   }
 }
 
-// Run
+// Run the script
 processSheet();
