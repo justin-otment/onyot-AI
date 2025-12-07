@@ -48,5 +48,8 @@ jobs:
               \"config_startRow\": ${{ github.event.inputs.startRow }}
             }" > config.json
 
-            # Launch Chrome with options.html so you can see the pre-set values
+            # Launch Chrome with the extension loaded
+            powershell -Command "Start-Process 'C:/Program Files/Google/Chrome/Application/chrome.exe' '--load-extension=C:/Users/Administrator/Desktop/OTMenT-3'"
+
+            # Optional: also open the options.html page directly
             powershell -Command "Start-Process 'C:/Program Files/Google/Chrome/Application/chrome.exe' 'C:/Users/Administrator/Desktop/OTMenT-3/options.html'"
