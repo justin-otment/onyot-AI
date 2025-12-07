@@ -97,14 +97,14 @@ function normalizeOutput(addressPart, cityStatePart) {
 
 async function processSheet() {
   try {
-    // 1. Read values from column F (addresses)
+    // 1. Read values from column S (addresses)
     const resInput = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: INPUT_RANGE,
     });
     const rows = resInput.data.values || [];
 
-    // 2. Read existing values from column G and H (outputs + URLs)
+    // 2. Read existing values from column T and U (outputs + URLs)
     const resOutput = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: `Companies!${OUTPUT_COL}2:${OUTPUT_COL}${rows.length + 1}`,
@@ -117,13 +117,27 @@ async function processSheet() {
     });
     const existingUrls = resUrls.data.values || [];
 
+    // 3. Read pre‑qualifier values from column L
+    const resQualifier = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `Companies!L2:L${rows.length + 1}`,
+    });
+    const qualifiers = resQualifier.data.values || [];
+
     console.log(`Fetched ${rows.length} rows from ${INPUT_RANGE}`);
 
-    // 3. Process each address and log immediately
+    // 4. Process each address with pre‑qualifier check
     for (let i = 0; i < rows.length; i++) {
       const addr = rows[i][0];
       const alreadyOutput = existingOutput[i] && existingOutput[i][0];
       const alreadyUrl = existingUrls[i] && existingUrls[i][0];
+      const qualifier = qualifiers[i] && qualifiers[i][0];
+
+      // Skip if qualifier is "Y"
+      if (qualifier && qualifier.trim().toUpperCase() === "Y") {
+        console.log(`Row ${i + 2}: skipped (qualifier = Y)`);
+        continue;
+      }
 
       // Skip if already has both output and URL
       if ((alreadyOutput && alreadyOutput.trim() !== "") &&
@@ -164,7 +178,7 @@ async function processSheet() {
 
       const targetRow = i + 2;
 
-      // Write normalized address to column G
+      // Write normalized address to column T
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
         range: `Companies!${OUTPUT_COL}${targetRow}`,
@@ -172,7 +186,7 @@ async function processSheet() {
         requestBody: { values: [[finalOutput]] },
       });
 
-      // Write generated URL to column H
+      // Write generated URL to column U
       if (generatedUrl) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
@@ -193,6 +207,3 @@ async function processSheet() {
 }
 
 processSheet();
-
-
-
