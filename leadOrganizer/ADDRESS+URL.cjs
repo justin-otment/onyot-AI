@@ -13,13 +13,21 @@ const auth = new google.auth.GoogleAuth({
 const sheets = google.sheets({ version: "v4", auth });
 
 const SPREADSHEET_ID = "1xPmFJ8yHfuqu2DrLpl5bCRlFO7vRn7BJJtKBdC6pdvk";
-const INPUT_RANGE = "Companies!S2:S";
-const OUTPUT_COL = "T"; // normalized enriched address
-const URL_COL = "U";    // generated URL
+
+// 🔑 unify sheet name here
+const SHEET_NAME = "Individuals";
+
+// column definitions
+const INPUT_COL = "K";   // addresses
+const OUTPUT_COL = "M";  // normalized enriched address
+const URL_COL = "N";     // generated URL
+const QUALIFIER_COL = "L"; // pre‑qualifier
+const START_ROW = 2;  // begin processing at this row
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
+
 
 // USPS state abbreviation map
 const STATE_ABBREVIATIONS = {
@@ -100,34 +108,41 @@ async function processSheet() {
     // 1. Read values from column S (addresses)
     const resInput = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: INPUT_RANGE,
+      range: `${SHEET_NAME}!${INPUT_COL}2:${INPUT_COL}`,
     });
     const rows = resInput.data.values || [];
 
     // 2. Read existing values from column T and U (outputs + URLs)
     const resOutput = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `Companies!${OUTPUT_COL}2:${OUTPUT_COL}${rows.length + 1}`,
+      range: `${SHEET_NAME}!${OUTPUT_COL}2:${OUTPUT_COL}${rows.length + 1}`,
     });
     const existingOutput = resOutput.data.values || [];
 
     const resUrls = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `Companies!${URL_COL}2:${URL_COL}${rows.length + 1}`,
+      range: `${SHEET_NAME}!${URL_COL}2:${URL_COL}${rows.length + 1}`,
     });
     const existingUrls = resUrls.data.values || [];
 
     // 3. Read pre‑qualifier values from column L
     const resQualifier = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `Companies!L2:L${rows.length + 1}`,
+      range: `${SHEET_NAME}!${QUALIFIER_COL}2:${QUALIFIER_COL}${rows.length + 1}`,
     });
     const qualifiers = resQualifier.data.values || [];
 
-    console.log(`Fetched ${rows.length} rows from ${INPUT_RANGE}`);
+    console.log(`Fetched ${rows.length} rows from ${SHEET_NAME}!${INPUT_COL}2:${INPUT_COL}`);
 
     // 4. Process each address with pre‑qualifier check
     for (let i = 0; i < rows.length; i++) {
+      const targetRow = i + 2; // actual sheet row number
+
+      // Skip until we reach START_ROW
+      if (targetRow < START_ROW) {
+        continue;
+      }
+
       const addr = rows[i][0];
       const alreadyOutput = existingOutput[i] && existingOutput[i][0];
       const alreadyUrl = existingUrls[i] && existingUrls[i][0];
@@ -135,14 +150,14 @@ async function processSheet() {
 
       // Skip if qualifier is "Y"
       if (qualifier && qualifier.trim().toUpperCase() === "Y") {
-        console.log(`Row ${i + 2}: skipped (qualifier = Y)`);
+        console.log(`Row ${targetRow}: skipped (qualifier = Y)`);
         continue;
       }
 
       // Skip if already has both output and URL
       if ((alreadyOutput && alreadyOutput.trim() !== "") &&
           (alreadyUrl && alreadyUrl.trim() !== "")) {
-        console.log(`Row ${i + 2}: skipped (already has output + URL)`);
+        console.log(`Row ${targetRow}: skipped (already has output + URL)`);
         continue;
       }
 
@@ -176,27 +191,31 @@ async function processSheet() {
         ? `https://www.peoplesearchnow.com/address/${finalOutput}`
         : "";
 
-      const targetRow = i + 2;
-
-      // Write normalized address to column T
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `Companies!${OUTPUT_COL}${targetRow}`,
-        valueInputOption: "RAW",
-        requestBody: { values: [[finalOutput]] },
-      });
-
-      // Write generated URL to column U
-      if (generatedUrl) {
+      try {
+        // Write normalized address to column T
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `Companies!${URL_COL}${targetRow}`,
+          range: `${SHEET_NAME}!${OUTPUT_COL}${targetRow}`,
           valueInputOption: "RAW",
-          requestBody: { values: [[generatedUrl]] },
+          requestBody: { values: [[finalOutput]] },
         });
+
+        // Write generated URL to column U
+        if (generatedUrl) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${SHEET_NAME}!${URL_COL}${targetRow}`,
+            valueInputOption: "RAW",
+            requestBody: { values: [[generatedUrl]] },
+          });
+        }
+
+        // ✅ Log only after both writes succeed
+        console.log(`Row ${targetRow}: ${finalOutput} | URL: ${generatedUrl}`);
+      } catch (writeErr) {
+        console.error(`Row ${targetRow}: error writing to sheet`, writeErr);
       }
 
-      console.log(`Row ${targetRow}: ${finalOutput} | URL: ${generatedUrl}`);
       await sleep(1000); // delay between lookups/writes
     }
 
