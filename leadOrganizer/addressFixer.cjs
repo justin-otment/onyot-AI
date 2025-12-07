@@ -17,7 +17,7 @@ const sheets = google.sheets({ version: "v4", auth });
 // Configuration
 // ======================
 const SPREADSHEET_ID = "1xPmFJ8yHfuqu2DrLpl5bCRlFO7vRn7BJJtKBdC6pdvk";
-const START_ROW = 2056; // Start processing from this row
+const START_ROW = 2931; // Start processing from this row
 const INPUT_RANGE = `Main File!F${START_ROW}:F8540`; // Addresses
 const OUTPUT_COL = "G"; // Column for normalized output
 
