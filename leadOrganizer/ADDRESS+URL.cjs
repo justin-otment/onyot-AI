@@ -13,9 +13,9 @@ const auth = new google.auth.GoogleAuth({
 const sheets = google.sheets({ version: "v4", auth });
 
 const SPREADSHEET_ID = "1xPmFJ8yHfuqu2DrLpl5bCRlFO7vRn7BJJtKBdC6pdvk";
-const INPUT_RANGE = "Main File!F2:F8540";
-const OUTPUT_COL = "G"; // normalized enriched address
-const URL_COL = "h";    // generated URL
+const INPUT_RANGE = "Companies!S2:S";
+const OUTPUT_COL = "T"; // normalized enriched address
+const URL_COL = "U";    // generated URL
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -107,13 +107,13 @@ async function processSheet() {
     // 2. Read existing values from column G and H (outputs + URLs)
     const resOutput = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `Main File!${OUTPUT_COL}2:${OUTPUT_COL}${rows.length + 1}`,
+      range: `Companies!${OUTPUT_COL}2:${OUTPUT_COL}${rows.length + 1}`,
     });
     const existingOutput = resOutput.data.values || [];
 
     const resUrls = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `Main File!${URL_COL}2:${URL_COL}${rows.length + 1}`,
+      range: `Companies!${URL_COL}2:${URL_COL}${rows.length + 1}`,
     });
     const existingUrls = resUrls.data.values || [];
 
@@ -167,7 +167,7 @@ async function processSheet() {
       // Write normalized address to column G
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `Main File!${OUTPUT_COL}${targetRow}`,
+        range: `Companies!${OUTPUT_COL}${targetRow}`,
         valueInputOption: "RAW",
         requestBody: { values: [[finalOutput]] },
       });
@@ -176,7 +176,7 @@ async function processSheet() {
       if (generatedUrl) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `Main File!${URL_COL}${targetRow}`,
+          range: `Companies!${URL_COL}${targetRow}`,
           valueInputOption: "RAW",
           requestBody: { values: [[generatedUrl]] },
         });
@@ -193,7 +193,6 @@ async function processSheet() {
 }
 
 processSheet();
-
 
 
 
