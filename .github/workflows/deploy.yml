@@ -1,0 +1,49 @@
+name: Manual Deploy Chrome Extension Config
+
+on:
+  workflow_dispatch:
+    inputs:
+      apiKey:
+        description: "2Captcha API Key"
+        required: true
+      apiMode:
+        description: "API Mode (json or legacy)"
+        default: "json"
+      sheetId:
+        description: "Google Sheet ID"
+        required: true
+      sheetName:
+        description: "Sheet Name"
+        required: true
+      urlRange:
+        description: "URL Range"
+        required: true
+      startRow:
+        description: "Start Row"
+        default: "2"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Update config.json on Windows VPS
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPN_USERNAME }}
+          password: ${{ secrets.VPN_PASSWORD }}
+          port: 22
+          script: |
+            cd C:/Users/Administrator/Desktop/OTMenT-3
+            echo "{
+              \"solver_api_key\": \"${{ github.event.inputs.apiKey }}\",
+              \"solver_api_mode\": \"${{ github.event.inputs.apiMode }}\",
+              \"config_spreadsheetId\": \"${{ github.event.inputs.sheetId }}\",
+              \"config_sheetName\": \"${{ github.event.inputs.sheetName }}\",
+              \"config_urlRange\": \"${{ github.event.inputs.urlRange }}\",
+              \"config_startRow\": ${{ github.event.inputs.startRow }}
+            }" > config.json
