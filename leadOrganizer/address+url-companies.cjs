@@ -15,19 +15,18 @@ const sheets = google.sheets({ version: "v4", auth });
 const SPREADSHEET_ID = "1xPmFJ8yHfuqu2DrLpl5bCRlFO7vRn7BJJtKBdC6pdvk";
 
 // 🔑 unify sheet name here
-const SHEET_NAME = "Companies";
+const SHEET_NAME = "Individuals";
 
 // column definitions
 const INPUT_COL = "S";   // addresses
 const OUTPUT_COL = "T";  // normalized enriched address
 const URL_COL = "U";     // generated URL
 const QUALIFIER_COL = "L"; // pre‑qualifier
-const START_ROW = 2;  // begin processing at this row
+const START_ROW = 2;     // begin processing at this row
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
-
 
 // USPS state abbreviation map
 const STATE_ABBREVIATIONS = {
@@ -86,33 +85,67 @@ async function lookupAddress(address) {
   }
 }
 
-// Normalization helper
+// Check if address already contains a known city
+function containsKnownCity(address, citiesList) {
+  if (!address) return null;
+  const upperAddr = address.toUpperCase();
+
+  for (const city of citiesList) {
+    const cityKey = city.toUpperCase().replace(/_/g, " ");
+    const regex = new RegExp(`\\b${cityKey}\\b`, "i");
+    if (regex.test(upperAddr)) {
+      return city; // return the matched city name
+    }
+  }
+  return null;
+}
+
+// Normalization helper: strip ZIPs, state abbreviations, and city tokens
 function normalizeOutput(addressPart, cityStatePart) {
-  // Remove ZIP from address part
-  const strippedAddr = addressPart.replace(/,\s*\d{4,5}.*$/, "");
+  // Remove trailing ZIP
+  let strippedAddr = addressPart.replace(/\b\d{5}(?:-\d{4})?$/, "");
+
+  // Remove state abbreviations (all 2‑letter USPS codes)
+  strippedAddr = strippedAddr.replace(/\b(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b/gi, "");
+
+  // Remove city tokens if present
+  const cityTokens = cityStatePart.split(" ");
+  cityTokens.forEach(tok => {
+    const regex = new RegExp(tok, "i");
+    strippedAddr = strippedAddr.replace(regex, "").trim();
+  });
 
   // Clean: keep only letters, numbers, spaces
   const cleanAddr = strippedAddr.replace(/[^a-zA-Z0-9\s]/g, "").trim();
   const cleanCityState = cityStatePart.replace(/[^a-zA-Z0-9\s]/g, "").trim();
 
-  // Replace spaces with "-" inside each part
-  const addrNorm = cleanAddr.replace(/\s+/g, "-");
-  const cityStateNorm = cleanCityState.replace(/\s+/g, "-");
+  // Slugs
+  const streetSlug = cleanAddr.replace(/\s+/g, "-").toLowerCase();
+  const citySlug = cleanCityState.split(" ")[0].toLowerCase();
 
-  // Join with underscore
-  return `${addrNorm}_${cityStateNorm}`;
+  return { streetSlug, citySlug };
+}
+
+// URL builder
+function buildUrl(streetSlug, citySlug, state, zip) {
+  if (!streetSlug || !citySlug || !state) return "";
+  if (zip) {
+    return `https://www.peoplesearchnow.com/address/${streetSlug}_${citySlug}-${state.toLowerCase()}-${zip}`;
+  } else {
+    return `https://www.peoplesearchnow.com/address/${streetSlug}_${citySlug}-${state.toLowerCase()}`;
+  }
 }
 
 async function processSheet() {
   try {
-    // 1. Read values from column S (addresses)
+    // 1. Read values from column K (addresses)
     const resInput = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: `${SHEET_NAME}!${INPUT_COL}2:${INPUT_COL}`,
     });
     const rows = resInput.data.values || [];
 
-    // 2. Read existing values from column T and U (outputs + URLs)
+    // 2. Read existing values from column M and N (outputs + URLs)
     const resOutput = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: `${SHEET_NAME}!${OUTPUT_COL}2:${OUTPUT_COL}${rows.length + 1}`,
@@ -132,29 +165,31 @@ async function processSheet() {
     });
     const qualifiers = resQualifier.data.values || [];
 
+    // 4. Load Cities sheet
+    const resCities = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: "Cities!A1:A",
+    });
+    const rawCities = resCities.data.values ? resCities.data.values.flat().filter(Boolean) : [];
+
     console.log(`Fetched ${rows.length} rows from ${SHEET_NAME}!${INPUT_COL}2:${INPUT_COL}`);
 
-    // 4. Process each address with pre‑qualifier check
+    // 5. Process each address with pre‑qualifier check
     for (let i = 0; i < rows.length; i++) {
       const targetRow = i + 2; // actual sheet row number
 
-      // Skip until we reach START_ROW
-      if (targetRow < START_ROW) {
-        continue;
-      }
+      if (targetRow < START_ROW) continue;
 
       const addr = rows[i][0];
       const alreadyOutput = existingOutput[i] && existingOutput[i][0];
       const alreadyUrl = existingUrls[i] && existingUrls[i][0];
       const qualifier = qualifiers[i] && qualifiers[i][0];
 
-      // Skip if qualifier is "Y"
       if (qualifier && qualifier.trim().toUpperCase() === "Y") {
         console.log(`Row ${targetRow}: skipped (qualifier = Y)`);
         continue;
       }
 
-      // Skip if already has both output and URL
       if ((alreadyOutput && alreadyOutput.trim() !== "") &&
           (alreadyUrl && alreadyUrl.trim() !== "")) {
         console.log(`Row ${targetRow}: skipped (already has output + URL)`);
@@ -162,37 +197,55 @@ async function processSheet() {
       }
 
       let cityState = null;
-      if (addr) {
-        // Extract ZIP
-        const match = addr.match(/\b\d{4,5}(?:-\d{4})?\b/);
-        if (match) {
-          let zip = match[0];
-          cityState = await lookupZip(zip);
-        }
+      let finalOutput = "Lookup-failed";
+      let generatedUrl = "";
 
-        // Fallback if ZIP lookup failed
-        if (!cityState) {
-          cityState = await lookupAddress(addr);
+      if (addr) {
+        // First check if address already contains a known city
+        const matchedCity = containsKnownCity(addr, rawCities);
+        if (matchedCity) {
+          const stateMatch = addr.match(/\b[A-Z]{2}\b/);
+          const zipMatch = addr.match(/\b\d{5}(?:-\d{4})?\b/);
+          const state = stateMatch ? stateMatch[0] : "";
+          const zip = zipMatch ? zipMatch[0] : "";
+          cityState = `${matchedCity} ${state}${zip ? " " + zip : ""}`;
+
+          const { streetSlug, citySlug } = normalizeOutput(addr, cityState);
+          finalOutput = `${streetSlug}_${citySlug}-${state}${zip ? "-" + zip : ""}`;
+          generatedUrl = buildUrl(streetSlug, citySlug, state, zip);
+
+          console.log(`Row ${targetRow}: city pre-check matched ${matchedCity}`);
+        } else {
+          // Otherwise fall back to ZIP/Nominatim lookups
+          const match = addr.match(/\b\d{4,5}(?:-\d{4})?\b/);
+          if (match) {
+            let zip = match[0];
+            cityState = await lookupZip(zip);
+          }
+
           if (!cityState) {
-            const stripped = addr.replace(/,\s*\d{4,5}.*$/, "");
-            cityState = await lookupAddress(stripped);
+            cityState = await lookupAddress(addr);
+            if (!cityState) {
+              const stripped = addr.replace(/,\s*\d{4,5}.*$/, "");
+              cityState = await lookupAddress(stripped);
+            }
+          }
+
+          if (cityState) {
+            const { streetSlug, citySlug } = normalizeOutput(addr, cityState);
+            const stateMatch = cityState.match(/\b[A-Z]{2}\b/);
+            const zipMatch = addr.match(/\b\d{5}(?:-\d{4})?\b/);
+            const state = stateMatch ? stateMatch[0] : "";
+            const zip = zipMatch ? zipMatch[0] : "";
+
+            finalOutput = `${streetSlug}_${citySlug}-${state}${zip ? "-" + zip : ""}`;
+            generatedUrl = buildUrl(streetSlug, citySlug, state, zip);
           }
         }
       }
 
-      // Build final normalized output
-      let finalOutput = "Lookup-failed";
-      if (addr && cityState) {
-        finalOutput = normalizeOutput(addr, cityState);
-      }
-
-      // Generate URL
-      const generatedUrl = finalOutput !== "Lookup-failed"
-        ? `https://www.peoplesearchnow.com/address/${finalOutput}`
-        : "";
-
       try {
-        // Write normalized address to column T
+        // Write normalized address to column M
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
           range: `${SHEET_NAME}!${OUTPUT_COL}${targetRow}`,
@@ -200,7 +253,7 @@ async function processSheet() {
           requestBody: { values: [[finalOutput]] },
         });
 
-        // Write generated URL to column U
+        // Write generated URL to column N
         if (generatedUrl) {
           await sheets.spreadsheets.values.update({
             spreadsheetId: SPREADSHEET_ID,
@@ -210,7 +263,6 @@ async function processSheet() {
           });
         }
 
-        // ✅ Log only after both writes succeed
         console.log(`Row ${targetRow}: ${finalOutput} | URL: ${generatedUrl}`);
       } catch (writeErr) {
         console.error(`Row ${targetRow}: error writing to sheet`, writeErr);
