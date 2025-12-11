@@ -15,7 +15,7 @@ const sheets = google.sheets({ version: "v4", auth });
 const SPREADSHEET_ID = "1xPmFJ8yHfuqu2DrLpl5bCRlFO7vRn7BJJtKBdC6pdvk";
 
 // 🔑 unify sheet name here
-const SHEET_NAME = "Individuals";
+const SHEET_NAME = "Companies";
 
 // column definitions
 const INPUT_COL = "S";   // addresses
