@@ -1,228 +1,252 @@
 const { google } = require("googleapis");
-// If Node < 18, install node-fetch: npm install node-fetch@2
-const fetch = require("node-fetch");
-const path = require("path");
-
-const SERVICE_ACCOUNT_PATH = path.join(process.cwd(), "service-account.json");
 
 const auth = new google.auth.GoogleAuth({
-  keyFile: SERVICE_ACCOUNT_PATH,
+  keyFile: "service-account.json",
   scopes: ["https://www.googleapis.com/auth/spreadsheets"],
 });
 
-const sheets = google.sheets({ version: "v4", auth });
-
+// ---------------------
+// Sheet ranges
+// ---------------------
 const SPREADSHEET_ID = "1HRA7wT6_ozDhjn5_BZSMuqVVFh4vxl23B_0DUf63oSE";
+const CITIES_RANGE    = "Cities!A1:A";
+const AJ_RANGE        = "Individuals!K2:K";
+const QUALIFIER_RANGE = "Individuals!L2:L"; // skip if "Y"
+const OUTPUT_RANGE    = "Individuals!N2:N";
 
-// 🔑 unify sheet name here
-const SHEET_NAME = "Individuals";
+// ------------------------
+// CLEANERS
+// ------------------------
+const normalize = (str) =>
+  (!str ? "" : String(str)
+    .replace(/#/g, "")        // remove all '#' characters
+    .replace(/\s+/g, " ")     // collapse whitespace
+    .trim());
 
-// column definitions
-const INPUT_COL = "K";   // addresses
-const OUTPUT_COL = "M";  // normalized enriched address
-const URL_COL = "N";     // generated URL
-const QUALIFIER_COL = "L"; // pre‑qualifier
-const START_ROW = 2;  // begin processing at this row
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+function expandAbbreviations(str) {
+  return str
+    .replace(/\bFt\b/i, "Fort")
+    .replace(/\bN\b/i, "North")
+    .replace(/\bS\b/i, "South")
+    .replace(/\bE\b/i, "East")
+    .replace(/\bW\b/i, "West");
 }
 
+const toUpperTokens = (str) => normalize(expandAbbreviations(str)).toUpperCase();
 
-// USPS state abbreviation map
-const STATE_ABBREVIATIONS = {
-  "Alabama": "AL","Alaska": "AK","Arizona": "AZ","Arkansas": "AR","California": "CA",
-  "Colorado": "CO","Connecticut": "CT","Delaware": "DE","Florida": "FL","Georgia": "GA",
-  "Hawaii": "HI","Idaho": "ID","Illinois": "IL","Indiana": "IN","Iowa": "IA","Kansas": "KS",
-  "Kentucky": "KY","Louisiana": "LA","Maine": "ME","Maryland": "MD","Massachusetts": "MA",
-  "Michigan": "MI","Minnesota": "MN","Mississippi": "MS","Missouri": "MO","Montana": "MT",
-  "Nebraska": "NE","Nevada": "NV","New Hampshire": "NH","New Jersey": "NJ","New Mexico": "NM",
-  "New York": "NY","North Carolina": "NC","North Dakota": "ND","Ohio": "OH","Oklahoma": "OK",
-  "Oregon": "OR","Pennsylvania": "PA","Rhode Island": "RI","South Carolina": "SC",
-  "South Dakota": "SD","Tennessee": "TN","Texas": "TX","Utah": "UT","Vermont": "VT",
-  "Virginia": "VA","Washington": "WA","West Virginia": "WV","Wisconsin": "WI","Wyoming": "WY"
-};
+function cleanStreetSlug(str) {
+  return normalize(str)
+    .toLowerCase()
+    .replace(/[_\s,\/]+/g, "-")   // underscores/spaces/commas/slashes → hyphen
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
 
-// Primary lookup: ZIP → City, State
-async function lookupZip(zip) {
-  if (!zip) return null;
-  if (/^\d{4}$/.test(zip)) zip = zip.padStart(5, "0"); // pad 4-digit ZIPs
+function cleanCitySlug(city) {
+  return normalize(city)
+    .toLowerCase()
+    .replace(/[_\s\/]+/g, "-")    // underscores/spaces/slashes → hyphen
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
 
-  try {
-    const res = await fetch(`https://api.zippopotam.us/us/${zip}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const place = data.places[0];
-    return `${place["place name"]} ${place["state abbreviation"]}`;
-  } catch {
-    return null;
+// ------------------------
+// US STATES LIST
+// ------------------------
+const US_STATES = new Set([
+  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC"
+]);
+
+// ------------------------
+// Helpers for fallback city extraction
+// ------------------------
+const UNIT_WORDS = new Set(["APT","APARTMENT","UNIT","STE","SUITE","BLDG","BLD","FL","FLOOR","LOT"]);
+const STREET_SUFFIXES = new Set([
+  "ST","STREET","RD","ROAD","AVE","AV","AVENUE","DR","DRIVE","BLVD","LANE","LN","PL","PLACE",
+  "CT","COURT","TER","TERRACE","PKWY","PARKWAY","CIR","CIRCLE","WAY","HWY","SPR","SPRINGS"
+]);
+const DIRECTIONS = new Set(["N","S","E","W","NE","NW","SE","SW"]);
+
+function isNumericToken(t) {
+  return /^\d+[A-Z]?$/.test(t);
+}
+
+function extractFallbackCity(tokensU) {
+  // Drop trailing unit words and numeric tokens (# already stripped in normalize)
+  let i = tokensU.length - 1;
+  while (i >= 0 && (UNIT_WORDS.has(tokensU[i]) || isNumericToken(tokensU[i]))) {
+    i--;
+  }
+  if (i < 0) return null;
+
+  // Prefer last token as city; avoid street suffixes/directions
+  let cityEnd = i;
+  if (DIRECTIONS.has(tokensU[cityEnd]) || STREET_SUFFIXES.has(tokensU[cityEnd])) {
+    cityEnd--;
+  }
+  if (cityEnd < 0) return null;
+
+  // Try two-token city if the previous token looks alphabetic and not a suffix/direction
+  const last = tokensU[cityEnd];
+  const prev = tokensU[cityEnd - 1];
+  let cityTokens = [last];
+
+  if (prev && /^[A-Z]+$/.test(prev) && !DIRECTIONS.has(prev) && !STREET_SUFFIXES.has(prev)) {
+    cityTokens = [prev, last];
+  }
+
+  return {
+    cityTokens,
+    streetTokens: tokensU.slice(0, cityEnd - (cityTokens.length === 2 ? 1 : 0))
+  };
+}
+
+// ------------------------
+// FLEXIBLE ADDRESS PARSER
+// ------------------------
+function parseLooseAddress(str, citiesU) {
+  if (!str) return null;
+
+  const tokensU = toUpperTokens(str).split(" ").filter(Boolean);
+  if (tokensU.length < 2) return null;
+
+  // ZIP
+  let zip = "";
+  if (/^\d{5}$/.test(tokensU[tokensU.length - 1])) {
+    zip = tokensU.pop();
+  }
+
+  // STATE
+  let state = "";
+  if (/^[A-Z]{2}$/.test(tokensU[tokensU.length - 1])) {
+    const candidate = tokensU.pop();
+    if (US_STATES.has(candidate)) {
+      state = candidate.toLowerCase();
+    }
+  }
+
+  let remainU = tokensU.join(" ");
+
+  // Try city match from Cities sheet (longest flexible match)
+  let foundCityKey = ""; // canonical uppercase with single spaces
+  let foundRegex = null;
+  for (const key of citiesU) {
+    const flexible = key.replace(/ /g, "[\\s_]+"); // allow underscores/spaces in input
+    const regex = new RegExp(flexible, "i");
+    if (regex.test(remainU) && key.length > foundCityKey.length) {
+      foundCityKey = key;
+      foundRegex = regex;
+    }
+  }
+
+  if (foundCityKey) {
+    const cityTitle = foundCityKey
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .replace(/\b\w/g, c => c.toUpperCase());
+    const street = normalize(remainU.replace(foundRegex, "").trim());
+    return { street, city: cityTitle, state, zip };
+  }
+
+  // Fallback: derive city from token tail, excluding units/directions/suffixes
+  const fb = extractFallbackCity(tokensU);
+  if (!fb) return null;
+
+  const cityTitle = fb.cityTokens
+    .join(" ")
+    .toLowerCase()
+    .replace(/[_\s]+/g, " ")
+    .replace(/\b\w/g, c => c.toUpperCase());
+  const street = normalize(fb.streetTokens.join(" "));
+
+  return { street, city: cityTitle, state, zip };
+}
+
+// ------------------------
+// URL BUILDER
+// ------------------------
+function buildUrl(street, city, state, zip) {
+  if (!street || !city || !state) return "";
+
+  const streetSlug = cleanStreetSlug(street);
+  const citySlug   = cleanCitySlug(city);
+
+  if (zip) {
+    return `https://www.peoplesearchnow.com/address/${streetSlug}_${citySlug}-${state}-${zip}`;
+  } else {
+    return `https://www.peoplesearchnow.com/address/${streetSlug}_${citySlug}-${state}`;
   }
 }
 
-// Fallback lookup: Street address → City, State (OpenStreetMap Nominatim)
-async function lookupAddress(address) {
-  try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(address)}`;
-    const res = await fetch(url, { headers: { "User-Agent": "Node.js script" } });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data.length) return null;
+// ------------------------
+// MAIN
+// ------------------------
+async function main() {
+  const client = await auth.getClient();
+  const sheets = google.sheets({ version: "v4", auth: client });
 
-    const result = data[0];
-    let city = result.address.city || result.address.town || result.address.village || "";
-    let state = result.address.state || "";
+  // Load cities and canonicalize to uppercase with single spaces (no underscores)
+  const resCities = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: CITIES_RANGE,
+  });
+  const rawCities = resCities.data.values
+    ? resCities.data.values.flat().filter(Boolean)
+    : [];
 
-    // 🔑 Strip "City of" completely
-    city = city.replace(/^City of\s+/i, "").trim();
+  // Canonical keys: uppercase, underscores -> spaces, collapse spaces
+  const citiesU = rawCities.map(c =>
+    normalize(String(c).replace(/_/g, " ")).toUpperCase()
+  );
 
-    // Normalize to abbreviation if possible
-    if (STATE_ABBREVIATIONS[state]) {
-      state = STATE_ABBREVIATIONS[state];
+  // Load addresses (K2:K)
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: AJ_RANGE,
+  });
+  const ajVals = res.data.values || [];
+  const siteCol = ajVals.map(r => r[0] || "");
+
+  // Load qualifiers (L2:L) and normalize to uppercase
+  const resQual = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: QUALIFIER_RANGE,
+  });
+  const qualVals = resQual.data.values || [];
+  const qualifiers = qualVals.map(r => (r[0] || "").trim().toUpperCase());
+
+  // Build URLs with qualifier check
+  const urls = siteCol.map((full, idx) => {
+    if (!full.trim()) return "";
+    if (qualifiers[idx] === "Y") {
+      console.log(`Row ${idx + 2}: skipped (qualifier = Y)`);
+      return "";
     }
 
-    return city && state ? `${city} ${state}` : null;
-  } catch {
-    return null;
-  }
-}
-
-// Normalization helper
-function normalizeOutput(addressPart, cityStatePart) {
-  // Remove ZIP from address part
-  const strippedAddr = addressPart.replace(/,\s*\d{4,5}.*$/, "");
-
-  // Clean: keep only letters, numbers, spaces
-  const cleanAddr = strippedAddr.replace(/[^a-zA-Z0-9\s]/g, "").trim();
-  const cleanCityState = cityStatePart.replace(/[^a-zA-Z0-9\s]/g, "").trim();
-
-  // Replace spaces with "-" inside each part
-  const addrNorm = cleanAddr.replace(/\s+/g, "-");
-  const cityStateNorm = cleanCityState.replace(/\s+/g, "-");
-
-  // Join with underscore
-  return `${addrNorm}_${cityStateNorm}`;
-}
-
-async function processSheet() {
-  try {
-    // 1. Read values from column S (addresses)
-    const resInput = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!${INPUT_COL}2:${INPUT_COL}`,
-    });
-    const rows = resInput.data.values || [];
-
-    // 2. Read existing values from column T and U (outputs + URLs)
-    const resOutput = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!${OUTPUT_COL}2:${OUTPUT_COL}${rows.length + 1}`,
-    });
-    const existingOutput = resOutput.data.values || [];
-
-    const resUrls = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!${URL_COL}2:${URL_COL}${rows.length + 1}`,
-    });
-    const existingUrls = resUrls.data.values || [];
-
-    // 3. Read pre‑qualifier values from column L
-    const resQualifier = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!${QUALIFIER_COL}2:${QUALIFIER_COL}${rows.length + 1}`,
-    });
-    const qualifiers = resQualifier.data.values || [];
-
-    console.log(`Fetched ${rows.length} rows from ${SHEET_NAME}!${INPUT_COL}2:${INPUT_COL}`);
-
-    // 4. Process each address with pre‑qualifier check
-    for (let i = 0; i < rows.length; i++) {
-      const targetRow = i + 2; // actual sheet row number
-
-      // Skip until we reach START_ROW
-      if (targetRow < START_ROW) {
-        continue;
-      }
-
-      const addr = rows[i][0];
-      const alreadyOutput = existingOutput[i] && existingOutput[i][0];
-      const alreadyUrl = existingUrls[i] && existingUrls[i][0];
-      const qualifier = qualifiers[i] && qualifiers[i][0];
-
-      // Skip if qualifier is "Y"
-      if (qualifier && qualifier.trim().toUpperCase() === "Y") {
-        console.log(`Row ${targetRow}: skipped (qualifier = Y)`);
-        continue;
-      }
-
-      // Skip if already has both output and URL
-      if ((alreadyOutput && alreadyOutput.trim() !== "") &&
-          (alreadyUrl && alreadyUrl.trim() !== "")) {
-        console.log(`Row ${targetRow}: skipped (already has output + URL)`);
-        continue;
-      }
-
-      let cityState = null;
-      if (addr) {
-        // Extract ZIP
-        const match = addr.match(/\b\d{4,5}(?:-\d{4})?\b/);
-        if (match) {
-          let zip = match[0];
-          cityState = await lookupZip(zip);
-        }
-
-        // Fallback if ZIP lookup failed
-        if (!cityState) {
-          cityState = await lookupAddress(addr);
-          if (!cityState) {
-            const stripped = addr.replace(/,\s*\d{4,5}.*$/, "");
-            cityState = await lookupAddress(stripped);
-          }
-        }
-      }
-
-      // Build final normalized output
-      let finalOutput = "Lookup-failed";
-      if (addr && cityState) {
-        finalOutput = normalizeOutput(addr, cityState);
-      }
-
-      // Generate URL
-      const generatedUrl = finalOutput !== "Lookup-failed"
-        ? `https://www.peoplesearchnow.com/address/${finalOutput}`
-        : "";
-
-      try {
-        // Write normalized address to column T
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SPREADSHEET_ID,
-          range: `${SHEET_NAME}!${OUTPUT_COL}${targetRow}`,
-          valueInputOption: "RAW",
-          requestBody: { values: [[finalOutput]] },
-        });
-
-        // Write generated URL to column U
-        if (generatedUrl) {
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `${SHEET_NAME}!${URL_COL}${targetRow}`,
-            valueInputOption: "RAW",
-            requestBody: { values: [[generatedUrl]] },
-          });
-        }
-
-        // ✅ Log only after both writes succeed
-        console.log(`Row ${targetRow}: ${finalOutput} | URL: ${generatedUrl}`);
-      } catch (writeErr) {
-        console.error(`Row ${targetRow}: error writing to sheet`, writeErr);
-      }
-
-      await sleep(1000); // delay between lookups/writes
+    const parsed = parseLooseAddress(full, citiesU);
+    if (!parsed) {
+      console.log("❌ Non‑US, unparseable, or city not found in Cities sheet:", full);
+      return "";
     }
 
-    console.log("Completed incremental logging with normalized output + URL logging.");
-  } catch (err) {
-    console.error("Error processing sheet:", err);
-  }
+    const url = buildUrl(parsed.street, parsed.city, parsed.state, parsed.zip);
+    if (!url) {
+      console.log("⚠️ Incomplete address:", parsed);
+    }
+    return url;
+  });
+
+  console.log("Sample:", urls.slice(0, 10));
+
+  // Write output to column N
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: OUTPUT_RANGE,
+    valueInputOption: "RAW",
+    requestBody: { values: urls.map(u => [u]) },
+  });
+
+  console.log("✅ US‑only URLs written to", OUTPUT_RANGE);
 }
 
-processSheet();
+main().catch(err => console.error(err));
