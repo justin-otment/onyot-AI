@@ -8,7 +8,7 @@ const auth = new google.auth.GoogleAuth({
 // ---------------------
 // Sheet ranges
 // ---------------------
-const SPREADSHEET_ID = "1HRA7wT6_ozDhjn5_BZSMuqVVFh4vxl23B_0DUf63oSE";
+const SPREADSHEET_ID = "1xPmFJ8yHfuqu2DrLpl5bCRlFO7vRn7BJJtKBdC6pdvk";
 const CITIES_RANGE    = "Cities!A1:A";
 const AJ_RANGE        = "Individuals!K2:K";
 const QUALIFIER_RANGE = "Individuals!L2:L"; // skip if "Y"
