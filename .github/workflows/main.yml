@@ -32,7 +32,7 @@ jobs:
           env:
             GOOGLE_APPLICATION_CREDENTIALS: "./service-account.json"
             GOOGLE_TOKEN_JSON: "./google-token.json"
-          run: node urlBuilder.cjs
+          run: node ADDRESS+URL.cjs
 
   corpTracer1:
     runs-on: ubuntu-latest
@@ -92,4 +92,4 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: "./service-account.json"
           GOOGLE_TOKEN_JSON: "./google-token.json"
-        run: node ADDRESS+URL.cjs
+        run: node address+url-companies.cjs
