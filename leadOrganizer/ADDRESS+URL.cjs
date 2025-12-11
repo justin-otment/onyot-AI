@@ -12,15 +12,15 @@ const auth = new google.auth.GoogleAuth({
 
 const sheets = google.sheets({ version: "v4", auth });
 
-const SPREADSHEET_ID = "1HRA7wT6_ozDhjn5_BZSMuqVVFh4vxl23B_0DUf63oSE";
+const SPREADSHEET_ID = "1xPmFJ8yHfuqu2DrLpl5bCRlFO7vRn7BJJtKBdC6pdvk";
 
 // 🔑 unify sheet name here
-const SHEET_NAME = "Companies";
+const SHEET_NAME = "Individuals";
 
 // column definitions
-const INPUT_COL = "S";   // addresses
-const OUTPUT_COL = "T";  // normalized enriched address
-const URL_COL = "U";     // generated URL
+const INPUT_COL = "K";   // addresses
+const OUTPUT_COL = "M";  // normalized enriched address
+const URL_COL = "N";     // generated URL
 const QUALIFIER_COL = "L"; // pre‑qualifier
 const START_ROW = 2;  // begin processing at this row
 
@@ -226,6 +226,7 @@ async function processSheet() {
 }
 
 processSheet();
+
 
 
 
