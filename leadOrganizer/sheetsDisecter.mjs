@@ -368,7 +368,7 @@ async function appendIndividualsFromTrusts(sheetsApi) {
     // ==========================
     const tracedResp = await sheetsApi.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `Traced!A2:D`, // street address in col A, phone in col D
+      range: `For REI Upload!A2:D`, // street address in col A, phone in col D
     });
 
     const tracedRows = tracedResp.data.values || [];
@@ -527,6 +527,7 @@ async function appendIndividualsFromTrusts(sheetsApi) {
 // RUN
 // ==========================
 organizeData();
+
 
 
 
