@@ -46,14 +46,7 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install Chrome and Chromedriver
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget unzip xvfb libxi6 libxss1 libnss3 libatk-bridge2.0-0 libgtk-3-0
-          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
-
-      - name: Install dependencies (fallback to npm install if no lockfile)
+      - name: Install dependencies
         run: |
           if [ -f package-lock.json ]; then
             npm ci
@@ -62,15 +55,13 @@ jobs:
           fi
 
       - name: Decode Service Account JSON
-        working-directory: "Property Appraiser Scripts"
-        run: base64 -d service-account_base64.txt > service-account.json
-
-      - name: Run Corp Tracer Port Charlotte script
-        working-directory: "Property Appraiser Scripts"
+        working-directory: "leadOrganizer"
+        run: echo "${{ secrets.GCP_KEY_BASE64 }}" | base64 -d > service-account.json
+      - name: Run corpTracer-1.js
+        working-directory: "leadOrganizer"
         env:
-          HEADLESS: 'true'
-          CHROME_PATH: '/usr/bin/google-chrome-stable'
-          GOOGLE_APPLICATION_CREDENTIALS: './service-account.json'
+          GOOGLE_APPLICATION_CREDENTIALS: "./service-account.json"
+          GOOGLE_TOKEN_JSON: "./google-token.json"
         run: node corpTracer.js
         
   AddressURL_gen1:
