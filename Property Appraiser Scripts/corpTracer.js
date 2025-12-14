@@ -8,7 +8,7 @@ import chrome from "selenium-webdriver/chrome.js";
 // ==========================
 // Google Sheets Configuration
 // ==========================
-const SHEET_ID = "1xPmFJ8yHfuqu2DrLpl5bCRlFO7vRn7BJJtKBdC6pdvk";
+const SHEET_ID = "1etq_jArx6Zq65SxitiXfKQV0G1TnotlAqhFZWbUFuaE";
 const SHEET_NAME = "Companies";
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
