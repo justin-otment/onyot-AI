@@ -12,7 +12,7 @@ const auth = new google.auth.GoogleAuth({
 
 const sheets = google.sheets({ version: "v4", auth });
 
-const SPREADSHEET_ID = "1HRA7wT6_ozDhjn5_BZSMuqVVFh4vxl23B_0DUf63oSE";
+const SPREADSHEET_ID = "1etq_jArx6Zq65SxitiXfKQV0G1TnotlAqhFZWbUFuaE";
 
 // 🔑 unify sheet name here
 const SHEET_NAME = "Companies";
