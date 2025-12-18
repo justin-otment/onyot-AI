@@ -36,6 +36,7 @@ jobs:
 
   LinkBuilder:
       runs-on: ubuntu-latest
+      needs: corpTracer
       steps:
         - name: Checkout repository
           uses: actions/checkout@v3
