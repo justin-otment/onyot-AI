@@ -5,7 +5,7 @@ on:
 
 jobs:
 
-  LinkBuilder:
+  corpTracer:
       runs-on: ubuntu-latest
       steps:
         - name: Checkout repository
@@ -33,3 +33,32 @@ jobs:
             GOOGLE_APPLICATION_CREDENTIALS: "./service-account.json"
             GOOGLE_TOKEN_JSON: "./google-token.json"
           run: node corpTracr.js
+
+  LinkBuilder:
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout repository
+          uses: actions/checkout@v3
+  
+        - name: Set up Node.js
+          uses: actions/setup-node@v3
+          with:
+            node-version: 20
+  
+        - name: Install dependencies
+          run: |
+            if [ -f package-lock.json ]; then
+              npm ci
+            else
+              npm install
+            fi
+  
+        - name: Decode Service Account JSON
+          working-directory: "leadOrganizer"
+          run: echo "${{ secrets.GCP_KEY_BASE64 }}" | base64 -d > service-account.json
+        - name: Run corpTracer-1.js
+          working-directory: "leadOrganizer"
+          env:
+            GOOGLE_APPLICATION_CREDENTIALS: "./service-account.json"
+            GOOGLE_TOKEN_JSON: "./google-token.json"
+          run: node address+url-companies.cjs
