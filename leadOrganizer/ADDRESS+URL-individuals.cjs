@@ -15,12 +15,12 @@ const sheets = google.sheets({ version: "v4", auth });
 const SPREADSHEET_ID = "1fA-5FaYvnEdjU_MpVqF2-jLFxFlTbv4KowJJ_xc0qfc";
 
 // 🔑 unify sheet name here
-const SHEET_NAME = "Individuals";
+const SHEET_NAME = "Companies";
 
 // column definitions
-const INPUT_COL = "K";   // addresses
-const OUTPUT_COL = "M";  // normalized enriched address
-const URL_COL = "N";     // generated URL
+const INPUT_COL = "S";   // addresses
+const OUTPUT_COL = "T";  // normalized enriched address
+const URL_COL = "U";     // generated URL
 const QUALIFIER_COL = "L"; // pre‑qualifier
 const START_ROW = 2;     // begin processing at this row
 
@@ -278,5 +278,3 @@ async function processSheet() {
 }
 
 processSheet();
-
-
