@@ -35,8 +35,8 @@ jobs:
           run: node corpTracr.js
 
   LinkBuilder:
-      runs-on: ubuntu-latest
       needs: corpTracer
+      runs-on: ubuntu-latest
       steps:
         - name: Checkout repository
           uses: actions/checkout@v3
