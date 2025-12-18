@@ -25,7 +25,7 @@ jobs:
             fi
   
         - name: Decode Service Account JSON
-          working-directory: "Property Appraiser Scripts"
+          working-directory: "leadOrganizer"
           run: echo "${{ secrets.GCP_KEY_BASE64 }}" | base64 -d > service-account.json
         - name: Run corpTracer-1.js
           working-directory: "leadOrganizer"
