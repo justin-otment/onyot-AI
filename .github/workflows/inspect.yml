@@ -25,7 +25,7 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
-        run: node inspectMiamidade.js
+        run: node inspectMiamidade.cjs
 
       # Optional: upload results if you write them to a file
       # - name: Upload inspection results
