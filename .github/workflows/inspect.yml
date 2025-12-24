@@ -14,16 +14,22 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
-          cache: 'npm'
+          node-version: '20'   # matches "engines": { "node": ">=20" }
+          cache: 'npm'         # uses package-lock.json for dependency caching
 
       - name: Install dependencies
-        run: |
-          npm install puppeteer cheerio googleapis readline
+        run: npm ci            # clean install using package-lock.json
 
       - name: Run inspection script
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
-        run: node inspectMiamidade.cjs
+        run: node inspectMiamidade.js
+
+      # Optional: upload results if you write them to a file
+      # - name: Upload inspection results
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: inspection-results
+      #     path: results.json
