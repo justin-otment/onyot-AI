@@ -1,4 +1,4 @@
-// inspectMiamidade.js
+// inspectMiamidade.cjs
 // Requires: npm install puppeteer cheerio googleapis readline
 
 const puppeteer = require('puppeteer');
@@ -7,10 +7,9 @@ const { google } = require('googleapis');
 const readline = require('readline');
 
 // === GOOGLE OAUTH2 SETUP ===
-// Values injected via GitHub Actions secrets
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "YOUR_CLIENT_ID";
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "YOUR_CLIENT_SECRET";
-const REDIRECT_URI = "http://localhost"; // stays the same for desktop flow
+const REDIRECT_URI = "http://localhost";
 
 const oauth2Client = new google.auth.OAuth2(
   CLIENT_ID,
@@ -18,19 +17,23 @@ const oauth2Client = new google.auth.OAuth2(
   REDIRECT_URI
 );
 
-// Define the scopes you need (Sheets, Drive, etc.)
-const SCOPES = [
-  'https://www.googleapis.com/auth/drive',
-  'https://www.googleapis.com/auth/spreadsheets'
-];
+// Use refresh token from secrets
+if (process.env.GOOGLE_REFRESH_TOKEN) {
+  oauth2Client.setCredentials({
+    refresh_token: process.env.GOOGLE_REFRESH_TOKEN
+  });
+}
 
-// === FUNCTION: Get Refresh Token (run locally once) ===
+// === FUNCTION: Get Refresh Token (local only) ===
 async function getRefreshToken() {
+  const SCOPES = [
+    'https://www.googleapis.com/auth/drive',
+    'https://www.googleapis.com/auth/spreadsheets'
+  ];
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: SCOPES,
   });
-
   console.log('Authorize this app by visiting this URL:\n', authUrl);
 
   const rl = readline.createInterface({
@@ -44,7 +47,6 @@ async function getRefreshToken() {
         const { tokens } = await oauth2Client.getToken(code);
         console.log('\nAccess Token:', tokens.access_token);
         console.log('Refresh Token:', tokens.refresh_token);
-        console.log('\nSave the refresh token securely (e.g., GitHub Secrets).');
         rl.close();
         resolve(tokens.refresh_token);
       } catch (err) {
@@ -67,21 +69,12 @@ async function inspectPage(url) {
     ]
   });
   const page = await browser.newPage();
-
-  // Increase default navigation timeout
-  page.setDefaultNavigationTimeout(120000); // 2 minutes
+  page.setDefaultNavigationTimeout(120000);
 
   try {
-    // Navigate and wait for DOM to load
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120000 });
-
-    // Explicitly wait for a known element (search form or body)
     await page.waitForSelector('body', { timeout: 60000 });
-
-    // Grab the rendered HTML
     const html = await page.content();
-
-    // Parse with Cheerio
     const $ = cheerio.load(html);
 
     const elements = [];
@@ -103,34 +96,39 @@ async function inspectPage(url) {
   }
 }
 
+// === FUNCTION: Write to Google Sheets ===
+async function writeToSheet(results) {
+  const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
+
+  const spreadsheetId = process.env.SPREADSHEET_ID; // add this as a secret
+  const range = 'Sheet1!A1';
+
+  const values = results.map(r => [r.tag, r.text]);
+
+  try {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range,
+      valueInputOption: 'RAW',
+      requestBody: { values }
+    });
+    console.log(`✅ Wrote ${values.length} rows to Google Sheet`);
+  } catch (err) {
+    console.error('Error writing to Google Sheets:', err);
+  }
+}
+
 // === MAIN EXECUTION ===
 (async () => {
-  // Step 1: Run OAuth flow once locally to get refresh token
-  // Comment this out after you’ve obtained and stored the refresh token in GitHub Secrets
-  // const refreshToken = await getRefreshToken();
-
-  // Step 2: Use refresh token from secrets in CI/CD
-  if (process.env.GOOGLE_REFRESH_TOKEN) {
-    oauth2Client.setCredentials({
-      refresh_token: process.env.GOOGLE_REFRESH_TOKEN
-    });
-  }
-
-  // Step 3: Inspect Miami-Dade property search page
   const url = 'https://www.miamidadepa.gov/pa/real-estate/property-search.page';
   const results = await inspectPage(url);
 
   console.log(`Total elements parsed: ${results.length}`);
-  console.log('Sample output:', results.slice(0, 20)); // show first 20
+  console.log('Sample output:', results.slice(0, 5));
 
-  // Example: push results into Google Sheets (optional)
-  // const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
-  // await sheets.spreadsheets.values.update({
-  //   spreadsheetId: 'YOUR_SPREADSHEET_ID',
-  //   range: 'Sheet1!A1',
-  //   valueInputOption: 'RAW',
-  //   requestBody: {
-  //     values: results.map(r => [r.tag, r.text])
-  //   }
-  // });
+  if (process.env.SPREADSHEET_ID) {
+    await writeToSheet(results);
+  } else {
+    console.log('⚠️ No SPREADSHEET_ID provided, skipping Sheets write.');
+  }
 })();
