@@ -7,8 +7,8 @@ const { google } = require('googleapis');
 const readline = require('readline');
 
 // === GOOGLE OAUTH2 SETUP ===
-const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "YOUR_CLIENT_ID";
-const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "YOUR_CLIENT_SECRET";
+const CLIENT_ID = process.env.CLIENT_ID || "YOUR_CLIENT_ID";
+const CLIENT_SECRET = process.env.CLIENT_SECRET || "YOUR_CLIENT_SECRET";
 const REDIRECT_URI = "http://localhost";
 
 const oauth2Client = new google.auth.OAuth2(
@@ -18,9 +18,9 @@ const oauth2Client = new google.auth.OAuth2(
 );
 
 // Use refresh token from secrets
-if (process.env.GOOGLE_REFRESH_TOKEN) {
+if (process.env.REFRESH_TOKEN) {
   oauth2Client.setCredentials({
-    refresh_token: process.env.GOOGLE_REFRESH_TOKEN
+    refresh_token: process.env.REFRESH_TOKEN
   });
 }
 
@@ -101,14 +101,15 @@ async function appendToSheet(results) {
   const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
 
   const spreadsheetId = "12qESHoxzkSXwUc5Pa1gAzt8-hIw7QyiExkIh6UeDCMM";
-  const range = "Property Appraiser!A:C"; // three columns: Tag, Text, Attributes
+  const range = "Property Appraiser!A:D"; // four columns: Timestamp, Tag, Text, Attributes
 
   // Flatten attributes into a string (e.g. class=..., id=...)
+  const timestamp = new Date().toISOString();
   const values = results.map(r => {
     const attrString = r.attrs
       ? Object.entries(r.attrs).map(([k, v]) => `${k}=${v}`).join('; ')
       : '';
-    return [r.tag, r.text, attrString];
+    return [timestamp, r.tag, r.text, attrString];
   });
 
   try {
@@ -120,7 +121,7 @@ async function appendToSheet(results) {
 
     // If empty, add header row first
     if (!existing.data.values || existing.data.values.length === 0) {
-      values.unshift(["Tag", "Text", "Attributes"]);
+      values.unshift(["Timestamp", "Tag", "Text", "Attributes"]);
     }
 
     await sheets.spreadsheets.values.append({
