@@ -15,7 +15,7 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '20'   # matches "engines": { "node": ">=20" }
-          cache: 'npm'         # uses package-lock.json for dependency caching
+          cache: 'npm'         # requires package-lock.json committed
 
       - name: Install dependencies
         run: npm ci            # clean install using package-lock.json
