@@ -96,23 +96,41 @@ async function inspectPage(url) {
   }
 }
 
-// === FUNCTION: Write to Google Sheets ===
-async function writeToSheet(results) {
+// === FUNCTION: Append to Google Sheets ===
+async function appendToSheet(results) {
   const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
 
-  const spreadsheetId = process.env.SPREADSHEET_ID; // add this as a secret
-  const range = 'Sheet1!A1';
+  const spreadsheetId = "12qESHoxzkSXwUc5Pa1gAzt8-hIw7QyiExkIh6UeDCMM";
+  const range = "Property Appraiser!A:C"; // three columns: Tag, Text, Attributes
 
-  const values = results.map(r => [r.tag, r.text]);
+  // Flatten attributes into a string (e.g. class=..., id=...)
+  const values = results.map(r => {
+    const attrString = r.attrs
+      ? Object.entries(r.attrs).map(([k, v]) => `${k}=${v}`).join('; ')
+      : '';
+    return [r.tag, r.text, attrString];
+  });
 
   try {
-    await sheets.spreadsheets.values.update({
+    // First, check if sheet is empty
+    const existing = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range
+    });
+
+    // If empty, add header row first
+    if (!existing.data.values || existing.data.values.length === 0) {
+      values.unshift(["Tag", "Text", "Attributes"]);
+    }
+
+    await sheets.spreadsheets.values.append({
       spreadsheetId,
       range,
       valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
       requestBody: { values }
     });
-    console.log(`✅ Wrote ${values.length} rows to Google Sheet`);
+    console.log(`✅ Appended ${values.length} rows to Google Sheet`);
   } catch (err) {
     console.error('Error writing to Google Sheets:', err);
   }
@@ -126,9 +144,5 @@ async function writeToSheet(results) {
   console.log(`Total elements parsed: ${results.length}`);
   console.log('Sample output:', results.slice(0, 5));
 
-  if (process.env.SPREADSHEET_ID) {
-    await writeToSheet(results);
-  } else {
-    console.log('⚠️ No SPREADSHEET_ID provided, skipping Sheets write.');
-  }
+  await appendToSheet(results);
 })();
