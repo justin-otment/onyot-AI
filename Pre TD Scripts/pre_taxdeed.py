@@ -134,7 +134,7 @@ def log_data_to_google_sheets(data):
 # Main execution
 if __name__ == "__main__":
     urls = [
-        "https://palmbeach.realtaxdeed.com/index.cfm?zaction=AUCTION&Zmethod=PREVIEW&AUCTIONDATE=02/12/2025","https://palmbeach.realtaxdeed.com/index.cfm?zaction=AUCTION&zmethod=PREVIEW&AuctionDate=03/12/2025"
+        "https://dallas.texas.sheriffsaleauctions.com/index.cfm?zaction=AUCTION&Zmethod=PREVIEW&AUCTIONDATE=02/03/2026"
     ]
     for url in urls:
         print(f"Processing URL: {url}")
