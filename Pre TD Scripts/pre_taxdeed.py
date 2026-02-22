@@ -13,7 +13,7 @@ from google.auth.transport.requests import Request
 import pickle
 
 # Google Sheets configuration
-SHEET_ID = '1VUB2NdGSY0l3tuQAfkz8QV2XZpOj2khCB69r5zU1E5A'
+SHEET_ID = '1CsLXhlNp9pP9dAVBpGFvEnw1PpuUvLfypFg56RrgjxA'
 SHEET_NAME = 'Palm Beach - Taxdeed'
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
